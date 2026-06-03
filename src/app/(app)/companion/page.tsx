@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { chatWithCompanion } from '@/app/actions/companion';
+import { getCompanionResponse } from '@/lib/gemini';
 import { CycleIntelligenceEngine } from '@/lib/cycle-intelligence';
 import { Send, Bot, User, Trash2, Settings2 } from 'lucide-react';
 
@@ -77,7 +77,7 @@ export default function CompanionPage() {
       recent_period_prediction: prediction ? `${prediction.earliestDate.toLocaleDateString()} - ${prediction.latestDate.toLocaleDateString()}` : 'Unknown'
     };
 
-    const response = await chatWithCompanion(
+    const response = await getCompanionResponse(
       userMessage,
       history,
       language,
@@ -86,7 +86,7 @@ export default function CompanionPage() {
       JSON.stringify(healthSummaryObj)
     );
 
-    setMessages([...newMessages, { role: 'model', content: response.text || 'Error occurred.' }]);
+    setMessages([...newMessages, { role: 'model', content: response || 'Error occurred.' }]);
     setIsLoading(false);
   };
 

@@ -1,9 +1,3 @@
-import { GoogleGenAI } from '@google/genai';
-
-const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
-
-export const ai = new GoogleGenAI({ apiKey });
-
 export async function getCompanionResponse(
   message: string,
   history: { role: 'user' | 'model'; parts: { text: string }[] }[],
@@ -12,6 +6,11 @@ export async function getCompanionResponse(
   companionName: string = 'HerSync AI',
   healthSummary: string = '{}'
 ) {
+  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
+  if (!apiKey) {
+    return "API Key is missing. Please set NEXT_PUBLIC_GEMINI_API_KEY in your environment.";
+  }
+
   const systemInstruction = `You are ${companionName}, an AI-powered PCOS/PCOD wellness companion.
 Your current personality is: ${personality}.
 You must communicate in this language: ${language}.
@@ -33,21 +32,41 @@ Strict Rules:
 User's message: ${message}`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [
-        { role: 'user', parts: [{ text: systemInstruction }] },
-        ...history,
-        { role: 'user', parts: [{ text: message }] }
-      ],
-      config: {
-        temperature: 0.7,
-      }
-    });
+    const contents = [
+      { role: 'user', parts: [{ text: systemInstruction }] },
+      ...history.map(h => ({
+        role: h.role === 'model' ? 'model' : 'user',
+        parts: h.parts
+      })),
+      { role: 'user', parts: [{ text: message }] }
+    ];
 
-    return response.text;
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents,
+          generationConfig: {
+            temperature: 0.7,
+          }
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errData = await response.json();
+      console.error('Gemini API Error details:', errData);
+      throw new Error(`Gemini API error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "I'm sorry, I couldn't generate a response.";
   } catch (error) {
-    console.error('Gemini API Error:', error);
+    console.error('Gemini API Fetch Error:', error);
     return "I'm sorry, I'm having trouble connecting right now. Please try again later.";
   }
 }
