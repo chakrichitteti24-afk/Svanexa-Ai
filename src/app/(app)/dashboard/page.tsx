@@ -2,27 +2,60 @@
 
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Activity, Droplets, Moon, Smile, HeartPulse, BrainCircuit, Target, AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { 
+  Activity, 
+  Moon, 
+  Smile, 
+  HeartPulse, 
+  BrainCircuit, 
+  Target, 
+  AlertCircle, 
+  Database,
+  ArrowRight,
+  TrendingUp,
+  Droplet
+} from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { CycleIntelligenceEngine, CycleEntry, CheckInEntry } from '@/lib/cycle-intelligence';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-
-import { seedLocalStorage } from '@/lib/seed-data';
-import { Button } from '@/components/ui/button';
-import { Database } from 'lucide-react';
+import Link from 'next/link';
 
 export default function DashboardPage() {
-  const [hasPCOS, setHasPCOS] = useLocalStorage('hersync_has_pcos', false);
+  const [hasPCOS] = useLocalStorage('hersync_has_pcos', false);
   const [cycles] = useLocalStorage<CycleEntry[]>('hersync_cycles', []);
   const [checkIns] = useLocalStorage<Record<string, CheckInEntry>>('hersync_checkins', {});
+  const [userName] = useLocalStorage('hersync_user_name', 'Sarah');
 
   const engine = new CycleIntelligenceEngine(cycles, checkIns, hasPCOS);
   const analytics = engine.analyzeCycles();
   const prediction = engine.predictNextPeriod();
   const healthScore = engine.calculateHealthScore();
 
-  // Prepare chart data based on checkins
+  // Find today's checkin
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayCheckIn = checkIns[todayStr];
+
+  // Calculate Today's Wellness Score
+  let wellnessScore = 0;
+  let hasCheckedInToday = false;
+  if (todayCheckIn) {
+    hasCheckedInToday = true;
+    const sleepScore = Math.min(25, (todayCheckIn.sleep / 8) * 25);
+    const waterScore = Math.min(25, (todayCheckIn.water / 2.5) * 25);
+    const exerciseScore = Math.min(20, (todayCheckIn.exercise / 30) * 20);
+    const stressScore = Math.min(15, (10 - todayCheckIn.stress) * 1.5);
+    
+    let moodScore = 10;
+    if (todayCheckIn.mood === 'happy') moodScore = 15;
+    else if (todayCheckIn.mood === 'calm') moodScore = 13;
+    else if (todayCheckIn.mood === 'anxious') moodScore = 8;
+    else if (todayCheckIn.mood === 'sad' || todayCheckIn.mood === 'angry') moodScore = 5;
+    
+    wellnessScore = Math.round(sleepScore + waterScore + exerciseScore + stressScore + moodScore);
+  }
+
+  // Generate chart data
   const sortedDates = Object.keys(checkIns).sort().slice(-7);
   const chartData = sortedDates.map(date => {
     const entry = checkIns[date];
@@ -40,212 +73,256 @@ export default function DashboardPage() {
     };
   });
 
+  // Today's AI Insight snippet based on metrics
+  const getTodayInsight = () => {
+    if (!hasCheckedInToday) {
+      return "Log today's wellness check-in to get a personalized hormone and wellness insight!";
+    }
+    if (todayCheckIn.sleep < 6.5) {
+      return "Your sleep is a bit low today. Rest supports progesterone synthesis and keeps cortisol spikes in check.";
+    }
+    if (todayCheckIn.stress > 7) {
+      return "Stress levels are high today. High cortisol suppresses ovulation. Try deep breathing for 3 minutes.";
+    }
+    if (todayCheckIn.water < 1.5) {
+      return "Your water intake is below target. Drink water to flush excess hormones and manage cycle bloating.";
+    }
+    return "Your hydration, sleep, and activity are aligned! Great job stabilizing your endocrine system today.";
+  };
+
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-20">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="max-w-md mx-auto space-y-6 pb-24 animate-in fade-in duration-500">
+      
+      {/* Premium Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight mb-2">Welcome back, Warrior ✨</h1>
-          <p className="text-muted-foreground">Your AI-powered cycle intelligence dashboard.</p>
-        </div>
-        <div className="flex flex-col sm:flex-row items-center gap-4">
-          <Button variant="outline" size="sm" onClick={seedLocalStorage} className="flex items-center gap-2">
-            <Database className="w-4 h-4" /> Load Test Data
-          </Button>
-          <div className="flex items-center space-x-2 bg-secondary/30 p-3 rounded-xl border border-border/50">
-            <Switch id="pcos-mode" checked={hasPCOS} onCheckedChange={setHasPCOS} />
-            <Label htmlFor="pcos-mode" className="font-medium">PCOS / PCOD Mode</Label>
-          </div>
+          <h1 className="text-xl font-bold tracking-tight text-foreground">Hi, {userName} ✨</h1>
+          <p className="text-xs text-muted-foreground">Here is your daily wellness status.</p>
         </div>
       </div>
 
       {hasPCOS && (
-        <div className="bg-pink-500/10 border border-pink-500/20 text-pink-600 dark:text-pink-400 p-4 rounded-xl flex items-start gap-3 text-sm">
-          <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-          <p>PCOS Mode enabled. Cycle predictions may be less precise due to cycle irregularity. Symptom-based weighting is now active.</p>
+        <div className="bg-pink-500/10 border border-pink-500/20 text-pink-500 p-3 rounded-xl flex items-start gap-2.5 text-xs">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div>
+            <span className="font-semibold">PCOS Mode active:</span> predictions are calibrated to account for cycle variability.
+          </div>
         </div>
       )}
 
-      {/* Advanced Widgets Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {/* Next Period Card */}
-        <Card className="bg-gradient-to-br from-pink-500/10 to-transparent border-pink-500/20 lg:col-span-1">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Target className="w-4 h-4 text-pink-500" /> Expected Period Window
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {prediction ? (
-              <>
-                <div className="text-2xl font-bold text-foreground mt-1">
-                  {prediction.earliestDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - {prediction.latestDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                </div>
-                <div className="text-xs text-muted-foreground mt-2 font-medium">
-                  Most Likely: <span className="text-pink-500">{prediction.likelyDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
-                </div>
-              </>
-            ) : (
-              <div className="text-muted-foreground text-sm">Not enough data to predict. Please log a cycle.</div>
-            )}
-          </CardContent>
-        </Card>
+      {/* 1. Today's Wellness Score Circle */}
+      <Card className="border-pink-500/15 bg-gradient-to-br from-pink-500/5 to-transparent relative overflow-hidden">
+        <CardContent className="pt-6 flex flex-col items-center text-center">
+          <span className="text-xs font-semibold text-muted-foreground mb-4 uppercase tracking-wider">Today's Wellness Score</span>
+          
+          <div className="relative w-36 h-36 flex items-center justify-center">
+            {/* SVG Progress Circle */}
+            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+              <circle
+                cx="50"
+                cy="50"
+                r="40"
+                className="stroke-secondary"
+                strokeWidth="8"
+                fill="transparent"
+              />
+              <circle
+                cx="50"
+                cy="50"
+                r="40"
+                className="stroke-pink-500 transition-all duration-1000"
+                strokeWidth="8"
+                fill="transparent"
+                strokeDasharray="251.2"
+                strokeDashoffset={251.2 - (251.2 * (hasCheckedInToday ? wellnessScore : 75)) / 100}
+                strokeLinecap="round"
+              />
+            </svg>
+            <div className="absolute flex flex-col items-center justify-center">
+              <span className="text-3xl font-extrabold text-foreground">{hasCheckedInToday ? `${wellnessScore}%` : '--'}</span>
+              <span className="text-[10px] text-muted-foreground mt-0.5">{hasCheckedInToday ? 'Complete' : 'Pending Log'}</span>
+            </div>
+          </div>
 
-        {/* Prediction Confidence Card */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <BrainCircuit className="w-4 h-4 text-violet-500" /> Prediction Confidence
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+          {!hasCheckedInToday ? (
+            <div className="mt-5 w-full">
+              <Link href="/check-in">
+                <Button className="w-full h-11 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 text-white font-medium text-xs hover:from-pink-600 hover:to-violet-600">
+                  Log Today's Habits
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <div className="mt-4 text-xs text-green-500 font-medium flex items-center gap-1">
+              ✓ Daily check-in complete! Keep up the good work.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 2 & 3. Cycle Metrics Side-by-Side */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* Next Period Card */}
+        <Card className="border-border/40 bg-card/60 backdrop-blur-xs">
+          <CardContent className="p-4 flex flex-col justify-between h-28">
+            <span className="text-[10px] text-muted-foreground font-semibold uppercase flex items-center gap-1.5">
+              <Target className="w-3.5 h-3.5 text-pink-500" /> Next Period
+            </span>
             {prediction ? (
-              <div className="flex items-end gap-3">
-                <div className="text-3xl font-bold">{prediction.confidenceScore}%</div>
-                <div className="text-sm text-muted-foreground mb-1 font-medium">{prediction.confidenceLabel}</div>
+              <div>
+                <div className="text-sm font-bold leading-tight text-foreground mt-2">
+                  {prediction.earliestDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-1">
+                  Conf: <span className="font-semibold text-pink-500">{prediction.confidenceScore}%</span>
+                </div>
               </div>
             ) : (
-              <div className="text-muted-foreground text-sm">Waiting for data...</div>
+              <span className="text-xs text-muted-foreground mt-2">No prediction yet.</span>
             )}
-            <div className="w-full bg-secondary h-2 mt-3 rounded-full overflow-hidden">
-              <div 
-                className="bg-violet-500 h-full rounded-full transition-all duration-1000" 
-                style={{ width: `${prediction?.confidenceScore || 0}%` }}
-              />
-            </div>
           </CardContent>
         </Card>
 
         {/* Cycle Health Score Card */}
-        <Card className="bg-gradient-to-br from-green-500/10 to-transparent border-green-500/20">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <HeartPulse className="w-4 h-4 text-green-500" /> Cycle Health Score
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-             <div className="flex items-end gap-3">
-                <div className="text-3xl font-bold">{healthScore.score}/100</div>
-                <div className={`text-sm mb-1 font-bold ${
-                  healthScore.category === 'Excellent' ? 'text-green-500' :
-                  healthScore.category === 'Good' ? 'text-blue-500' :
-                  healthScore.category === 'Moderate' ? 'text-yellow-500' : 'text-red-500'
-                }`}>
-                  {healthScore.category}
-                </div>
+        <Card className="border-border/40 bg-card/60 backdrop-blur-xs">
+          <CardContent className="p-4 flex flex-col justify-between h-28">
+            <span className="text-[10px] text-muted-foreground font-semibold uppercase flex items-center gap-1.5">
+              <HeartPulse className="w-3.5 h-3.5 text-green-500" /> Cycle Health
+            </span>
+            <div>
+              <div className="text-xl font-bold leading-none text-foreground mt-2">
+                {healthScore.score}/100
               </div>
-              <p className="text-xs text-muted-foreground mt-2 line-clamp-1">{healthScore.insights[0]}</p>
-          </CardContent>
-        </Card>
-
-        {/* Averages */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Cycle Stats</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4 mt-2">
-              <div>
-                <div className="text-xs text-muted-foreground mb-1">Avg Length</div>
-                <div className="text-xl font-bold">{analytics.avgCycleLength}d</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground mb-1">Avg Period</div>
-                <div className="text-xl font-bold">{analytics.avgPeriodDuration}d</div>
+              <div className={`text-[10px] font-bold mt-1.5 ${
+                healthScore.category === 'Excellent' ? 'text-green-500' :
+                healthScore.category === 'Good' ? 'text-blue-500' :
+                healthScore.category === 'Moderate' ? 'text-yellow-500' : 'text-red-500'
+              }`}>
+                {healthScore.category}
               </div>
             </div>
-            <div className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border/50">
-              Regularity: <span className="font-semibold text-foreground">{analytics.regularityStatus}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* AI Insight Card */}
-        <Card className="md:col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <BrainCircuit className="w-4 h-4 text-indigo-500" /> AI Cycle Insights
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {healthScore.insights.slice(0, 2).map((insight, idx) => (
-              <div key={idx} className="flex gap-3 items-start bg-secondary/30 p-3 rounded-lg border border-border/50">
-                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-2 shrink-0" />
-                <p className="text-sm">{insight}</p>
-              </div>
-            ))}
-            {prediction && (
-              <div className="flex gap-3 items-start bg-secondary/30 p-3 rounded-lg border border-border/50">
-                <div className="w-1.5 h-1.5 rounded-full bg-pink-500 mt-2 shrink-0" />
-                <p className="text-sm">{prediction.message}</p>
-              </div>
-            )}
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Mood & Stress Trends</CardTitle>
-          </CardHeader>
-          <CardContent className="h-[300px]">
-            {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%" minHeight={300} minWidth={100}>
-                <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorMood" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ec4899" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#ec4899" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="colorStress" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                  <XAxis dataKey="day" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: '#1f2937', borderColor: '#374151', borderRadius: '8px' }} itemStyle={{ color: '#fff' }} />
-                  <Area type="monotone" dataKey="mood" stroke="#ec4899" fillOpacity={1} fill="url(#colorMood)" strokeWidth={2} />
-                  <Area type="monotone" dataKey="stress" stroke="#8b5cf6" fillOpacity={1} fill="url(#colorStress)" strokeWidth={2} />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-muted-foreground text-sm">No recent data available.</div>
-            )}
-          </CardContent>
-        </Card>
+      {/* 4. Today's AI Insight */}
+      <Card className="border-violet-500/10 bg-card/60 backdrop-blur-xs">
+        <CardContent className="p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-muted-foreground font-semibold uppercase flex items-center gap-1.5">
+              <BrainCircuit className="w-3.5 h-3.5 text-violet-500" /> Today's AI Insight
+            </span>
+            <Link href="/companion" className="text-[10px] text-primary flex items-center gap-0.5 hover:underline font-medium">
+              Ask AI <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+          <p className="text-xs leading-relaxed text-foreground/80">{getTodayInsight()}</p>
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Sleep Duration</CardTitle>
-          </CardHeader>
-          <CardContent className="h-[300px]">
-            {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%" minHeight={300} minWidth={100}>
-                <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorSleep" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                  <XAxis dataKey="day" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: '#1f2937', borderColor: '#374151', borderRadius: '8px' }} itemStyle={{ color: '#fff' }} />
-                  <Area type="monotone" dataKey="sleep" stroke="#3b82f6" fillOpacity={1} fill="url(#colorSleep)" strokeWidth={2} />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-               <div className="h-full flex items-center justify-center text-muted-foreground text-sm">No recent data available.</div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      {/* 5. Cycle Stats summary */}
+      <Card className="border-border/40 bg-card/60 backdrop-blur-xs">
+        <CardContent className="p-4">
+          <div className="grid grid-cols-3 gap-2 text-center divide-x divide-border/30">
+            <div>
+              <div className="text-[10px] text-muted-foreground">Avg Cycle</div>
+              <div className="text-sm font-bold text-foreground mt-1">{analytics.avgCycleLength} days</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-muted-foreground">Avg Period</div>
+              <div className="text-sm font-bold text-foreground mt-1">{analytics.avgPeriodDuration} days</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-muted-foreground">Regularity</div>
+              <div className="text-sm font-semibold text-foreground mt-1 truncate px-1">{analytics.regularityStatus}</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      <div className="text-center text-xs text-muted-foreground opacity-60 max-w-2xl mx-auto pt-8">
-        Predictions are estimates and should not replace professional medical advice. For severe or persistent symptoms, please consult a qualified healthcare professional.
+      {/* 6. Recent Wellness Trends (Tabs to avoid crowding) */}
+      <Card className="border-border/40 bg-card/60 backdrop-blur-xs">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xs font-semibold flex items-center gap-1.5">
+            <TrendingUp className="w-4 h-4 text-pink-500" /> Recent Trends
+          </CardTitle>
+          <CardDescription className="text-[10px]">Track your metrics over the last 7 logs.</CardDescription>
+        </CardHeader>
+        <CardContent className="pt-2">
+          {chartData.length > 0 ? (
+            <Tabs defaultValue="sleep" className="w-full">
+              <TabsList className="grid grid-cols-3 h-9 rounded-full bg-secondary/20 p-1 mb-4">
+                <TabsTrigger value="sleep" className="text-[10px] rounded-full">Sleep</TabsTrigger>
+                <TabsTrigger value="mood" className="text-[10px] rounded-full">Mood</TabsTrigger>
+                <TabsTrigger value="stress" className="text-[10px] rounded-full">Stress</TabsTrigger>
+              </TabsList>
+              
+              <div className="h-44 w-full">
+                <TabsContent value="sleep" className="h-full mt-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData} margin={{ top: 5, right: 10, left: -30, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorSleep" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/>
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
+                      <XAxis dataKey="day" stroke="#666" fontSize={9} tickLine={false} />
+                      <YAxis stroke="#666" fontSize={9} domain={[0, 10]} tickLine={false} />
+                      <Tooltip contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '8px', fontSize: '10px' }} />
+                      <Area type="monotone" dataKey="sleep" stroke="#3b82f6" fillOpacity={1} fill="url(#colorSleep)" strokeWidth={1.5} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </TabsContent>
+                
+                <TabsContent value="mood" className="h-full mt-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData} margin={{ top: 5, right: 10, left: -30, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorMood" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#ec4899" stopOpacity={0.2}/>
+                          <stop offset="95%" stopColor="#ec4899" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
+                      <XAxis dataKey="day" stroke="#666" fontSize={9} tickLine={false} />
+                      <YAxis stroke="#666" fontSize={9} domain={[1, 5]} tickLine={false} />
+                      <Tooltip contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '8px', fontSize: '10px' }} />
+                      <Area type="monotone" dataKey="mood" stroke="#ec4899" fillOpacity={1} fill="url(#colorMood)" strokeWidth={1.5} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </TabsContent>
+                
+                <TabsContent value="stress" className="h-full mt-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData} margin={{ top: 5, right: 10, left: -30, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorStress" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2}/>
+                          <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
+                      <XAxis dataKey="day" stroke="#666" fontSize={9} tickLine={false} />
+                      <YAxis stroke="#666" fontSize={9} domain={[0, 10]} tickLine={false} />
+                      <Tooltip contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '8px', fontSize: '10px' }} />
+                      <Area type="monotone" dataKey="stress" stroke="#8b5cf6" fillOpacity={1} fill="url(#colorStress)" strokeWidth={1.5} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </TabsContent>
+              </div>
+            </Tabs>
+          ) : (
+            <div className="h-32 flex flex-col items-center justify-center text-muted-foreground text-xs italic text-center px-4">
+              No recent history found. Please complete your daily wellness check-ins to generate personalized trends.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="text-center text-[10px] text-muted-foreground opacity-50 px-4">
+        HerSync AI provides educational and lifestyle guidance. Insights are informational only and do not replace medical evaluation.
       </div>
     </div>
   );

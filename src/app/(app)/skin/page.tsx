@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Slider } from '@/components/ui/slider';
 import { toast } from 'sonner';
 import { Camera, Image as ImageIcon, Trash2 } from 'lucide-react';
 
@@ -70,17 +69,17 @@ export default function SkinTrackerPage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
+    <div className="max-w-md mx-auto space-y-6 pb-24 animate-in fade-in duration-500">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight mb-2">Skin Tracker</h1>
-        <p className="text-muted-foreground">Monitor your skin health visually and track symptom severity over time.</p>
+        <h1 className="text-2xl font-bold tracking-tight mb-1">Skin Log</h1>
+        <p className="text-xs text-muted-foreground">Monitor skin indicators and track visual progress.</p>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Log Today's Skin</CardTitle>
-            <CardDescription>Upload a photo to see progress over time.</CardDescription>
+      <div className="space-y-6">
+        <Card className="border-border/40 bg-card/60 backdrop-blur-xs">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold">Log Today's Skin</CardTitle>
+            <CardDescription className="text-[10px]">Upload a photo to keep track of visual changes.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             
@@ -109,19 +108,79 @@ export default function SkinTrackerPage() {
               )}
             </div>
 
-            <div className="space-y-4">
-              <div className="flex justify-between"><Label>Acne Severity</Label><span>{acne}/10</span></div>
-              <Slider min={1} max={10} step={1} value={[acne]} onValueChange={(val: any) => setAcne(val[0])} />
+            {/* Acne Counter */}
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <span className="text-sm font-semibold flex items-center gap-1.5">Acne Severity</span>
+                <p className="text-[10px] text-muted-foreground">Scale of 1-10</p>
+              </div>
+              <div className="flex items-center gap-3 bg-secondary/20 p-1.5 rounded-full border border-border/30">
+                <button
+                  type="button"
+                  onClick={() => setAcne(Math.max(1, acne - 1))}
+                  className="w-10 h-10 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-sm"
+                >
+                  -
+                </button>
+                <span className="w-8 text-center text-sm font-bold">{acne}</span>
+                <button
+                  type="button"
+                  onClick={() => setAcne(Math.min(10, acne + 1))}
+                  className="w-10 h-10 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-sm"
+                >
+                  +
+                </button>
+              </div>
             </div>
 
-            <div className="space-y-4">
-              <div className="flex justify-between"><Label>Oiliness</Label><span>{oiliness}/10</span></div>
-              <Slider min={1} max={10} step={1} value={[oiliness]} onValueChange={(val: any) => setOiliness(val[0])} />
+            {/* Oiliness Counter */}
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <span className="text-sm font-semibold flex items-center gap-1.5">Oiliness</span>
+                <p className="text-[10px] text-muted-foreground">Scale of 1-10</p>
+              </div>
+              <div className="flex items-center gap-3 bg-secondary/20 p-1.5 rounded-full border border-border/30">
+                <button
+                  type="button"
+                  onClick={() => setOiliness(Math.max(1, oiliness - 1))}
+                  className="w-10 h-10 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-sm"
+                >
+                  -
+                </button>
+                <span className="w-8 text-center text-sm font-bold">{oiliness}</span>
+                <button
+                  type="button"
+                  onClick={() => setOiliness(Math.min(10, oiliness + 1))}
+                  className="w-10 h-10 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-sm"
+                >
+                  +
+                </button>
+              </div>
             </div>
 
-            <div className="space-y-4">
-              <div className="flex justify-between"><Label>Dryness / Flakiness</Label><span>{dryness}/10</span></div>
-              <Slider min={1} max={10} step={1} value={[dryness]} onValueChange={(val: any) => setDryness(val[0])} />
+            {/* Dryness Counter */}
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <span className="text-sm font-semibold flex items-center gap-1.5">Dryness / Flakiness</span>
+                <p className="text-[10px] text-muted-foreground">Scale of 1-10</p>
+              </div>
+              <div className="flex items-center gap-3 bg-secondary/20 p-1.5 rounded-full border border-border/30">
+                <button
+                  type="button"
+                  onClick={() => setDryness(Math.max(1, dryness - 1))}
+                  className="w-10 h-10 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-sm"
+                >
+                  -
+                </button>
+                <span className="w-8 text-center text-sm font-bold">{dryness}</span>
+                <button
+                  type="button"
+                  onClick={() => setDryness(Math.min(10, dryness + 1))}
+                  className="w-10 h-10 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-sm"
+                >
+                  +
+                </button>
+              </div>
             </div>
 
             <div className="space-y-2">

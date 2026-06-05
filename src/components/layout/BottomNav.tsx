@@ -2,15 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, CheckSquare, CalendarHeart, Sparkles, LineChart } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, CalendarHeart, Sparkles, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const mobileNavItems = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Check-In', href: '/check-in', icon: CheckSquare },
+  { name: 'Home', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Cycle', href: '/cycle', icon: CalendarHeart },
-  { name: 'AI Companion', href: '/companion', icon: Sparkles },
-  { name: 'Reports', href: '/reports', icon: LineChart },
+  { name: 'Check-In', href: '/check-in', icon: CheckSquare },
+  { name: 'AI', href: '/companion', icon: Sparkles },
+  { name: 'Profile', href: '/profile', icon: User },
 ];
 
 export function BottomNav() {

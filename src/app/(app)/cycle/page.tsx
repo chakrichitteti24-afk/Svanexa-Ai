@@ -7,6 +7,7 @@ import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { addDays, format, differenceInDays } from 'date-fns';
+import { CalendarHeart, Sparkles, Trash2, CalendarDays, Plus } from 'lucide-react';
 
 type CycleEntry = {
   startDate: string;
@@ -24,22 +25,36 @@ export default function CycleTrackerPage() {
       return;
     }
 
+    // Verify start is before end
+    if (dateRange.from > dateRange.to) {
+      toast.error('Start date must be before the end date');
+      return;
+    }
+
     const newCycle: CycleEntry = {
       startDate: dateRange.from.toISOString(),
       endDate: dateRange.to.toISOString(),
       notes: '',
     };
 
-    setCycles([...cycles, newCycle].sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()));
+    const updated = [...cycles, newCycle].sort(
+      (a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+    );
+    setCycles(updated);
     setDateRange({});
-    toast.success('Cycle logged successfully!');
+    toast.success('Period dates saved successfully!');
+  };
+
+  const handleDeleteCycle = (index: number) => {
+    const updated = cycles.filter((_, idx) => idx !== index);
+    setCycles(updated);
+    toast.success('Cycle entry deleted.');
   };
 
   const getPrediction = () => {
     if (cycles.length === 0) return null;
     const lastCycle = cycles[0];
     
-    // Simple mock prediction: average 28 days or from user data
     let avgLength = 28;
     if (cycles.length > 1) {
       let totalLength = 0;
@@ -56,104 +71,135 @@ export default function CycleTrackerPage() {
   const prediction = getPrediction();
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
+    <div className="max-w-md mx-auto space-y-6 pb-24 animate-in fade-in duration-500">
+      
+      {/* Title */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight mb-2">Cycle Tracker</h1>
-        <p className="text-muted-foreground">Monitor your period and get predictions based on your unique cycle.</p>
+        <h1 className="text-2xl font-bold tracking-tight mb-1">Cycle Calendar</h1>
+        <p className="text-xs text-muted-foreground">Log period flows and predict upcoming fertility windows.</p>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
-          <Card>
-            <CardHeader>
-              <CardTitle>Log New Period</CardTitle>
-              <CardDescription>Select the start and end dates of your period.</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center">
-              <Calendar
-                mode="range"
-                selected={{
-                  from: dateRange.from,
-                  to: dateRange.to,
-                }}
-                onSelect={(range) => {
-                  setDateRange({ from: range?.from, to: range?.to });
-                }}
-                className="rounded-md border mb-6"
-              />
-              <div className="flex gap-4 w-full max-w-sm">
-                <Button 
-                  onClick={handleSaveCycle} 
-                  className="w-full bg-gradient-to-r from-pink-600 to-violet-600 hover:from-pink-500 hover:to-violet-500 text-white"
-                >
-                  Save Period Dates
-                </Button>
-                <Button variant="outline" onClick={() => setDateRange({})} className="w-full">
-                  Clear
-                </Button>
+      {/* Log Period Card */}
+      <Card className="border-border/40 bg-card/60 backdrop-blur-xs">
+        <CardHeader className="pb-3 text-center">
+          <CardTitle className="text-sm font-semibold flex items-center justify-center gap-1.5">
+            <CalendarHeart className="w-4.5 h-4.5 text-pink-500" /> Log Cycle Dates
+          </CardTitle>
+          <CardDescription className="text-[10px]">Tap first day and last day of period flow</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col items-center">
+          <div className="w-full flex justify-center scale-95 origin-center overflow-x-auto bg-background/50 rounded-2xl p-2 border border-border/20">
+            <Calendar
+              mode="range"
+              selected={{
+                from: dateRange.from,
+                to: dateRange.to,
+              }}
+              onSelect={(range) => {
+                setDateRange({ from: range?.from, to: range?.to });
+              }}
+              className="rounded-md"
+            />
+          </div>
+          
+          <div className="flex gap-2.5 w-full mt-4">
+            <Button 
+              onClick={handleSaveCycle} 
+              className="flex-1 h-11 text-xs rounded-full bg-pink-600 hover:bg-pink-500 text-white font-medium"
+            >
+              <Plus className="w-3.5 h-3.5 mr-1" /> Log Period
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => setDateRange({})} 
+              className="h-11 px-4 text-xs rounded-full"
+            >
+              Clear
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Cycle Prediction Card */}
+      <Card className="border-pink-500/15 bg-gradient-to-br from-pink-500/5 to-transparent">
+        <CardContent className="p-4">
+          {prediction ? (
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[9px] text-muted-foreground uppercase font-semibold tracking-wider flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-pink-500 animate-pulse" /> Predicted Start
+                </span>
+                <p className="text-base font-bold text-pink-500 mt-1">
+                  {format(prediction.nextStart, 'MMMM d, yyyy')}
+                </p>
               </div>
-            </CardContent>
-          </Card>
+              <div className="text-right">
+                <span className="text-[9px] text-muted-foreground uppercase font-semibold tracking-wider">
+                  Avg Cycle Length
+                </span>
+                <p className="text-sm font-bold mt-1">{prediction.avgLength} Days</p>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-4 text-xs text-muted-foreground">
+              Please log at least one period to enable cycle predictions.
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Next Cycle Prediction</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {prediction ? (
-                <div className="flex items-center justify-between p-6 bg-secondary/30 rounded-2xl border border-pink-500/20">
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Predicted Start Date</p>
-                    <p className="text-2xl font-bold text-pink-500">{format(prediction.nextStart, 'MMMM d, yyyy')}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-muted-foreground mb-1">Average Cycle Length</p>
-                    <p className="text-2xl font-bold">{prediction.avgLength} Days</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-6 text-center text-muted-foreground bg-secondary/30 rounded-2xl">
-                  Log your first period to see predictions.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="lg:col-span-1">
-          <Card className="h-full">
-            <CardHeader>
-              <CardTitle>Cycle History</CardTitle>
-              <CardDescription>Your recently logged periods.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {cycles.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">No cycles logged yet.</p>
-              ) : (
-                <div className="space-y-4">
-                  {cycles.map((cycle, i) => (
-                    <div key={i} className="flex justify-between items-center p-4 border rounded-xl hover:border-pink-500/30 transition-colors">
+      {/* Cycle History Timeline */}
+      <Card className="border-border/40 bg-card/60 backdrop-blur-xs">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xs font-semibold flex items-center gap-1.5">
+            <CalendarDays className="w-4 h-4 text-pink-500" /> Logged Flow History
+          </CardTitle>
+          <CardDescription className="text-[10px]">Your historical period flow records</CardDescription>
+        </CardHeader>
+        <CardContent className="pt-2">
+          {cycles.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-6 italic">No logs on record yet.</p>
+          ) : (
+            <div className="relative border-l border-pink-500/20 ml-2.5 pl-4 space-y-4">
+              {cycles.map((cycle, i) => {
+                const flowDays = differenceInDays(new Date(cycle.endDate), new Date(cycle.startDate)) + 1;
+                return (
+                  <div key={i} className="relative group">
+                    {/* Circle timeline bullet */}
+                    <div className="absolute -left-[22.5px] top-1.5 w-3 h-3 rounded-full bg-pink-500 border-2 border-background" />
+                    
+                    <div className="flex justify-between items-center p-3 rounded-xl bg-background/40 border border-border/30 hover:border-pink-500/20 transition-all">
                       <div>
-                        <p className="font-medium text-sm">
+                        <p className="font-semibold text-xs text-foreground">
                           {format(new Date(cycle.startDate), 'MMM d')} - {format(new Date(cycle.endDate), 'MMM d, yyyy')}
                         </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {differenceInDays(new Date(cycle.endDate), new Date(cycle.startDate)) + 1} Days Flow
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          {flowDays} {flowDays === 1 ? 'day' : 'days'} flow period
                         </p>
+                        {i < cycles.length - 1 && (
+                          <div className="inline-block text-[9px] bg-secondary/40 text-muted-foreground px-2 py-0.5 rounded-full mt-1.5">
+                            Cycle length: {differenceInDays(new Date(cycle.startDate), new Date(cycles[i+1].startDate))} days
+                          </div>
+                        )}
                       </div>
-                      {i < cycles.length - 1 && (
-                        <div className="text-xs bg-secondary px-2 py-1 rounded-full">
-                          {differenceInDays(new Date(cycle.startDate), new Date(cycles[i+1].startDate))} Day Cycle
-                        </div>
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteCycle(i)}
+                        className="h-8 w-8 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-full"
+                        aria-label="Delete entry"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      
     </div>
   );
 }
