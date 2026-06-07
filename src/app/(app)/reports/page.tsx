@@ -1,8 +1,5 @@
 'use client';
 
-export const runtime = 'edge';
-export const dynamic = 'force-dynamic';
-
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';

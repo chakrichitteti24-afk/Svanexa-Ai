@@ -1,8 +1,5 @@
 'use client';
 
-export const runtime = 'edge';
-export const dynamic = 'force-dynamic';
-
 import { useState, useRef, useEffect } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { Button } from '@/components/ui/button';
