@@ -17,6 +17,7 @@ import {
   TrendingUp,
   Droplet
 } from 'lucide-react';
+import { format } from 'date-fns';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { CycleIntelligenceEngine, CycleEntry, CheckInEntry } from '@/lib/cycle-intelligence';
 import Link from 'next/link';
@@ -33,7 +34,7 @@ export default function DashboardPage() {
   const healthScore = engine.calculateHealthScore();
 
   // Find today's checkin
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
   const todayCheckIn = checkIns[todayStr];
 
   // Calculate Today's Wellness Score

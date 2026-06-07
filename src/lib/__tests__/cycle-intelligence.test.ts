@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CycleIntelligenceEngine } from '../cycle-intelligence';
-import { subDays } from 'date-fns';
+import { subDays, format } from 'date-fns';
 
 describe('CycleIntelligenceEngine - Advanced Test Cases', () => {
   const today = new Date();
@@ -95,7 +95,7 @@ describe('CycleIntelligenceEngine - Advanced Test Cases', () => {
       const poorHabitsCheckIns: Record<string, any> = {};
       // Generate 10 days of check-ins with poor habits
       for (let i = 0; i < 10; i++) {
-        const d = subDays(today, i).toISOString().split('T')[0];
+        const d = format(subDays(today, i), 'yyyy-MM-dd');
         poorHabitsCheckIns[d] = {
           mood: 'angry',
           sleep: 5, // Under 6.5 hours

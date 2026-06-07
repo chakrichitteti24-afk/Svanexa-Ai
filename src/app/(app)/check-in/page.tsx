@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Slider } from '@/components/ui/slider';
 import { toast } from 'sonner';
 import { Smile, Moon, Droplet, Dumbbell, Activity, ShieldAlert, Sparkles } from 'lucide-react';
+import { format } from 'date-fns';
 
 const checkInSchema = z.object({
   mood: z.string().min(1, 'Mood is required'),
@@ -42,7 +43,7 @@ const SYMPTOM_SEVERITIES = ['none', 'mild', 'moderate', 'severe'];
 
 export default function CheckInPage() {
   const [entries, setEntries] = useLocalStorage<Record<string, CheckInFormValues>>('hersync_checkins', {});
-  const today = new Date().toISOString().split('T')[0];
+  const today = format(new Date(), 'yyyy-MM-dd');
 
   const currentValues = entries[today] || {
     mood: 'calm',

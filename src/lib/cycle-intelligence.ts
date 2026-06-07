@@ -1,4 +1,4 @@
-import { differenceInDays, addDays, subDays } from 'date-fns';
+import { differenceInDays, addDays, subDays, format } from 'date-fns';
 
 export interface CycleEntry {
   startDate: string;
@@ -195,7 +195,7 @@ export class CycleIntelligenceEngine {
     const today = new Date();
     const recent: CheckInEntry[] = [];
     for (let i = 0; i < days; i++) {
-      const d = subDays(today, i).toISOString().split('T')[0];
+      const d = format(subDays(today, i), 'yyyy-MM-dd');
       if (this.checkIns[d]) recent.push(this.checkIns[d]);
     }
     return recent;
