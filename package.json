@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "cf-build": "opennextjs-cloudflare build",
+    "cf-build": "npx @cloudflare/next-on-pages@1",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run"
@@ -13,14 +13,13 @@
   "dependencies": {
     "@base-ui/react": "^1.5.0",
     "@hookform/resolvers": "^5.4.0",
-    "@opennextjs/cloudflare": "^1.19.11",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "framer-motion": "^12.40.0",
     "groq-sdk": "^1.2.1",
     "lucide-react": "^1.17.0",
-    "next": "16.2.7",
+    "next": "15.1.0",
     "next-themes": "^0.4.6",
     "react": "19.2.4",
     "react-day-picker": "^10.0.1",
@@ -42,7 +41,7 @@
     "@types/react-dom": "^19",
     "esbuild": "^0.28.0",
     "eslint": "^9",
-    "eslint-config-next": "16.2.7",
+    "eslint-config-next": "15.1.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.8",
