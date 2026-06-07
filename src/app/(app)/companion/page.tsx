@@ -16,7 +16,7 @@ type Message = {
   content: string;
 };
 
-type ChatSession = {
+export type ChatSession = {
   id: string;
   title: string;
   messages: Message[];
