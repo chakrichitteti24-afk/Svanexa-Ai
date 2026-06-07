@@ -8,14 +8,28 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
 
   // Load from localStorage on client-side mount
   useEffect(() => {
-    try {
-      const item = window.localStorage.getItem(key);
-      if (item !== null) {
-        setStoredValue(JSON.parse(item));
+    const loadFromStorage = () => {
+      try {
+        const item = window.localStorage.getItem(key);
+        if (item !== null) {
+          setStoredValue(JSON.parse(item));
+        }
+      } catch (error) {
+        console.warn(`Error reading localStorage key "${key}":`, error);
       }
-    } catch (error) {
-      console.warn(`Error reading localStorage key "${key}":`, error);
-    }
+    };
+
+    loadFromStorage();
+
+    // Listen for custom event on the same window
+    window.addEventListener('local-storage', loadFromStorage);
+    // Listen for native storage event from other tabs
+    window.addEventListener('storage', loadFromStorage);
+
+    return () => {
+      window.removeEventListener('local-storage', loadFromStorage);
+      window.removeEventListener('storage', loadFromStorage);
+    };
   }, [key]);
 
   // Persist setter
@@ -25,6 +39,7 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
         const valueToStore = value instanceof Function ? value(prevValue) : value;
         if (typeof window !== 'undefined') {
           window.localStorage.setItem(key, JSON.stringify(valueToStore));
+          window.dispatchEvent(new Event('local-storage'));
         }
         return valueToStore;
       });

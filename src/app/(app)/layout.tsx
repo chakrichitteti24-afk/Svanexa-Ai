@@ -26,7 +26,11 @@ export default function AppLayout({
 
   useEffect(() => {
     if (mounted && !hasOnboarded && pathname !== '/onboarding') {
-      router.replace('/onboarding');
+      // Double check localStorage directly to prevent race conditions during navigation
+      const actualStorageValue = window.localStorage.getItem('hersync_onboarded');
+      if (actualStorageValue !== 'true') {
+        router.replace('/onboarding');
+      }
     }
   }, [hasOnboarded, pathname, router, mounted]);
 
