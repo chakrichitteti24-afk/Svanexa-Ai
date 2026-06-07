@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -22,6 +22,12 @@ export default function OnboardingPage() {
   const [localName, setLocalName] = useState(name || '');
   const [localCompanionName, setLocalCompanionName] = useState(companionName || 'Luna');
   const [localAge, setLocalAge] = useState(age || '');
+
+  useEffect(() => {
+    if (name) setLocalName(name);
+    if (companionName) setLocalCompanionName(companionName);
+    if (age) setLocalAge(age);
+  }, [name, companionName, age]);
 
   const handleComplete = (e: React.FormEvent) => {
     e.preventDefault();
