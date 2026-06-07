@@ -1,5 +1,8 @@
 'use client';
 
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
+
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';

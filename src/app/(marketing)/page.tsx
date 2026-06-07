@@ -1,3 +1,6 @@
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
+
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Activity, CalendarHeart, Sparkles, Droplets } from 'lucide-react';

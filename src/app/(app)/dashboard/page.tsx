@@ -1,5 +1,8 @@
 'use client';
 
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
+
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
