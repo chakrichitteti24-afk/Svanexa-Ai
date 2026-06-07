@@ -1,6 +1,8 @@
 'use client';
 
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { createClient } from '@/utils/supabase/client';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,45 +11,110 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { User, Settings, Sparkles, Shield, Trash2, Heart } from 'lucide-react';
+import { User, Settings, Sparkles, Shield, Trash2, Heart, LogOut, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 export default function ProfilePage() {
-  const [name, setName] = useLocalStorage('hersync_user_name', 'Sarah');
-  const [age, setAge] = useLocalStorage('hersync_user_age', '26');
+  const router = useRouter();
+  const supabase = createClient();
+  
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  // Supabase state
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [dob, setDob] = useState('');
+  const [companionName, setCompanionName] = useState('Luna');
+
+  // Local Storage state (for non-database preferences right now)
   const [weight, setWeight] = useLocalStorage('hersync_user_weight', '62');
   const [hasPCOS, setHasPCOS] = useLocalStorage('hersync_has_pcos', false);
   const [avgCycleLength, setAvgCycleLength] = useLocalStorage('hersync_avg_cycle_length', 28);
   const [avgPeriodLength, setAvgPeriodLength] = useLocalStorage('hersync_avg_period_length', 5);
-
-  const [companionName, setCompanionName] = useLocalStorage('hersync_companion_name', 'HerSync AI');
   const [language, setLanguage] = useLocalStorage('hersync_language', 'English');
   const [personality, setPersonality] = useLocalStorage('hersync_personality', 'Friendly');
 
-  const [isSaved, setIsSaved] = useState(false);
+  useEffect(() => {
+    async function loadProfile() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setEmail(user.email || '');
+        const { data } = await supabase
+          .from('profiles')
+          .select('username, ai_name, date_of_birth')
+          .eq('id', user.id)
+          .single();
+        
+        if (data) {
+          setName(data.username);
+          setCompanionName(data.ai_name);
+          setDob(data.date_of_birth);
+        }
+      }
+      setLoading(false);
+    }
+    loadProfile();
+  }, [supabase]);
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSaved(true);
-    toast.success('Profile settings updated successfully!');
-    setTimeout(() => setIsSaved(false), 2000);
+    setSaving(true);
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          username: name,
+          ai_name: companionName,
+          date_of_birth: dob
+        })
+        .eq('id', user.id);
+
+      if (error) {
+        toast.error(error.message);
+      } else {
+        toast.success('Profile settings updated successfully!');
+      }
+    }
+    setSaving(false);
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push('/login');
+    router.refresh();
   };
 
   const handleClearAllData = () => {
     if (confirm('Are you sure you want to delete all your tracking logs, cycle history, and reset your preferences? This cannot be undone.')) {
       localStorage.clear();
-      toast.success('All data has been reset. Reloading app...');
+      toast.success('Local tracking data reset.');
       setTimeout(() => {
-        window.location.href = '/dashboard';
+        window.location.reload();
       }, 1500);
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-pink-500" />
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-md mx-auto space-y-6 pb-24 animate-in fade-in duration-500">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight mb-1">My Health Profile</h1>
-        <p className="text-xs text-muted-foreground">Manage your settings, PCOS parameters, and AI companion settings.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight mb-1">My Profile</h1>
+          <p className="text-xs text-muted-foreground">{email}</p>
+        </div>
+        <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-muted-foreground hover:text-foreground">
+          <LogOut className="w-4 h-4 mr-2" /> Sign Out
+        </Button>
       </div>
 
       <form onSubmit={handleSaveProfile} className="space-y-6">
@@ -55,9 +122,9 @@ export default function ProfilePage() {
         <Card className="border-border/40 bg-card/60 backdrop-blur-xs">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <User className="w-4 h-4 text-pink-500" /> Demographic Info
+              <User className="w-4 h-4 text-pink-500" /> Account Profile
             </CardTitle>
-            <CardDescription className="text-[10px]">Your personal metrics support cycle predictions.</CardDescription>
+            <CardDescription className="text-[10px]">Your personal details synced to Supabase.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -71,17 +138,17 @@ export default function ProfilePage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="user-age" className="text-xs">Age (years)</Label>
+                <Label htmlFor="user-dob" className="text-xs">Date of Birth</Label>
                 <Input 
-                  id="user-age" 
-                  type="number" 
-                  value={age} 
-                  onChange={(e) => setAge(e.target.value)} 
+                  id="user-dob" 
+                  type="date" 
+                  value={dob} 
+                  onChange={(e) => setDob(e.target.value)} 
                   className="h-11 bg-background text-sm"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="user-weight" className="text-xs">Weight (kg)</Label>
+                <Label htmlFor="user-weight" className="text-xs">Weight (kg) <span className="text-muted-foreground font-normal">(local)</span></Label>
                 <Input 
                   id="user-weight" 
                   type="number" 
@@ -94,11 +161,52 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
+        {/* Companion Setup Card */}
+        <Card className="border-border/40 bg-card/60 backdrop-blur-xs">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-pink-500" /> AI Companion Config
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs">Companion Name</Label>
+              <Input 
+                value={companionName} 
+                onChange={e => setCompanionName(e.target.value)} 
+                className="h-11 bg-background text-sm"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">Language <span className="text-muted-foreground font-normal">(local)</span></Label>
+              <Select value={language} onValueChange={(val) => setLanguage(val || '')}>
+                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="English">English</SelectItem>
+                  <SelectItem value="Hindi">Hindi (हिंदी)</SelectItem>
+                  <SelectItem value="Telugu">Telugu (తెలుగు)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">Personality <span className="text-muted-foreground font-normal">(local)</span></Label>
+              <Select value={personality} onValueChange={(val) => setPersonality(val || '')}>
+                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Friendly">Friendly & Empathetic</SelectItem>
+                  <SelectItem value="Professional">Professional & Direct</SelectItem>
+                  <SelectItem value="Motivational">Motivational Coach</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* PCOS & Cycle parameters Card */}
         <Card className="border-border/40 bg-card/60 backdrop-blur-xs">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Heart className="w-4 h-4 text-pink-500" /> Cycle & Condition parameters
+              <Heart className="w-4 h-4 text-pink-500" /> Cycle Parameters <span className="text-[10px] text-muted-foreground font-normal">(local)</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -139,83 +247,19 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        {/* Companion Setup Card */}
-        <Card className="border-border/40 bg-card/60 backdrop-blur-xs">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-pink-500" /> AI Companion Config
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-xs">Companion Name</Label>
-              <Input 
-                value={companionName} 
-                onChange={e => setCompanionName(e.target.value)} 
-                className="h-11 bg-background text-sm"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs">Language</Label>
-              <Select value={language} onValueChange={(val) => setLanguage(val || '')}>
-                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="English">English</SelectItem>
-                  <SelectItem value="Hindi">Hindi (हिंदी)</SelectItem>
-                  <SelectItem value="Telugu">Telugu (తెలుగు)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs">Personality</Label>
-              <Select value={personality} onValueChange={(val) => setPersonality(val || '')}>
-                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Friendly">Friendly & Empathetic</SelectItem>
-                  <SelectItem value="Professional">Professional & Direct</SelectItem>
-                  <SelectItem value="Motivational">Motivational Coach</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Health Trackers & Tools */}
-        <Card className="border-border/40 bg-card/60 backdrop-blur-xs">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Settings className="w-4 h-4 text-pink-500" /> Trackers & Analytics
-            </CardTitle>
-            <CardDescription className="text-[10px]">Access advanced tracking modules.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-3">
-            <Link href="/skin" className="w-full">
-              <Button type="button" variant="outline" className="w-full h-12 rounded-xl text-xs flex flex-col justify-center items-center gap-1 border-border/60 hover:bg-secondary/40">
-                <span className="text-lg">📷</span>
-                <span>Skin Tracker</span>
-              </Button>
-            </Link>
-            <Link href="/reports" className="w-full">
-              <Button type="button" variant="outline" className="w-full h-12 rounded-xl text-xs flex flex-col justify-center items-center gap-1 border-border/60 hover:bg-secondary/40">
-                <span>📊</span>
-                <span>Health Reports</span>
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
         <Button 
           type="submit" 
+          disabled={saving}
           className="w-full h-12 rounded-full text-sm bg-pink-600 hover:bg-pink-500 text-white font-medium"
         >
-          {isSaved ? 'Saved! ✨' : 'Save Profile Preferences'}
+          {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Save Profile Details'}
         </Button>
 
         {/* Destructive zone */}
         <Card className="border-red-500/20 bg-red-500/5">
           <CardHeader className="pb-2">
             <CardTitle className="text-xs text-red-500 font-semibold flex items-center gap-2">
-              <Shield className="w-4 h-4 text-red-500" /> Reset Settings
+              <Shield className="w-4 h-4 text-red-500" /> Danger Zone
             </CardTitle>
           </CardHeader>
           <CardContent>

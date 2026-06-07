@@ -2,398 +2,284 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { createClient } from '@/utils/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from '@/components/ui/sheet';
-import { getCompanionResponse, generateChatTitle } from '@/lib/gemini';
-import { CycleIntelligenceEngine } from '@/lib/cycle-intelligence';
-import { Send, Bot, User, Mic, MicOff, RefreshCw, Menu, Plus, MessageSquare, Trash2, Edit2 } from 'lucide-react';
-import { toast } from 'sonner';
-import { isToday, isYesterday, subDays, isAfter } from 'date-fns';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Send, ArrowLeft, MoreVertical, Trash2, BrainCircuit, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { getCompanionResponse } from '@/lib/gemini';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { format } from 'date-fns';
 
-type Message = {
+export interface ChatMessage {
   role: 'user' | 'model';
   content: string;
-};
+}
 
-export type ChatSession = {
+export interface ChatSession {
   id: string;
   title: string;
-  messages: Message[];
+  messages: ChatMessage[];
   created_at: number;
   updated_at: number;
-};
+}
 
 export default function CompanionPage() {
+  const supabase = createClient();
+  const [userName, setUserName] = useState<string>('there');
+  const [aiName, setAiName] = useState<string>('Luna');
+  const [loadingProfile, setLoadingProfile] = useState(true);
+
   const [sessions, setSessions] = useLocalStorage<ChatSession[]>('hersync_chat_sessions', []);
   const [activeSessionId, setActiveSessionId] = useLocalStorage<string | null>('hersync_active_session', null);
   
-  const [input, setInput] = useState('');
+  const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  
-  // Settings loaded from local storage
-  const [companionName] = useLocalStorage('hersync_companion_name', 'HerSync AI');
-  const [language] = useLocalStorage('hersync_language', 'English');
-  const [personality] = useLocalStorage('hersync_personality', 'Friendly');
-  const [hasPCOS] = useLocalStorage('hersync_has_pcos', false);
-  const [cycles] = useLocalStorage<any[]>('hersync_cycles', []);
-  const [checkIns] = useLocalStorage<any>('hersync_checkins', {});
-  
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-cleanup sessions older than 7 days and set default active session
+  // Fetch profile
   useEffect(() => {
-    const sevenDaysAgo = subDays(new Date(), 7).getTime();
-    const validSessions = sessions.filter(s => s.updated_at > sevenDaysAgo);
-    
-    if (validSessions.length !== sessions.length) {
-      setSessions(validSessions);
+    async function loadProfile() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('username, ai_name')
+          .eq('id', user.id)
+          .single();
+        
+        if (data) {
+          setUserName(data.username);
+          setAiName(data.ai_name);
+        }
+      }
+      setLoadingProfile(false);
     }
+    loadProfile();
+  }, [supabase]);
 
-    if (!activeSessionId && validSessions.length > 0) {
-      setActiveSessionId(validSessions[0].id);
-    }
-  }, [sessions, activeSessionId, setSessions, setActiveSessionId]);
-
-  const activeSession = sessions.find(s => s.id === activeSessionId) || null;
-  const messages = activeSession?.messages || [];
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
+  // Ensure an active session exists when profile loads
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, isLoading]);
+    if (loadingProfile) return;
 
-  const handleSend = async (textToSend?: string) => {
-    const messageContent = textToSend || input.trim();
-    if (!messageContent || isLoading) return;
-
-    if (!textToSend) setInput('');
-    
-    setIsLoading(true);
-
-    const newUserMsg: Message = { role: 'user', content: messageContent };
-    let currentSessionId = activeSessionId;
-    let currentMessages = [...messages, newUserMsg];
-
-    if (!currentSessionId) {
-      // Create new session
-      currentSessionId = crypto.randomUUID();
+    if (sessions.length === 0 || !activeSessionId) {
       const newSession: ChatSession = {
-        id: currentSessionId,
-        title: 'New Conversation',
-        messages: currentMessages,
+        id: crypto.randomUUID(),
+        title: 'New Chat',
+        messages: [
+          {
+            role: 'model',
+            content: `Hey ${userName} 😊 I'm ${aiName}. It's nice to see you again. How are you feeling today?`
+          }
+        ],
         created_at: Date.now(),
         updated_at: Date.now()
       };
       setSessions([newSession, ...sessions]);
-      setActiveSessionId(currentSessionId);
-      
-      // Async generate title
-      generateChatTitle(messageContent).then(title => {
-        setSessions(prev => prev.map(s => s.id === currentSessionId ? { ...s, title } : s));
-      });
-    } else {
-      // Update existing session immediately for UI
-      setSessions(prev => prev.map(s => 
-        s.id === currentSessionId 
-          ? { ...s, messages: currentMessages, updated_at: Date.now() } 
-          : s
-      ));
+      setActiveSessionId(newSession.id);
     }
+  }, [sessions.length, activeSessionId, userName, aiName, loadingProfile, setSessions, setActiveSessionId]);
 
-    // Prepare Context & Health Data
-    const history = currentMessages.map(m => ({ role: m.role, parts: [{ text: m.content }] }));
-    const engine = new CycleIntelligenceEngine(cycles, checkIns, hasPCOS);
-    const analytics = engine.analyzeCycles();
-    const prediction = engine.predictNextPeriod();
-    const healthScore = engine.calculateHealthScore();
-    const recentCheckIns = engine.getRecentCheckIns(14);
+  const activeSession = sessions.find(s => s.id === activeSessionId);
+  const messages = activeSession?.messages || [];
+
+  // Scroll to bottom
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const updateActiveSession = (newMessages: ChatMessage[]) => {
+    if (!activeSessionId) return;
     
-    const avgSleep = recentCheckIns.length > 0 ? (recentCheckIns.reduce((a, b) => a + b.sleep, 0) / recentCheckIns.length).toFixed(1) : '7.0';
-    const avgWater = recentCheckIns.length > 0 ? (recentCheckIns.reduce((a, b) => a + b.water, 0) / recentCheckIns.length).toFixed(1) : '2.0';
-
-    const healthSummaryObj = {
-      pcos: hasPCOS,
-      avg_cycle_length: analytics.avgCycleLength,
-      cycle_regularity: analytics.regularityStatus,
-      cycle_health_score: healthScore.score,
-      avg_sleep: avgSleep,
-      avg_water: avgWater,
-      recent_period_prediction: prediction ? `${prediction.earliestDate.toLocaleDateString()} - ${prediction.latestDate.toLocaleDateString()}` : 'Unknown'
-    };
-
-    const response = await getCompanionResponse(
-      messageContent,
-      history,
-      language,
-      personality,
-      companionName,
-      JSON.stringify(healthSummaryObj)
-    );
-
-    // Save final AI response to session
-    setSessions(prev => prev.map(s => 
-      s.id === currentSessionId 
-        ? { ...s, messages: [...s.messages, { role: 'model', content: response || 'Error occurred.' }], updated_at: Date.now() } 
-        : s
-    ));
-    setIsLoading(false);
-  };
-
-  const handleVoiceInput = () => {
-    if (isRecording) {
-      setIsRecording(false);
-      const speechResults = [
-        "How can I reduce bloating in my luteal phase?",
-        "What are the best food suggestions for PCOS insulin spikes?",
-        "Can you check my average sleep trend impact?"
-      ];
-      setInput(speechResults[Math.floor(Math.random() * speechResults.length)]);
-      toast.success("Voice transcribed successfully!");
-    } else {
-      setIsRecording(true);
-      toast.info("Listening... Speak now and press microphone again to finish.");
+    // Auto-generate title from first user message if it's "New Chat"
+    let newTitle = activeSession?.title;
+    if (newMessages.length === 3 && activeSession?.title === 'New Chat') {
+      const firstUserMsg = newMessages[1].content;
+      newTitle = firstUserMsg.length > 25 ? firstUserMsg.substring(0, 25) + '...' : firstUserMsg;
     }
+
+    const updatedSessions = sessions.map(s => {
+      if (s.id === activeSessionId) {
+        return { ...s, messages: newMessages, updated_at: Date.now(), title: newTitle || s.title };
+      }
+      return s;
+    });
+    setSessions(updatedSessions);
   };
 
   const startNewChat = () => {
-    setActiveSessionId(null);
-    setIsSidebarOpen(false);
+    const newSession: ChatSession = {
+      id: crypto.randomUUID(),
+      title: 'New Chat',
+      messages: [
+        {
+          role: 'model',
+          content: `Hi ${userName}! What's on your mind?`
+        }
+      ],
+      created_at: Date.now(),
+      updated_at: Date.now()
+    };
+    setSessions([newSession, ...sessions]);
+    setActiveSessionId(newSession.id);
   };
 
-  const deleteSession = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    setSessions(prev => prev.filter(s => s.id !== id));
-    if (activeSessionId === id) {
-      setActiveSessionId(null);
+  const clearChatHistory = () => {
+    startNewChat();
+  };
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputMessage.trim() || isLoading || !activeSession) return;
+
+    const userMsg = inputMessage.trim();
+    setInputMessage('');
+    setIsLoading(true);
+
+    const newMessages: ChatMessage[] = [...activeSession.messages, { role: 'user', content: userMsg }];
+    updateActiveSession(newMessages);
+
+    try {
+      const historyToPass = activeSession.messages.map(msg => ({
+        role: msg.role,
+        parts: [{ text: msg.content }]
+      }));
+      const response = await getCompanionResponse(
+        userMsg, 
+        historyToPass, 
+        'English', 
+        'Friendly', 
+        aiName, 
+        `User Name: ${userName}`
+      );
+      updateActiveSession([...newMessages, { role: 'model', content: response }]);
+    } catch (error) {
+      updateActiveSession([...newMessages, { 
+        role: 'model', 
+        content: "I'm having a little trouble connecting right now. Can we try again in a moment?" 
+      }]);
+    } finally {
+      setIsLoading(false);
     }
-    toast.success("Chat deleted.");
   };
 
-  // Grouping for sidebar
-  const todaySessions = sessions.filter(s => isToday(new Date(s.updated_at))).sort((a,b) => b.updated_at - a.updated_at);
-  const yesterdaySessions = sessions.filter(s => isYesterday(new Date(s.updated_at))).sort((a,b) => b.updated_at - a.updated_at);
-  const last7DaysSessions = sessions.filter(s => {
-    const date = new Date(s.updated_at);
-    return !isToday(date) && !isYesterday(date) && isAfter(date, subDays(new Date(), 7));
-  }).sort((a,b) => b.updated_at - a.updated_at);
-
-  const SessionGroup = ({ title, data }: { title: string, data: ChatSession[] }) => {
-    if (data.length === 0) return null;
+  if (loadingProfile) {
     return (
-      <div className="mb-6 px-3">
-        <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 px-2">{title}</h4>
-        <div className="space-y-0.5">
-          {data.map(session => (
-            <button
-              key={session.id}
-              onClick={() => { setActiveSessionId(session.id); setIsSidebarOpen(false); }}
-              className={`w-full text-left px-3 py-2 rounded-xl text-sm flex items-center justify-between group transition-colors ${
-                activeSessionId === session.id ? 'bg-secondary/80 text-foreground font-medium' : 'text-muted-foreground hover:bg-secondary/40 hover:text-foreground'
-              }`}
-            >
-              <div className="flex items-center gap-2 overflow-hidden">
-                <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-70" />
-                <span className="truncate text-xs">{session.title}</span>
-              </div>
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <div 
-                  role="button"
-                  onClick={(e) => deleteSession(e, session.id)} 
-                  className="p-1.5 hover:bg-red-500/10 hover:text-red-500 rounded-md transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-pink-500" />
       </div>
     );
-  };
+  }
 
   return (
-    <div className="max-w-md mx-auto flex flex-col h-[calc(100vh-10rem)] md:h-[calc(100vh-12rem)] relative animate-in fade-in duration-500 overflow-hidden bg-card/10 border border-border/20 rounded-2xl">
-      
-      {/* Premium Compact Header */}
-      <div className="p-3 border-b bg-card/45 backdrop-blur-xs flex items-center justify-between shrink-0">
+    <div className="flex flex-col h-screen max-w-2xl mx-auto bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      {/* App Bar */}
+      <header className="flex items-center justify-between px-4 py-3 border-b border-border/40 bg-background/80 backdrop-blur-md z-10">
         <div className="flex items-center gap-3">
-          <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
-            <SheetTrigger 
-              render={<Button variant="ghost" size="icon" className="h-9 w-9 rounded-full shrink-0" />}
-            >
-              <Menu className="w-4 h-4" />
-            </SheetTrigger>
-            <SheetContent side="left" className="w-[85vw] sm:w-[320px] p-0 flex flex-col border-r-border/40 bg-background/95 backdrop-blur-xl">
-              <SheetHeader className="p-4 border-b border-border/40 text-left space-y-1">
-                <SheetTitle className="text-sm font-bold flex items-center gap-2">
-                  <Bot className="w-4 h-4 text-pink-500" />
-                  Chat History
-                </SheetTitle>
-                <SheetDescription className="text-xs">
-                  Chats are stored locally for 7 days.
-                </SheetDescription>
-              </SheetHeader>
-              <div className="p-3">
-                <Button onClick={startNewChat} className="w-full justify-start gap-2 h-11 bg-pink-600 hover:bg-pink-500 text-white rounded-xl shadow-xs">
-                  <Plus className="w-4 h-4" />
-                  New Conversation
-                </Button>
-              </div>
-              <div className="flex-1 overflow-y-auto py-2 scrollbar-none">
-                <SessionGroup title="Today" data={todaySessions} />
-                <SessionGroup title="Yesterday" data={yesterdaySessions} />
-                <SessionGroup title="Previous 7 Days" data={last7DaysSessions} />
-                
-                {sessions.length === 0 && (
-                  <div className="text-center py-12 px-4 text-muted-foreground">
-                    <MessageSquare className="w-8 h-8 mx-auto mb-3 opacity-20" />
-                    <p className="text-xs">No recent conversations.</p>
-                  </div>
-                )}
-              </div>
-            </SheetContent>
-          </Sheet>
-
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-500 to-violet-500 flex items-center justify-center text-white shadow-sm shrink-0">
-              <Bot className="w-4 h-4" />
+          <Link href="/dashboard" className="p-2 -ml-2 rounded-full hover:bg-secondary/50 text-muted-foreground transition-colors">
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-pink-400 to-violet-500 flex items-center justify-center shadow-inner relative">
+              <BrainCircuit className="w-5 h-5 text-white" />
+              {isLoading && (
+                <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                </span>
+              )}
             </div>
             <div>
-              <h2 className="text-sm font-bold text-foreground leading-tight">{companionName}</h2>
-              <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                <span className="text-[9px] text-muted-foreground font-medium">Online • {personality}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          onClick={() => {
-            if(activeSessionId) {
-              setSessions(prev => prev.map(s => s.id === activeSessionId ? {...s, messages: []} : s));
-              toast.success("Chat cleared.");
-            }
-          }} 
-          className="h-8 w-8 rounded-full hover:bg-secondary/80 text-muted-foreground hover:text-foreground"
-          title="Clear Current Chat"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-        </Button>
-      </div>
-
-      {/* Chat Messages Container */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-background/20 scrollbar-none">
-        {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center px-4 max-w-[280px] mx-auto space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-pink-500/5 flex items-center justify-center border border-pink-500/10">
-              <Bot className="w-6 h-6 text-pink-500" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="font-semibold text-xs text-foreground">Start a New Chat</h3>
-              <p className="text-[10px] text-muted-foreground leading-relaxed">
-                Ask about PCOS diet tips, sleep adjustments, cycle irregularity, bloating, or skincare routines.
+              <h1 className="font-bold text-foreground leading-tight">{aiName}</h1>
+              <p className="text-[10px] text-muted-foreground font-medium flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span> Online
               </p>
             </div>
           </div>
-        ) : (
-          messages.map((msg, idx) => (
-            <div key={idx} className={`flex gap-2.5 max-w-[90%] ${msg.role === 'user' ? 'ml-auto flex-row-reverse' : ''}`}>
-              <div className={`w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-white ${msg.role === 'user' ? 'bg-pink-600' : 'bg-gradient-to-br from-pink-500 to-violet-500'}`}>
-                {msg.role === 'user' ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
-              </div>
-              <div className={`p-3 rounded-2xl text-xs leading-relaxed shadow-xs ${
-                msg.role === 'user' 
-                  ? 'bg-pink-600 text-white rounded-tr-xs' 
-                  : 'bg-card border border-border/40 text-foreground rounded-tl-xs whitespace-pre-wrap'
-              }`}>
+        </div>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger className="inline-flex items-center justify-center rounded-full h-9 w-9 hover:bg-secondary/50 text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50">
+            <MoreVertical className="w-5 h-5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48 bg-card/95 backdrop-blur-xl border-border/40">
+            <DropdownMenuItem onClick={startNewChat} className="cursor-pointer font-medium">
+              Start New Chat
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={clearChatHistory} className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive font-medium">
+              <Trash2 className="w-4 h-4 mr-2" /> Clear History
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </header>
+
+      {/* Chat Area */}
+      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+        <div className="flex flex-col gap-4 pb-4">
+          <div className="text-center text-[10px] text-muted-foreground/60 font-medium mb-4">
+            Today, {format(new Date(), 'h:mm a')}
+          </div>
+          
+          {messages.map((msg, index) => (
+            <div 
+              key={index} 
+              className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div 
+                className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed shadow-sm ${
+                  msg.role === 'user' 
+                    ? 'bg-gradient-to-br from-pink-500 to-violet-500 text-white rounded-br-sm' 
+                    : 'bg-secondary/60 text-foreground border border-border/40 rounded-bl-sm'
+                }`}
+              >
                 {msg.content}
               </div>
             </div>
-          ))
-        )}
-        {isLoading && (
-          <div className="flex gap-2.5 max-w-[90%]">
-            <div className="w-7 h-7 shrink-0 rounded-full bg-gradient-to-br from-pink-500 to-violet-500 flex items-center justify-center text-white">
-              <Bot className="w-3.5 h-3.5" />
+          ))}
+
+          {isLoading && (
+            <div className="flex w-full justify-start animate-in fade-in slide-in-from-bottom-2">
+              <div className="bg-secondary/60 text-foreground border border-border/40 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
             </div>
-            <div className="p-3 rounded-2xl bg-card border border-border/40 rounded-tl-xs flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 bg-pink-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
-              <div className="w-1.5 h-1.5 bg-pink-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
-              <div className="w-1.5 h-1.5 bg-pink-500 rounded-full animate-bounce" />
-            </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+          )}
+        </div>
+      </ScrollArea>
 
-      {/* Swipeable Quick Prompts & Sticky Input bar */}
-      <div className="p-2.5 border-t bg-card/45 backdrop-blur-xs shrink-0 space-y-2.5">
-        
-        {/* Swipeable Prompts (horizontal scroll) */}
-        {messages.length === 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none snap-x mask-gradient">
-            <button 
-              onClick={() => handleSend("What are the best exercises for PCOS?")}
-              className="px-3 py-1.5 bg-secondary/30 hover:bg-secondary/50 border border-border/40 rounded-full text-[10px] text-muted-foreground hover:text-foreground shrink-0 snap-start transition-all"
-            >
-              🏋️ PCOS Workouts
-            </button>
-            <button 
-              onClick={() => handleSend("How can I lower my stress levels and sleep better?")}
-              className="px-3 py-1.5 bg-secondary/30 hover:bg-secondary/50 border border-border/40 rounded-full text-[10px] text-muted-foreground hover:text-foreground shrink-0 snap-start transition-all"
-            >
-              🧘 Stress & Sleep
-            </button>
-            <button 
-              onClick={() => handleSend("What foods help with cycle regularities?")}
-              className="px-3 py-1.5 bg-secondary/30 hover:bg-secondary/50 border border-border/40 rounded-full text-[10px] text-muted-foreground hover:text-foreground shrink-0 snap-start transition-all"
-            >
-              🥗 Period Nutrition
-            </button>
-          </div>
-        )}
-
-        {/* Input Bar */}
-        <form onSubmit={e => { e.preventDefault(); handleSend(); }} className="flex gap-2 items-center">
-          <Button 
-            type="button" 
-            size="icon" 
-            onClick={handleVoiceInput}
-            className={`rounded-full shrink-0 h-11 w-11 transition-all ${
-              isRecording 
-                ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse' 
-                : 'bg-secondary/40 hover:bg-secondary/60 text-muted-foreground hover:text-foreground border border-border/30'
-            }`}
-            aria-label="Voice input"
-          >
-            {isRecording ? <MicOff className="w-4.5 h-4.5" /> : <Mic className="w-4.5 h-4.5" />}
-          </Button>
-
-          <Input 
-            placeholder={`Message ${companionName}...`}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            className="flex-1 rounded-full bg-background border-border/50 h-11 px-4 text-xs focus-visible:ring-1 focus-visible:ring-pink-500"
+      {/* Input Area */}
+      <div className="p-4 bg-background/80 backdrop-blur-md border-t border-border/40">
+        <form 
+          onSubmit={handleSendMessage}
+          className="flex items-end gap-2 bg-secondary/30 border border-border/50 p-1.5 rounded-3xl shadow-sm focus-within:ring-1 focus-within:ring-pink-500/30 focus-within:border-pink-500/50 transition-all"
+        >
+          <Input
+            value={inputMessage}
+            onChange={(e) => setInputMessage(e.target.value)}
+            placeholder={`Message ${aiName}...`}
+            className="flex-1 bg-transparent border-0 focus-visible:ring-0 px-3 shadow-none text-[15px]"
             disabled={isLoading}
+            autoComplete="off"
           />
-          
           <Button 
             type="submit" 
             size="icon" 
-            className="rounded-full bg-pink-600 hover:bg-pink-500 text-white w-11 h-11 shrink-0 transition-transform active:scale-95" 
-            disabled={isLoading || !input.trim()}
+            disabled={!inputMessage.trim() || isLoading}
+            className={`rounded-full shrink-0 h-10 w-10 transition-all ${
+              inputMessage.trim() ? 'bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-md' : 'bg-muted text-muted-foreground'
+            }`}
           >
-            <Send className="w-4.5 h-4.5" />
+            <Send className="w-4 h-4 ml-0.5" />
           </Button>
         </form>
+        <div className="text-center mt-2">
+          <p className="text-[9px] text-muted-foreground/60">{aiName} can make mistakes. Consider verifying medical info.</p>
+        </div>
       </div>
     </div>
   );

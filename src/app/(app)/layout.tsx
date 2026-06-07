@@ -3,12 +3,12 @@
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Navbar } from '@/components/layout/Navbar';
 import { BottomNav } from '@/components/layout/BottomNav';
-import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useEffect, useState } from 'react';
+import { createClient } from '@/utils/supabase/client';
 
 export default function AppLayout({
   children,
@@ -16,33 +16,17 @@ export default function AppLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const [hasOnboarded] = useLocalStorage('hersync_onboarded', false);
   const [mounted, setMounted] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setMounted(true);
+    setLoading(false);
   }, []);
 
-  useEffect(() => {
-    if (mounted && !hasOnboarded && pathname !== '/onboarding') {
-      // Double check localStorage directly to prevent race conditions during navigation
-      const actualStorageValue = window.localStorage.getItem('hersync_onboarded');
-      if (actualStorageValue !== 'true') {
-        router.replace('/onboarding');
-      }
-    }
-  }, [hasOnboarded, pathname, router, mounted]);
+  const hideFAB = pathname === '/check-in' || pathname === '/companion' || pathname === '/login' || pathname === '/signup' || pathname === '/forgot-password';
 
-  const isOnboarding = pathname === '/onboarding';
-  const hideFAB = pathname === '/check-in' || pathname === '/companion' || isOnboarding;
-
-  // Render nothing or a spinner until mounted to prevent hydration mismatch
-  if (!mounted) return null;
-
-  if (isOnboarding) {
-    return <main className="bg-background">{children}</main>;
-  }
+  if (!mounted || loading) return <div className="min-h-screen bg-background" />;
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
