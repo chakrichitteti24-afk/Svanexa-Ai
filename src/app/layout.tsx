@@ -8,6 +8,15 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'HerSync AI | PCOS & PCOD Wellness Platform',
   description: 'AI-powered PCOS/PCOD wellness platform tracking mood, cycle, skin, and lifestyle.',
+  icons: {
+    icon: [
+      { url: '/favicon.ico' },
+      { url: '/icon.png', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/apple-icon.png' },
+    ],
+  },
 };
 
 export default function RootLayout({
