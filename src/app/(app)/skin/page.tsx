@@ -131,6 +131,7 @@ export default function SkinTrackerPage() {
               <Label>Skin Photo</Label>
               {preview ? (
                 <div className="relative rounded-2xl overflow-hidden aspect-[4/3] border border-border group">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={preview} alt="Skin Preview" className="w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <Button variant="destructive" size="sm" onClick={() => setPreview('')}>
@@ -269,7 +270,10 @@ export default function SkinTrackerPage() {
                       <Trash2 className="w-4 h-4" />
                     </Button>
                     {entry.image ? (
-                      <img src={entry.image} alt="Skin Log" className="w-24 h-24 object-cover rounded-xl border border-border" />
+                      <>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={entry.image} alt="Skin Log" className="w-24 h-24 object-cover rounded-xl border border-border" />
+                      </>
                     ) : (
                       <div className="w-24 h-24 bg-muted rounded-xl flex items-center justify-center border border-border">
                         <Camera className="w-6 h-6 text-muted-foreground opacity-50" />

@@ -33,7 +33,6 @@ export default function MessageList({ messages, isLoading, aiName }: MessageList
   useEffect(() => {
     // Initial mount: instant scroll to bottom
     scrollToBottom('auto');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

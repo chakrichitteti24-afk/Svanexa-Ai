@@ -77,7 +77,7 @@ export default function CompanionPage() {
         created_at: Date.now(),
         updated_at: Date.now()
       };
-      setSessions([newSession, ...sessions]);
+      setSessions(prev => [newSession, ...prev]);
       setActiveSessionId(newSession.id);
     }
   }, [sessions.length, activeSessionId, userName, aiName, loadingProfile, setSessions, setActiveSessionId]);
