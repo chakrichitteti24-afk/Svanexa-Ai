@@ -1,21 +1,17 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useVisualViewport } from '@/hooks/useVisualViewport';
 import { createClient } from '@/utils/supabase/client';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, ArrowLeft, MoreVertical, Trash2, BrainCircuit, Loader2 } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Trash2, BrainCircuit, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { getCompanionResponse } from '@/lib/gemini';
+// getCompanionResponse is now handled server-side via /api/chat
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { format } from 'date-fns';
-
-export interface ChatMessage {
-  role: 'user' | 'model';
-  content: string;
-}
+import MessageList, { ChatMessage } from '@/components/chat/MessageList';
+import ChatInput from '@/components/chat/ChatInput';
+import SuggestedPrompts from '@/components/chat/SuggestedPrompts';
+import { apiFetch } from '@/utils/api-client';
 
 export interface ChatSession {
   id: string;
@@ -27,16 +23,20 @@ export interface ChatSession {
 
 export default function CompanionPage() {
   const supabase = createClient();
+  const viewportHeight = useVisualViewport();
+  
   const [userName, setUserName] = useState<string>('there');
   const [aiName, setAiName] = useState<string>('Luna');
   const [loadingProfile, setLoadingProfile] = useState(true);
 
   const [sessions, setSessions] = useLocalStorage<ChatSession[]>('hersync_chat_sessions', []);
   const [activeSessionId, setActiveSessionId] = useLocalStorage<string | null>('hersync_active_session', null);
+  const [cycles] = useLocalStorage<any[]>('hersync_cycles', []);
+  const [checkIns] = useLocalStorage<Record<string, any>>('hersync_checkins', {});
+  const [skinEntries] = useLocalStorage<any[]>('hersync_skin', []);
   
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Fetch profile
   useEffect(() => {
@@ -70,7 +70,8 @@ export default function CompanionPage() {
         messages: [
           {
             role: 'model',
-            content: `Hey ${userName} 😊 I'm ${aiName}. It's nice to see you again. How are you feeling today?`
+            content: `Hey ${userName} 😊 I'm ${aiName}. It's nice to see you again. How are you feeling today?`,
+            timestamp: Date.now()
           }
         ],
         created_at: Date.now(),
@@ -83,13 +84,6 @@ export default function CompanionPage() {
 
   const activeSession = sessions.find(s => s.id === activeSessionId);
   const messages = activeSession?.messages || [];
-
-  // Scroll to bottom
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
 
   const updateActiveSession = (newMessages: ChatMessage[]) => {
     if (!activeSessionId) return;
@@ -117,7 +111,8 @@ export default function CompanionPage() {
       messages: [
         {
           role: 'model',
-          content: `Hi ${userName}! What's on your mind?`
+          content: `Hi ${userName}! What's on your mind?`,
+          timestamp: Date.now()
         }
       ],
       created_at: Date.now(),
@@ -131,36 +126,56 @@ export default function CompanionPage() {
     startNewChat();
   };
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputMessage.trim() || isLoading || !activeSession) return;
+  const handleSendMessage = async (customMessage?: string) => {
+    const messageToSend = (customMessage || inputMessage).trim();
+    if (!messageToSend || isLoading || !activeSession) return;
 
-    const userMsg = inputMessage.trim();
+    // Clear input box
     setInputMessage('');
     setIsLoading(true);
 
-    const newMessages: ChatMessage[] = [...activeSession.messages, { role: 'user', content: userMsg }];
+    const userMsgObj: ChatMessage = { 
+      role: 'user', 
+      content: messageToSend, 
+      timestamp: Date.now() 
+    };
+
+    const newMessages: ChatMessage[] = [...activeSession.messages, userMsgObj];
     updateActiveSession(newMessages);
 
     try {
-      const historyToPass = activeSession.messages.map(msg => ({
-        role: msg.role,
-        parts: [{ text: msg.content }]
-      }));
-      const response = await getCompanionResponse(
-        userMsg, 
-        historyToPass, 
-        'English', 
-        'Friendly', 
-        aiName, 
-        `User Name: ${userName}`
-      );
-      updateActiveSession([...newMessages, { role: 'model', content: response }]);
-    } catch (error) {
-      updateActiveSession([...newMessages, { 
+      const chatResponse = await apiFetch('/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          message: messageToSend,
+          history: activeSession.messages.map(msg => ({
+            role: msg.role === 'model' ? 'assistant' : 'user',
+            content: msg.content
+          }))
+        })
+      });
+
+      if (!chatResponse.ok) {
+        throw new Error('Chat generation failed');
+      }
+
+      const chatData = await chatResponse.json();
+      const response = chatData.response;
+      
+      const aiMsgObj: ChatMessage = { 
         role: 'model', 
-        content: "I'm having a little trouble connecting right now. Can we try again in a moment?" 
-      }]);
+        content: response, 
+        timestamp: Date.now() 
+      };
+      
+      updateActiveSession([...newMessages, aiMsgObj]);
+    } catch (error) {
+      const errorMsgObj: ChatMessage = { 
+        role: 'model', 
+        content: "I'm having a little trouble connecting right now. Can we try again in a moment?", 
+        timestamp: Date.now() 
+      };
+      updateActiveSession([...newMessages, errorMsgObj]);
     } finally {
       setIsLoading(false);
     }
@@ -175,9 +190,12 @@ export default function CompanionPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen max-w-2xl mx-auto bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <div 
+      className="flex flex-col w-full max-w-2xl mx-auto bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 overflow-hidden border-x border-border/10"
+      style={{ height: viewportHeight ? `${viewportHeight}px` : '100dvh' }}
+    >
       {/* App Bar */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-border/40 bg-background/80 backdrop-blur-md z-10">
+      <header className="flex items-center justify-between px-4 py-3 border-b border-border/40 bg-background/80 backdrop-blur-md z-10 shrink-0">
         <div className="flex items-center gap-3">
           <Link href="/dashboard" className="p-2 -ml-2 rounded-full hover:bg-secondary/50 text-muted-foreground transition-colors">
             <ArrowLeft className="w-5 h-5" />
@@ -216,70 +234,27 @@ export default function CompanionPage() {
         </DropdownMenu>
       </header>
 
-      {/* Chat Area */}
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-        <div className="flex flex-col gap-4 pb-4">
-          <div className="text-center text-[10px] text-muted-foreground/60 font-medium mb-4">
-            Today, {format(new Date(), 'h:mm a')}
-          </div>
-          
-          {messages.map((msg, index) => (
-            <div 
-              key={index} 
-              className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div 
-                className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed shadow-sm ${
-                  msg.role === 'user' 
-                    ? 'bg-gradient-to-br from-pink-500 to-violet-500 text-white rounded-br-sm' 
-                    : 'bg-secondary/60 text-foreground border border-border/40 rounded-bl-sm'
-                }`}
-              >
-                {msg.content}
-              </div>
-            </div>
-          ))}
+      {/* Chat Messages */}
+      <MessageList
+        messages={messages}
+        isLoading={isLoading}
+        aiName={aiName}
+      />
 
-          {isLoading && (
-            <div className="flex w-full justify-start animate-in fade-in slide-in-from-bottom-2">
-              <div className="bg-secondary/60 text-foreground border border-border/40 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
-            </div>
-          )}
-        </div>
-      </ScrollArea>
-
-      {/* Input Area */}
-      <div className="p-4 bg-background/80 backdrop-blur-md border-t border-border/40">
-        <form 
-          onSubmit={handleSendMessage}
-          className="flex items-end gap-2 bg-secondary/30 border border-border/50 p-1.5 rounded-3xl shadow-sm focus-within:ring-1 focus-within:ring-pink-500/30 focus-within:border-pink-500/50 transition-all"
-        >
-          <Input
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            placeholder={`Message ${aiName}...`}
-            className="flex-1 bg-transparent border-0 focus-visible:ring-0 px-3 shadow-none text-[15px]"
-            disabled={isLoading}
-            autoComplete="off"
+      {/* Bottom suggestions & input */}
+      <div className="flex flex-col bg-background/85 backdrop-blur-md shrink-0">
+        {messages.length <= 1 && (
+          <SuggestedPrompts
+            onPromptClick={(prompt) => handleSendMessage(prompt)}
           />
-          <Button 
-            type="submit" 
-            size="icon" 
-            disabled={!inputMessage.trim() || isLoading}
-            className={`rounded-full shrink-0 h-10 w-10 transition-all ${
-              inputMessage.trim() ? 'bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-md' : 'bg-muted text-muted-foreground'
-            }`}
-          >
-            <Send className="w-4 h-4 ml-0.5" />
-          </Button>
-        </form>
-        <div className="text-center mt-2">
-          <p className="text-[9px] text-muted-foreground/60">{aiName} can make mistakes. Consider verifying medical info.</p>
-        </div>
+        )}
+        <ChatInput
+          value={inputMessage}
+          onChange={setInputMessage}
+          onSubmit={() => handleSendMessage()}
+          isLoading={isLoading}
+          aiName={aiName}
+        />
       </div>
     </div>
   );

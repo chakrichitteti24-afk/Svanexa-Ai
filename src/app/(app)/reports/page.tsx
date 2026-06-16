@@ -1,36 +1,92 @@
 'use client';
 
-import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useEffect, useState } from 'react';
+import { createClient } from '@/utils/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { FileText, CalendarHeart, Droplets, Activity, Brain } from 'lucide-react';
+import { FileText, CalendarHeart, Droplets, Activity, Brain, Loader2 } from 'lucide-react';
 import { differenceInDays } from 'date-fns';
 
 export default function ReportsPage() {
-  const [checkIns] = useLocalStorage<Record<string, any>>('hersync_checkins', {});
-  const [cycles] = useLocalStorage<any[]>('hersync_cycles', []);
-  const [skinEntries] = useLocalStorage<any[]>('hersync_skin', []);
+  const supabase = createClient();
+  const [loading, setLoading] = useState(true);
+  const [dailyLogs, setDailyLogs] = useState<any[]>([]);
+  const [cycleLogs, setCycleLogs] = useState<any[]>([]);
+  const [skinLogs, setSkinLogs] = useState<any[]>([]);
 
-  // Prepare data for charts
-  const sortedDates = Object.keys(checkIns).sort();
-  const last14Days = sortedDates.slice(-14);
-  
-  const chartData = last14Days.map(date => ({
-    date: new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-    mood: checkIns[date].mood === 'happy' ? 5 : checkIns[date].mood === 'calm' ? 4 : checkIns[date].mood === 'mood_swings' ? 3 : checkIns[date].mood === 'anxious' ? 2 : 1,
-    sleep: checkIns[date].sleep,
-    water: checkIns[date].water,
-    stress: checkIns[date].stress,
-    exercise: checkIns[date].exercise,
-  }));
+  useEffect(() => {
+    async function loadReportsData() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          // Fetch daily logs
+          const { data: dbDaily } = await supabase
+            .from('daily_logs')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('log_date', { ascending: true });
+          
+          if (dbDaily) setDailyLogs(dbDaily);
 
-  // Calculate summaries
-  const totalEntries = Object.keys(checkIns).length;
-  const avgSleep = totalEntries > 0 ? (Object.values(checkIns).reduce((acc: number, curr: any) => acc + curr.sleep, 0) / totalEntries).toFixed(1) : 0;
-  const avgWater = totalEntries > 0 ? (Object.values(checkIns).reduce((acc: number, curr: any) => acc + curr.water, 0) / totalEntries).toFixed(1) : 0;
+          // Fetch cycle logs
+          const { data: dbCycles } = await supabase
+            .from('cycle_logs')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('start_date', { ascending: false });
+          
+          if (dbCycles) setCycleLogs(dbCycles);
+
+          // Fetch skin logs
+          const { data: dbSkin } = await supabase
+            .from('skin_logs')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('log_date', { ascending: false });
+          
+          if (dbSkin) setSkinLogs(dbSkin);
+        }
+      } catch (err) {
+        console.error('Failed to load reports data:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadReportsData();
+  }, [supabase]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-pink-500" />
+      </div>
+    );
+  }
+
+  // Map data for charts
+  const chartData = dailyLogs.map(log => {
+    let moodVal = 3;
+    if (log.mood === 'happy') moodVal = 5;
+    if (log.mood === 'calm') moodVal = 4;
+    if (log.mood === 'anxious') moodVal = 2;
+    if (log.mood === 'sad' || log.mood === 'angry') moodVal = 1;
+
+    return {
+      date: new Date(log.log_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      mood: moodVal,
+      sleep: Number(log.sleep),
+      water: Number(log.water),
+      stress: Number(log.stress),
+      exercise: Number(log.exercise),
+    };
+  });
+
+  const totalEntries = dailyLogs.length;
+  const avgSleep = totalEntries > 0 ? (dailyLogs.reduce((acc, curr) => acc + Number(curr.sleep), 0) / totalEntries).toFixed(1) : 0;
+  const avgWater = totalEntries > 0 ? (dailyLogs.reduce((acc, curr) => acc + Number(curr.water), 0) / totalEntries).toFixed(1) : 0;
   
-  const avgCycleLength = cycles.length > 1 
-    ? Math.round(cycles.slice(0, -1).reduce((acc: number, curr: any, idx: number) => acc + differenceInDays(new Date(curr.startDate), new Date(cycles[idx+1].startDate)), 0) / (cycles.length - 1))
+  const avgCycleLength = cycleLogs.length > 1 
+    ? Math.round(cycleLogs.slice(0, -1).reduce((acc, curr, idx) => acc + differenceInDays(new Date(curr.start_date), new Date(cycleLogs[idx+1].start_date)), 0) / (cycleLogs.length - 1))
     : 'N/A';
 
   return (
@@ -53,7 +109,7 @@ export default function ReportsPage() {
           <CardContent className="p-6 flex flex-col items-center text-center">
             <CalendarHeart className="w-8 h-8 text-violet-500 mb-3" />
             <p className="text-sm text-muted-foreground">Avg Cycle</p>
-            <p className="text-3xl font-bold">{avgCycleLength}d</p>
+            <p className="text-3xl font-bold">{avgCycleLength === 'N/A' ? 'N/A' : `${avgCycleLength}d`}</p>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-blue-500/10 to-transparent border-blue-500/20">
@@ -72,7 +128,7 @@ export default function ReportsPage() {
         </Card>
       </div>
 
-      {chartData.length > 0 ? (
+      {chartData.length >= 3 ? (
         <div className="space-y-6">
           {/* Stress & Mood Chart */}
           <Card>
@@ -139,11 +195,11 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Total Logs: <span className="font-bold text-foreground">{skinEntries.length}</span></p>
-              {skinEntries.length > 0 && (
+              <p className="text-sm text-muted-foreground">Total Logs: <span className="font-bold text-foreground">{skinLogs.length}</span></p>
+              {skinLogs.length > 0 && (
                 <div className="text-sm">
-                  <p>Latest Acne Severity: <span className="font-bold text-pink-500">{skinEntries[0].acne}/10</span></p>
-                  <p>Latest Oiliness: <span className="font-bold text-blue-500">{skinEntries[0].oiliness}/10</span></p>
+                  <p>Latest Acne Severity: <span className="font-bold text-pink-500">{skinLogs[0].acne}/10</span></p>
+                  <p>Latest Oiliness: <span className="font-bold text-blue-500">{skinLogs[0].oiliness}/10</span></p>
                 </div>
               )}
             </div>
@@ -156,13 +212,13 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Logged Cycles: <span className="font-bold text-foreground">{cycles.length}</span></p>
-              {cycles.length > 0 && (
+              <p className="text-sm text-muted-foreground">Logged Cycles: <span className="font-bold text-foreground">{cycleLogs.length}</span></p>
+              {cycleLogs.length > 0 && (
                 <div className="text-sm">
-                  <p>Last Period: <span className="font-bold text-violet-500">{new Date(cycles[0].startDate).toLocaleDateString()}</span></p>
-                  {cycles.length > 1 && (
+                  <p>Last Period: <span className="font-bold text-violet-500">{new Date(cycleLogs[0].start_date).toLocaleDateString()}</span></p>
+                  {cycleLogs.length > 1 && (
                      <p>Cycle Regularity: <span className="font-bold text-green-500">
-                       {Math.abs(differenceInDays(new Date(cycles[0].startDate), new Date(cycles[1].startDate)) - (avgCycleLength as number)) <= 3 ? 'Regular' : 'Irregular'}
+                       {Math.abs(differenceInDays(new Date(cycleLogs[0].start_date), new Date(cycleLogs[1].start_date)) - (avgCycleLength as number)) <= 3 ? 'Regular' : 'Irregular'}
                      </span></p>
                   )}
                 </div>

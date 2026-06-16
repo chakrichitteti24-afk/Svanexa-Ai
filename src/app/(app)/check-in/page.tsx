@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { createClient } from '@/utils/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -83,11 +84,42 @@ export default function CheckInPage() {
   const watchedFatigue = watch('fatigue');
   const watchedCramps = watch('cramps');
 
-  const onSubmit = (data: CheckInFormValues) => {
+  const onSubmit = async (data: CheckInFormValues) => {
     setEntries({ ...entries, [today]: data });
-    toast.success('Habits logged successfully!', {
-      description: 'Your wellness factors are saved for today.'
-    });
+    
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { error } = await supabase
+          .from('daily_logs')
+          .upsert({
+            user_id: user.id,
+            log_date: today,
+            mood: data.mood,
+            sleep: data.sleep,
+            water: data.water,
+            exercise: data.exercise,
+            stress: data.stress,
+            acne: data.acne,
+            hair_fall: data.hairFall,
+            bloating: data.bloating,
+            fatigue: data.fatigue,
+            cramps: data.cramps,
+            notes: data.notes || null
+          }, {
+            onConflict: 'user_id, log_date'
+          });
+
+        if (error) throw error;
+      }
+      toast.success('Habits logged successfully!', {
+        description: 'Your wellness factors are saved for today.'
+      });
+    } catch (err) {
+      console.error('Failed to sync check-in to Supabase:', err);
+      toast.success('Habits logged locally! Sync to database pending.');
+    }
   };
 
   // Stepper utility functions
@@ -119,7 +151,7 @@ export default function CheckInPage() {
         <Card className="border-border/40 bg-card/60 backdrop-blur-xs">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
-              <Smile className="w-4.5 h-4.5 text-pink-500" /> How's your mood today?
+              <Smile className="w-4.5 h-4.5 text-pink-500" /> {"How's your mood today?"}
             </CardTitle>
           </CardHeader>
           <CardContent>

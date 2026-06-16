@@ -9,6 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { Camera, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { createClient } from '@/utils/supabase/client';
+import { format } from 'date-fns';
 
 type SkinEntry = {
   id: string;
@@ -43,7 +45,8 @@ export default function SkinTrackerPage() {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
     const newEntry: SkinEntry = {
       id: Date.now().toString(),
       date: new Date().toISOString(),
@@ -60,12 +63,53 @@ export default function SkinTrackerPage() {
     setOiliness(5);
     setDryness(2);
     setNotes('');
-    toast.success('Skin progress saved successfully!');
+
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { error } = await supabase
+          .from('skin_logs')
+          .upsert({
+            user_id: user.id,
+            log_date: todayStr,
+            image: preview || null,
+            acne,
+            oiliness,
+            dryness,
+            notes: notes || null
+          }, {
+            onConflict: 'user_id, log_date'
+          });
+
+        if (error) throw error;
+      }
+      toast.success('Skin progress saved successfully!');
+    } catch (err) {
+      console.error('Failed to sync skin log to Supabase:', err);
+      toast.success('Saved locally! Sync to database pending.');
+    }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    const entryToDelete = entries.find(e => e.id === id);
     setEntries(entries.filter(e => e.id !== id));
-    toast.success('Entry deleted.');
+
+    try {
+      if (entryToDelete) {
+        const supabase = createClient();
+        const dateStr = format(new Date(entryToDelete.date), 'yyyy-MM-dd');
+        const { error } = await supabase
+          .from('skin_logs')
+          .delete()
+          .eq('log_date', dateStr);
+        if (error) throw error;
+      }
+      toast.success('Entry deleted.');
+    } catch (err) {
+      console.error('Failed to delete skin log from Supabase:', err);
+      toast.success('Deleted locally! Sync to database pending.');
+    }
   };
 
   return (
@@ -78,7 +122,7 @@ export default function SkinTrackerPage() {
       <div className="space-y-6">
         <Card className="border-border/40 bg-card/60 backdrop-blur-xs">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold">Log Today's Skin</CardTitle>
+            <CardTitle className="text-sm font-semibold">{"Log Today's Skin"}</CardTitle>
             <CardDescription className="text-[10px]">Upload a photo to keep track of visual changes.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -237,7 +281,7 @@ export default function SkinTrackerPage() {
                         <span className="bg-pink-500/10 text-pink-500 px-2 py-0.5 rounded-full">Acne: {entry.acne}</span>
                         <span className="bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded-full">Oil: {entry.oiliness}</span>
                       </div>
-                      {entry.notes && <p className="text-sm mt-2 line-clamp-2 italic text-muted-foreground">"{entry.notes}"</p>}
+                      {entry.notes && <p className="text-sm mt-2 line-clamp-2 italic text-muted-foreground">{`"${entry.notes}"`}</p>}
                     </div>
                   </div>
                 ))}

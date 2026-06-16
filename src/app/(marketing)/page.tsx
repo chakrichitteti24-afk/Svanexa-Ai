@@ -111,12 +111,12 @@ export default function LandingPage() {
               </div>
               <div className="flex gap-4 mb-6 items-end">
                 <div className="bg-primary text-primary-foreground p-4 rounded-2xl rounded-br-none text-sm w-3/4 ml-auto">
-                  I'm feeling really bloated today and my acne is flaring up. It's so frustrating.
+                  {"I'm feeling really bloated today and my acne is flaring up. It's so frustrating."}
                 </div>
               </div>
               <div className="flex gap-4 items-start">
                 <div className="bg-muted p-4 rounded-2xl rounded-bl-none text-sm w-5/6">
-                  I completely understand how frustrating that can be. Bloating and acne flare-ups are very common with PCOS due to hormonal fluctuations. Make sure you're drinking plenty of water today. Would you like some gentle stretching exercises that might help relieve the bloating?
+                  {"I completely understand how frustrating that can be. Bloating and acne flare-ups are very common with PCOS due to hormonal fluctuations. Make sure you're drinking plenty of water today. Would you like some gentle stretching exercises that might help relieve the bloating?"}
                 </div>
               </div>
             </div>
@@ -137,7 +137,7 @@ export default function LandingPage() {
                   <div className="flex gap-1 text-yellow-500 mb-4">
                     {'★★★★★'.split('').map((star, j) => <span key={j}>{star}</span>)}
                   </div>
-                  <p className="italic text-muted-foreground mb-6">"{t.quote}"</p>
+                  <p className="italic text-muted-foreground mb-6">{`"${t.quote}"`}</p>
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 bg-gradient-to-br from-pink-400 to-violet-500 rounded-full flex items-center justify-center text-white font-bold">
                       {t.name[0]}

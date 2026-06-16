@@ -20,8 +20,11 @@ export default function AppLayout({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setMounted(true);
-    setLoading(false);
+    const handle = requestAnimationFrame(() => {
+      setMounted(true);
+      setLoading(false);
+    });
+    return () => cancelAnimationFrame(handle);
   }, []);
 
   const hideFAB = pathname === '/check-in' || pathname === '/companion' || pathname === '/login' || pathname === '/signup' || pathname === '/forgot-password';

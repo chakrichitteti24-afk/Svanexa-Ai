@@ -45,7 +45,7 @@ export default function ForgotPasswordPage() {
             <Sparkles className="w-6 h-6 text-pink-500" />
           </div>
           <h1 className="text-3xl font-extrabold tracking-tight">Reset Password</h1>
-          <p className="text-sm text-muted-foreground">We'll send you a link to reset your password.</p>
+          <p className="text-sm text-muted-foreground">{"We'll send you a link to reset your password."}</p>
         </div>
 
         <Card className="border-border/40 bg-card/60 backdrop-blur-xl shadow-2xl">
@@ -77,7 +77,7 @@ export default function ForgotPasswordPage() {
               <div className="text-center py-4 space-y-4">
                 <div className="text-green-500 font-medium">Check your email!</div>
                 <p className="text-sm text-muted-foreground">
-                  We've sent a password reset link to <strong>{email}</strong>.
+                  {"We've sent a password reset link to "}<strong>{email}</strong>.
                 </p>
                 <Button 
                   variant="outline" 

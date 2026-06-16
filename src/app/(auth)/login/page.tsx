@@ -96,7 +96,7 @@ export default function LoginPage() {
         </Card>
 
         <p className="text-center text-sm text-muted-foreground">
-          Don't have an account?{' '}
+          {"Don't have an account?"}{' '}
           <Link href="/signup" className="text-pink-500 font-medium hover:underline">
             Sign up
           </Link>

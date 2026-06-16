@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, CheckSquare, CalendarHeart, Sparkles, Droplets, LineChart } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, CalendarHeart, Sparkles, Droplets, LineChart, Award } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -11,6 +11,7 @@ const navItems = [
   { name: 'Cycle Tracker', href: '/cycle', icon: CalendarHeart },
   { name: 'Skin Tracker', href: '/skin', icon: Droplets },
   { name: 'AI Companion', href: '/companion', icon: Sparkles },
+  { name: '✨ Wellness Plan (Premium)', href: '/wellness-plan', icon: Award },
   { name: 'Reports', href: '/reports', icon: LineChart },
 ];
 

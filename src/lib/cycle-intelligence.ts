@@ -28,6 +28,8 @@ export interface PredictionResult {
   confidenceLabel: string;
   isPCOSMode: boolean;
   message: string;
+  expectedPeriod: string;
+  explanation: string;
 }
 
 export interface CycleAnalytics {
@@ -40,8 +42,8 @@ export interface CycleAnalytics {
 }
 
 export interface HealthScoreResult {
-  score: number;
-  category: 'Excellent' | 'Good' | 'Moderate' | 'Needs Attention';
+  score: number | null;
+  category: 'Excellent' | 'Good' | 'Moderate' | 'Needs Attention' | 'Insufficient Data';
   insights: string[];
 }
 
@@ -51,8 +53,10 @@ export class CycleIntelligenceEngine {
   hasPCOS: boolean;
 
   constructor(cycles: CycleEntry[], checkIns: Record<string, CheckInEntry> = {}, hasPCOS: boolean = false) {
-    // Sort cycles descending (newest first)
-    this.cycles = [...cycles].sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+    // Limit to last 12 cycles for Prediction Engine V2
+    this.cycles = [...cycles]
+      .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())
+      .slice(0, 12);
     this.checkIns = checkIns;
     this.hasPCOS = hasPCOS;
   }
@@ -103,7 +107,6 @@ export class CycleIntelligenceEngine {
     let trend: CycleAnalytics['trend'] = 'Stable';
     if (lengths.length >= 3) {
       const recent = lengths.slice(0, 3); // lengths are newest first (index 0 is most recent gap)
-      // Since index 0 is most recent, if index 0 > index 1 > index 2, length is increasing
       if (recent[0] > recent[1] && recent[1] > recent[2]) trend = 'Increasing';
       else if (recent[0] < recent[1] && recent[1] < recent[2]) trend = 'Decreasing';
     }
@@ -129,7 +132,9 @@ export class CycleIntelligenceEngine {
     
     // Window calculation
     let windowDays = Math.max(2, Math.round(Math.sqrt(analytics.variance)));
-    if (this.hasPCOS) windowDays += 3; // Wider window for PCOS
+    if (this.hasPCOS) {
+      windowDays += 4; // Wider window for PCOS V2
+    }
     
     // Symptom-based adjustment (e.g., severe cramps/bloating today might pull date closer)
     const recentCheckIns = this.getRecentCheckIns(5);
@@ -142,43 +147,60 @@ export class CycleIntelligenceEngine {
     let latestDate = addDays(likelyDate, windowDays);
 
     if (hasPrePeriodSymptoms) {
-      // If symptoms are showing, period might be imminent
       const today = new Date();
       if (today < earliestDate && differenceInDays(earliestDate, today) <= 5) {
         earliestDate = today;
       }
     }
 
-    // Confidence Calculation
+    // Confidence Calculation V2
     let confidence = 100;
-    // Penalty for lack of data
-    if (this.cycles.length < 3) confidence -= 40;
-    else if (this.cycles.length < 6) confidence -= 15;
     
-    // Penalty for high variance
-    confidence -= (Math.sqrt(analytics.variance) * 3);
+    // Data size impact
+    if (this.cycles.length < 3) {
+      confidence -= 35;
+    } else if (this.cycles.length < 6) {
+      confidence -= 15;
+    }
     
-    // PCOS Adjustment
+    // Variance impact
+    confidence -= Math.round(Math.sqrt(analytics.variance) * 4);
+    
+    // PCOS Adjustment (More variability, lower confidence, no medical certainty)
     if (this.hasPCOS) {
-      confidence -= 10;
+      confidence -= 15;
     }
 
-    // Reward for active tracking (symptom correlation)
-    if (recentCheckIns.length >= 3) {
-      confidence += 5;
+    // Stress & Sleep factors (recent check-ins average stress > 7 deducts confidence)
+    if (recentCheckIns.length > 0) {
+      const avgSleep = recentCheckIns.reduce((sum, c) => sum + c.sleep, 0) / recentCheckIns.length;
+      const avgStress = recentCheckIns.reduce((sum, c) => sum + c.stress, 0) / recentCheckIns.length;
+      if (avgSleep < 6.0) confidence -= 5;
+      if (avgStress > 7) confidence -= 8;
     }
 
-    confidence = Math.max(0, Math.min(100, Math.round(confidence)));
+    confidence = Math.max(10, Math.min(99, confidence)); // Limit max confidence to 99% (never 100% certain)
 
-    let confidenceLabel = 'Low Confidence';
-    if (confidence >= 85) confidenceLabel = 'Very Reliable';
+    let confidenceLabel = 'Moderate';
+    if (confidence >= 85) confidenceLabel = 'High';
     else if (confidence >= 70) confidenceLabel = 'Reliable';
-    else if (confidence >= 50) confidenceLabel = 'Moderate';
+    else if (confidence < 50) confidenceLabel = 'Low';
 
-    let message = `Based on your cycle history, your next period is likely between ${earliestDate.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})} and ${latestDate.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}.`;
-    if (this.hasPCOS) {
-      message += " Cycle predictions may be less precise due to PCOS-related variability.";
+    // Format Expected Period Window
+    const formatStr = 'MMM d';
+    const expectedPeriod = `${format(earliestDate, formatStr)} - ${format(latestDate, 'MMM d, yyyy')}`;
+
+    // Explanation Construction
+    let explanation = `Based on your last ${this.cycles.length} logged cycle${this.cycles.length > 1 ? 's' : ''}`;
+    if (hasPrePeriodSymptoms) {
+      explanation += " and recent physical symptoms";
     }
+    if (this.hasPCOS) {
+      explanation += ". Adjusted for PCOS-related variability (confidence lowered, wider forecast window)";
+    }
+    explanation += ".";
+
+    const message = `Expected Period: ${expectedPeriod} (${confidence}% confidence). ${explanation}`;
 
     return {
       earliestDate,
@@ -187,7 +209,9 @@ export class CycleIntelligenceEngine {
       confidenceScore: confidence,
       confidenceLabel,
       isPCOSMode: this.hasPCOS,
-      message
+      message,
+      expectedPeriod,
+      explanation
     };
   }
 
@@ -204,6 +228,14 @@ export class CycleIntelligenceEngine {
   calculateHealthScore(): HealthScoreResult {
     const analytics = this.analyzeCycles();
     const recentLogs = this.getRecentCheckIns(30);
+    
+    if (this.cycles.length === 0 && recentLogs.length < 3) {
+      return {
+        score: null,
+        category: 'Insufficient Data',
+        insights: ["Not enough data yet."]
+      };
+    }
     
     let score = 100;
     const insights: string[] = [];
