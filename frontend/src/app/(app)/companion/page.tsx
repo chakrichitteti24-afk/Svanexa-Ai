@@ -69,18 +69,19 @@ export default function CompanionPage() {
     const newSession: ChatSession = {
       id: crypto.randomUUID(),
       title: 'New Chat',
-      messages: [
-        {
-          role: 'model',
-          content: `Hey ${userName} 😊\nI'm ${aiName}. How are you feeling today?`,
-          timestamp: Date.now(),
-        },
-      ],
+      messages: [], // Starts completely empty to trigger empty state screen
       created_at: Date.now(),
       updated_at: Date.now(),
     };
     setSessions(prev => [newSession, ...prev]);
     setActiveSessionId(newSession.id);
+  };
+
+  const clearChatHistory = () => {
+    if (activeSessionId) {
+      setSessions(prev => prev.filter(s => s.id !== activeSessionId));
+    }
+    startNewChat();
   };
 
   const updateActiveSession = (newMessages: ChatMessage[]) => {
@@ -89,8 +90,8 @@ export default function CompanionPage() {
       prev.map(s => {
         if (s.id !== activeSessionId) return s;
         let title = s.title;
-        if (newMessages.length === 3 && s.title === 'New Chat') {
-          const first = newMessages[1]?.content || '';
+        if (newMessages.length === 2 && s.title === 'New Chat') {
+          const first = newMessages[0]?.content || '';
           title = first.length > 28 ? first.slice(0, 28) + '…' : first;
         }
         return { ...s, messages: newMessages, updated_at: Date.now(), title };
@@ -106,7 +107,7 @@ export default function CompanionPage() {
     setIsLoading(true);
 
     const userMsg: ChatMessage = { role: 'user', content: messageToSend, timestamp: Date.now() };
-    const newMessages: ChatMessage[] = [...activeSession.messages, userMsg];
+    const newMessages: ChatMessage[] = [...messages, userMsg];
     updateActiveSession(newMessages);
 
     try {
@@ -114,7 +115,7 @@ export default function CompanionPage() {
         method: 'POST',
         body: JSON.stringify({
           message: messageToSend,
-          history: activeSession.messages.map(m => ({
+          history: messages.map(m => ({
             role: m.role === 'model' ? 'assistant' : 'user',
             content: m.content,
           })),
@@ -154,7 +155,7 @@ export default function CompanionPage() {
 
   return (
     <div
-      className="flex flex-col w-full max-w-2xl mx-auto overflow-hidden"
+      className="flex flex-col w-full max-w-2xl mx-auto overflow-hidden relative"
       style={{
         height: viewportHeight ? `${viewportHeight}px` : '100dvh',
         background: '#0a0a0f',
@@ -162,7 +163,7 @@ export default function CompanionPage() {
     >
       {/* Header */}
       <header
-        className="flex items-center justify-between px-4 py-3 shrink-0 border-b"
+        className="flex items-center justify-between px-4 py-3 shrink-0 border-b z-20"
         style={{
           background: 'rgba(10,8,18,0.92)',
           backdropFilter: 'blur(24px)',
@@ -211,7 +212,7 @@ export default function CompanionPage() {
               <Plus className="w-4 h-4" /> New Chat
             </DropdownMenuItem>
             <DropdownMenuItem
-              onClick={startNewChat}
+              onClick={clearChatHistory}
               className="cursor-pointer text-sm gap-2 text-red-400 hover:bg-red-500/10 focus:bg-red-500/10 focus:text-red-400"
             >
               <Trash2 className="w-4 h-4" /> Clear History
@@ -220,14 +221,34 @@ export default function CompanionPage() {
         </DropdownMenu>
       </header>
 
-      {/* Messages */}
-      <MessageList messages={messages} isLoading={isLoading} aiName={aiName} />
+      {/* Messages Scrollable Area OR Empty State */}
+      {messages.length === 0 ? (
+        <div className="flex-1 flex flex-col justify-center items-center px-6 text-center select-none animate-in fade-in duration-500 overflow-y-auto">
+          <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-pink-500 to-violet-600 flex items-center justify-center shadow-lg shadow-violet-500/25 mb-6 relative">
+            <BrainCircuit className="w-8 h-8 text-white" />
+            <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-green-500 border-2 border-[#0a0a0f] status-online" />
+          </div>
+          
+          <h2 className="text-2xl font-bold text-white tracking-tight leading-normal mb-1">
+            Hi {userName} 💜
+          </h2>
+          <p className="text-[#9d91c4] text-base max-w-sm mb-8 leading-relaxed whitespace-pre-line">
+            I'm {aiName}.{"\n"}How are you feeling today?
+          </p>
+          
+          <div className="w-full max-w-sm">
+            <p className="text-[10px] font-bold text-[#5a527a] uppercase tracking-wider mb-3 text-center">
+              Suggested Actions
+            </p>
+            <SuggestedPrompts onPromptClick={(p) => handleSendMessage(p)} />
+          </div>
+        </div>
+      ) : (
+        <MessageList messages={messages} isLoading={isLoading} aiName={aiName} />
+      )}
 
-      {/* Bottom area */}
-      <div className="shrink-0 flex flex-col">
-        {messages.length <= 1 && (
-          <SuggestedPrompts onPromptClick={(p) => handleSendMessage(p)} />
-        )}
+      {/* Input Form at bottom */}
+      <div className="shrink-0 z-10">
         <ChatInput
           value={inputMessage}
           onChange={setInputMessage}

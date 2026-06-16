@@ -8,7 +8,6 @@ import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
-import { createClient } from '@/utils/supabase/client';
 
 export default function AppLayout({
   children,
@@ -27,16 +26,26 @@ export default function AppLayout({
     return () => cancelAnimationFrame(handle);
   }, []);
 
-  const hideFAB = pathname === '/check-in' || pathname === '/companion' || pathname === '/login' || pathname === '/signup' || pathname === '/forgot-password';
-
   if (!mounted || loading) return <div className="min-h-screen bg-background" />;
+
+  const isCompanion = pathname === '/companion';
+  const hideFAB = isCompanion || pathname === '/check-in' || pathname === '/login' || pathname === '/signup' || pathname === '/forgot-password';
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      <Sidebar className="hidden md:flex border-r border-border/40" />
+      <Sidebar className="hidden md:flex border-r border-border/40 shrink-0" />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Navbar />
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 pb-20 md:pb-8">
+        {/* Hide global mobile navbar on companion page to avoid double headers */}
+        {!isCompanion && <Navbar />}
+        
+        <main
+          className={cn(
+            'flex-1 flex flex-col',
+            isCompanion
+              ? 'p-0 overflow-hidden'
+              : 'overflow-y-auto p-4 md:p-8 pb-20 md:pb-8'
+          )}
+        >
           {children}
         </main>
         
@@ -57,7 +66,8 @@ export default function AppLayout({
           </Link>
         )}
         
-        <BottomNav />
+        {/* Hide bottom nav on companion page so chat is truly fullscreen with fixed input */}
+        {!isCompanion && <BottomNav />}
       </div>
     </div>
   );

@@ -66,7 +66,7 @@ export default function ChatInput({ value, onChange, onSubmit, isLoading, aiName
             <Sparkles className="w-4 h-4" />
           </div>
 
-          {/* Growing textarea */}
+          {/* Growing textarea - 16px font size prevents Safari auto-zoom */}
           <textarea
             ref={textareaRef}
             rows={1}
@@ -75,7 +75,8 @@ export default function ChatInput({ value, onChange, onSubmit, isLoading, aiName
             onKeyDown={handleKeyDown}
             placeholder={`Message ${aiName}…`}
             disabled={isLoading}
-            className="flex-1 bg-transparent border-0 outline-none resize-none text-[14.5px] leading-relaxed text-[#f0eeff] placeholder:text-[#4d4668] py-0.5 max-h-[140px] min-h-[22px] focus:ring-0 scrollbar-thin"
+            autoFocus
+            className="flex-1 bg-transparent border-0 outline-none resize-none text-[16px] leading-relaxed text-[#f0eeff] placeholder:text-[#4d4668] py-0.5 max-h-[140px] min-h-[22px] focus:ring-0 scrollbar-thin"
             style={{ WebkitOverflowScrolling: 'touch' }}
           />
 

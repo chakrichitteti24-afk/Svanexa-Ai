@@ -48,16 +48,17 @@ export default function MessageList({ messages, isLoading, aiName }: MessageList
   return (
     <div
       ref={scrollContainerRef}
-      className="flex-1 overflow-y-auto scrollbar-thin"
+      className="flex-1 overflow-y-auto scrollbar-thin px-4 py-3"
       style={{ WebkitOverflowScrolling: 'touch' }}
     >
-      <div className="flex flex-col gap-2 px-4 py-4 max-w-2xl mx-auto">
-        {/* Date separator */}
-        <div className="flex items-center justify-center my-2">
-          <span className="text-[10px] font-semibold text-[#5a527a] tracking-wider uppercase bg-white/4 px-3 py-1 rounded-full border border-white/5">
-            Today
-          </span>
-        </div>
+      <div className="flex flex-col gap-3 max-w-2xl mx-auto">
+        {messages.length > 0 && (
+          <div className="flex items-center justify-center my-1">
+            <span className="text-[10px] font-bold text-[#5a527a] tracking-widest uppercase bg-white/5 px-2.5 py-0.5 rounded-full border border-white/5">
+              Today
+            </span>
+          </div>
+        )}
 
         <AnimatePresence initial={false}>
           {messages.map((msg, idx) => {
@@ -74,19 +75,19 @@ export default function MessageList({ messages, isLoading, aiName }: MessageList
               >
                 {/* AI Avatar */}
                 {!isUser && (
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-pink-400 to-violet-600 flex items-center justify-center shrink-0 mb-1 shadow-md shadow-violet-500/20">
-                    <BrainCircuit className="w-3.5 h-3.5 text-white" />
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-violet-600 flex items-center justify-center shrink-0 mb-0.5 shadow-md shadow-violet-500/20">
+                    <BrainCircuit className="w-4 h-4 text-white" />
                   </div>
                 )}
 
                 <div
-                  className={`relative max-w-[78%] text-[14.5px] leading-relaxed break-words ${
+                  className={`relative text-[16px] leading-relaxed break-words px-4 py-2.5 ${
                     isUser
-                      ? 'bg-gradient-to-br from-pink-500 to-violet-600 text-white rounded-2xl rounded-br-md px-4 py-2.5 shadow-lg shadow-pink-500/15'
-                      : 'bg-[rgba(255,255,255,0.06)] border border-[rgba(168,85,247,0.12)] text-[#f0eeff] rounded-2xl rounded-bl-md px-4 py-2.5'
+                      ? 'max-w-[75%] bg-gradient-to-br from-pink-500 to-violet-600 text-white rounded-2xl rounded-br-sm shadow-lg shadow-pink-500/15'
+                      : 'max-w-[85%] bg-[#12101c] border border-[rgba(168,85,247,0.12)] text-[#f0eeff] rounded-2xl rounded-bl-sm'
                   } ${isLastAI ? 'fade-in-up' : ''}`}
                 >
-                  {/* Content — whitespace preserved for line breaks */}
+                  {/* Message content */}
                   <span className="whitespace-pre-wrap">{msg.content}</span>
 
                   {/* Timestamp */}
@@ -101,8 +102,8 @@ export default function MessageList({ messages, isLoading, aiName }: MessageList
 
                 {/* User Avatar */}
                 {isUser && (
-                  <div className="w-7 h-7 rounded-full bg-[rgba(255,255,255,0.08)] border border-[rgba(168,85,247,0.15)] flex items-center justify-center shrink-0 mb-1">
-                    <User className="w-3.5 h-3.5 text-[#9d91c4]" />
+                  <div className="w-8 h-8 rounded-full bg-white/5 border border-[rgba(168,85,247,0.15)] flex items-center justify-center shrink-0 mb-0.5">
+                    <User className="w-4 h-4 text-[#9d91c4]" />
                   </div>
                 )}
               </motion.div>
@@ -119,8 +120,8 @@ export default function MessageList({ messages, isLoading, aiName }: MessageList
               transition={{ duration: 0.2 }}
               className="flex w-full gap-2.5 items-end justify-start"
             >
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-pink-400 to-violet-600 flex items-center justify-center shrink-0 mb-1 shadow-md shadow-violet-500/20">
-                <BrainCircuit className="w-3.5 h-3.5 text-white" />
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-violet-600 flex items-center justify-center shrink-0 mb-0.5 shadow-md shadow-violet-500/20">
+                <BrainCircuit className="w-4 h-4 text-white" />
               </div>
               <TypingIndicator aiName={aiName} />
             </motion.div>
