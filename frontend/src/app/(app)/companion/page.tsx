@@ -4,9 +4,8 @@ import { useState, useEffect } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useVisualViewport } from '@/hooks/useVisualViewport';
 import { createClient } from '@/utils/supabase/client';
-import { ArrowLeft, MoreVertical, Trash2, BrainCircuit, Loader2 } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Trash2, Plus, BrainCircuit } from 'lucide-react';
 import Link from 'next/link';
-// getCompanionResponse is now handled server-side via /api/chat
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import MessageList, { ChatMessage } from '@/components/chat/MessageList';
 import ChatInput from '@/components/chat/ChatInput';
@@ -24,21 +23,17 @@ export interface ChatSession {
 export default function CompanionPage() {
   const supabase = createClient();
   const viewportHeight = useVisualViewport();
-  
+
   const [userName, setUserName] = useState<string>('there');
   const [aiName, setAiName] = useState<string>('Luna');
   const [loadingProfile, setLoadingProfile] = useState(true);
 
   const [sessions, setSessions] = useLocalStorage<ChatSession[]>('hersync_chat_sessions', []);
   const [activeSessionId, setActiveSessionId] = useLocalStorage<string | null>('hersync_active_session', null);
-  const [cycles] = useLocalStorage<any[]>('hersync_cycles', []);
-  const [checkIns] = useLocalStorage<Record<string, any>>('hersync_checkins', {});
-  const [skinEntries] = useLocalStorage<any[]>('hersync_skin', []);
-  
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Fetch profile
+  // Load profile
   useEffect(() => {
     async function loadProfile() {
       const { data: { user } } = await supabase.auth.getUser();
@@ -48,7 +43,6 @@ export default function CompanionPage() {
           .select('username, ai_name')
           .eq('id', user.id)
           .single();
-        
         if (data) {
           setUserName(data.username);
           setAiName(data.ai_name);
@@ -59,50 +53,17 @@ export default function CompanionPage() {
     loadProfile();
   }, [supabase]);
 
-  // Ensure an active session exists when profile loads
+  // Init session
   useEffect(() => {
     if (loadingProfile) return;
-
     if (sessions.length === 0 || !activeSessionId) {
-      const newSession: ChatSession = {
-        id: crypto.randomUUID(),
-        title: 'New Chat',
-        messages: [
-          {
-            role: 'model',
-            content: `Hey ${userName} 😊 I'm ${aiName}. It's nice to see you again. How are you feeling today?`,
-            timestamp: Date.now()
-          }
-        ],
-        created_at: Date.now(),
-        updated_at: Date.now()
-      };
-      setSessions(prev => [newSession, ...prev]);
-      setActiveSessionId(newSession.id);
+      startNewChat();
     }
-  }, [sessions.length, activeSessionId, userName, aiName, loadingProfile, setSessions, setActiveSessionId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingProfile]);
 
   const activeSession = sessions.find(s => s.id === activeSessionId);
   const messages = activeSession?.messages || [];
-
-  const updateActiveSession = (newMessages: ChatMessage[]) => {
-    if (!activeSessionId) return;
-    
-    // Auto-generate title from first user message if it's "New Chat"
-    let newTitle = activeSession?.title;
-    if (newMessages.length === 3 && activeSession?.title === 'New Chat') {
-      const firstUserMsg = newMessages[1].content;
-      newTitle = firstUserMsg.length > 25 ? firstUserMsg.substring(0, 25) + '...' : firstUserMsg;
-    }
-
-    const updatedSessions = sessions.map(s => {
-      if (s.id === activeSessionId) {
-        return { ...s, messages: newMessages, updated_at: Date.now(), title: newTitle || s.title };
-      }
-      return s;
-    });
-    setSessions(updatedSessions);
-  };
 
   const startNewChat = () => {
     const newSession: ChatSession = {
@@ -111,71 +72,68 @@ export default function CompanionPage() {
       messages: [
         {
           role: 'model',
-          content: `Hi ${userName}! What's on your mind?`,
-          timestamp: Date.now()
-        }
+          content: `Hey ${userName} 😊\nI'm ${aiName}. How are you feeling today?`,
+          timestamp: Date.now(),
+        },
       ],
       created_at: Date.now(),
-      updated_at: Date.now()
+      updated_at: Date.now(),
     };
-    setSessions([newSession, ...sessions]);
+    setSessions(prev => [newSession, ...prev]);
     setActiveSessionId(newSession.id);
   };
 
-  const clearChatHistory = () => {
-    startNewChat();
+  const updateActiveSession = (newMessages: ChatMessage[]) => {
+    if (!activeSessionId) return;
+    setSessions(prev =>
+      prev.map(s => {
+        if (s.id !== activeSessionId) return s;
+        let title = s.title;
+        if (newMessages.length === 3 && s.title === 'New Chat') {
+          const first = newMessages[1]?.content || '';
+          title = first.length > 28 ? first.slice(0, 28) + '…' : first;
+        }
+        return { ...s, messages: newMessages, updated_at: Date.now(), title };
+      })
+    );
   };
 
   const handleSendMessage = async (customMessage?: string) => {
     const messageToSend = (customMessage || inputMessage).trim();
     if (!messageToSend || isLoading || !activeSession) return;
 
-    // Clear input box
     setInputMessage('');
     setIsLoading(true);
 
-    const userMsgObj: ChatMessage = { 
-      role: 'user', 
-      content: messageToSend, 
-      timestamp: Date.now() 
-    };
-
-    const newMessages: ChatMessage[] = [...activeSession.messages, userMsgObj];
+    const userMsg: ChatMessage = { role: 'user', content: messageToSend, timestamp: Date.now() };
+    const newMessages: ChatMessage[] = [...activeSession.messages, userMsg];
     updateActiveSession(newMessages);
 
     try {
-      const chatResponse = await apiFetch('/api/chat', {
+      const res = await apiFetch('/api/chat', {
         method: 'POST',
         body: JSON.stringify({
           message: messageToSend,
-          history: activeSession.messages.map(msg => ({
-            role: msg.role === 'model' ? 'assistant' : 'user',
-            content: msg.content
-          }))
-        })
+          history: activeSession.messages.map(m => ({
+            role: m.role === 'model' ? 'assistant' : 'user',
+            content: m.content,
+          })),
+        }),
       });
 
-      if (!chatResponse.ok) {
-        throw new Error('Chat generation failed');
-      }
+      if (!res.ok) throw new Error('Chat API error');
+      const { response } = await res.json();
 
-      const chatData = await chatResponse.json();
-      const response = chatData.response;
-      
-      const aiMsgObj: ChatMessage = { 
-        role: 'model', 
-        content: response, 
-        timestamp: Date.now() 
-      };
-      
-      updateActiveSession([...newMessages, aiMsgObj]);
-    } catch (error) {
-      const errorMsgObj: ChatMessage = { 
-        role: 'model', 
-        content: "I'm having a little trouble connecting right now. Can we try again in a moment?", 
-        timestamp: Date.now() 
-      };
-      updateActiveSession([...newMessages, errorMsgObj]);
+      updateActiveSession([...newMessages, { role: 'model', content: response, timestamp: Date.now() }]);
+    } catch {
+      updateActiveSession([
+        ...newMessages,
+        {
+          role: 'model',
+          content: "I'm having a little trouble connecting right now. Can we try again in a moment? 💜",
+          timestamp: Date.now(),
+        },
+      ]);
     } finally {
       setIsLoading(false);
     }
@@ -183,70 +141,92 @@ export default function CompanionPage() {
 
   if (loadingProfile) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-pink-500" />
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0a0a0f' }}>
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-500 to-violet-600 flex items-center justify-center animate-pulse">
+            <BrainCircuit className="w-5 h-5 text-white" />
+          </div>
+          <p className="text-xs text-[#5a527a]">Loading companion…</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div 
-      className="flex flex-col w-full max-w-2xl mx-auto bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 overflow-hidden border-x border-border/10"
-      style={{ height: viewportHeight ? `${viewportHeight}px` : '100dvh' }}
+    <div
+      className="flex flex-col w-full max-w-2xl mx-auto overflow-hidden"
+      style={{
+        height: viewportHeight ? `${viewportHeight}px` : '100dvh',
+        background: '#0a0a0f',
+      }}
     >
-      {/* App Bar */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-border/40 bg-background/80 backdrop-blur-md z-10 shrink-0">
+      {/* Header */}
+      <header
+        className="flex items-center justify-between px-4 py-3 shrink-0 border-b"
+        style={{
+          background: 'rgba(10,8,18,0.92)',
+          backdropFilter: 'blur(24px)',
+          borderColor: 'rgba(168,85,247,0.12)',
+        }}
+      >
         <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="p-2 -ml-2 rounded-full hover:bg-secondary/50 text-muted-foreground transition-colors">
-            <ArrowLeft className="w-5 h-5" />
+          <Link
+            href="/dashboard"
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/5 text-[#7c71a4] transition-colors"
+          >
+            <ArrowLeft className="w-4.5 h-4.5" />
           </Link>
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-pink-400 to-violet-500 flex items-center justify-center shadow-inner relative">
-              <BrainCircuit className="w-5 h-5 text-white" />
-              {isLoading && (
-                <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-                </span>
-              )}
+
+          <div className="flex items-center gap-2.5">
+            {/* AI avatar with live indicator */}
+            <div className="relative">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-pink-400 to-violet-600 flex items-center justify-center shadow-lg shadow-violet-500/25">
+                <BrainCircuit className="w-4.5 h-4.5 text-white" />
+              </div>
+              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-[#0a0a0f] status-online" />
             </div>
+
             <div>
-              <h1 className="font-bold text-foreground leading-tight">{aiName}</h1>
-              <p className="text-[10px] text-muted-foreground font-medium flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span> Online
+              <h1 className="text-[15px] font-bold text-white leading-none">{aiName}</h1>
+              <p className="text-[10px] text-[#5a527a] mt-0.5 font-medium">
+                {isLoading ? 'typing…' : 'Online'}
               </p>
             </div>
           </div>
         </div>
 
+        {/* Menu */}
         <DropdownMenu>
-          <DropdownMenuTrigger className="inline-flex items-center justify-center rounded-full h-9 w-9 hover:bg-secondary/50 text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50">
-            <MoreVertical className="w-5 h-5" />
+          <DropdownMenuTrigger className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/5 text-[#7c71a4] transition-colors">
+            <MoreVertical className="w-4.5 h-4.5" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48 bg-card/95 backdrop-blur-xl border-border/40">
-            <DropdownMenuItem onClick={startNewChat} className="cursor-pointer font-medium">
-              Start New Chat
+          <DropdownMenuContent
+            align="end"
+            className="w-48 border-[rgba(168,85,247,0.15)] bg-[rgba(18,16,28,0.98)] backdrop-blur-xl text-[#f0eeff]"
+          >
+            <DropdownMenuItem
+              onClick={startNewChat}
+              className="cursor-pointer text-sm gap-2 hover:bg-white/5 focus:bg-white/5"
+            >
+              <Plus className="w-4 h-4" /> New Chat
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={clearChatHistory} className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive font-medium">
-              <Trash2 className="w-4 h-4 mr-2" /> Clear History
+            <DropdownMenuItem
+              onClick={startNewChat}
+              className="cursor-pointer text-sm gap-2 text-red-400 hover:bg-red-500/10 focus:bg-red-500/10 focus:text-red-400"
+            >
+              <Trash2 className="w-4 h-4" /> Clear History
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </header>
 
-      {/* Chat Messages */}
-      <MessageList
-        messages={messages}
-        isLoading={isLoading}
-        aiName={aiName}
-      />
+      {/* Messages */}
+      <MessageList messages={messages} isLoading={isLoading} aiName={aiName} />
 
-      {/* Bottom suggestions & input */}
-      <div className="flex flex-col bg-background/85 backdrop-blur-md shrink-0">
+      {/* Bottom area */}
+      <div className="shrink-0 flex flex-col">
         {messages.length <= 1 && (
-          <SuggestedPrompts
-            onPromptClick={(prompt) => handleSendMessage(prompt)}
-          />
+          <SuggestedPrompts onPromptClick={(p) => handleSendMessage(p)} />
         )}
         <ChatInput
           value={inputMessage}

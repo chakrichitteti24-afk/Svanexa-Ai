@@ -22,32 +22,24 @@ export default function MessageList({ messages, isLoading, aiName }: MessageList
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom helper
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
     if (bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior });
+      bottomRef.current.scrollIntoView({ behavior, block: 'end' });
     }
   };
 
-  // Auto-scroll on initial load and when message count changes
   useEffect(() => {
-    // Initial mount: instant scroll to bottom
     scrollToBottom('auto');
   }, []);
 
   useEffect(() => {
-    // If a new message is added or loading state changes, smoothly scroll to bottom
-    const timer = setTimeout(() => {
-      scrollToBottom('smooth');
-    }, 100);
+    const timer = setTimeout(() => scrollToBottom('smooth'), 80);
     return () => clearTimeout(timer);
   }, [messages.length, isLoading]);
 
-  // Helper to format timestamps safely
   const formatTime = (timestamp?: number) => {
-    if (!timestamp) return format(new Date(), 'h:mm a');
     try {
-      return format(new Date(timestamp), 'h:mm a');
+      return format(timestamp ? new Date(timestamp) : new Date(), 'h:mm a');
     } catch {
       return format(new Date(), 'h:mm a');
     }
@@ -56,65 +48,61 @@ export default function MessageList({ messages, isLoading, aiName }: MessageList
   return (
     <div
       ref={scrollContainerRef}
-      className="flex-1 overflow-y-auto px-4 py-4 space-y-4 scrollbar-thin scrollbar-thumb-pink-500/10 scrollbar-track-transparent scroll-smooth"
-      style={{
-        WebkitOverflowScrolling: 'touch',
-      }}
+      className="flex-1 overflow-y-auto scrollbar-thin"
+      style={{ WebkitOverflowScrolling: 'touch' }}
     >
-      {/* Date Header for starting point */}
-      <div className="text-center my-4">
-        <span className="text-[10px] font-semibold text-muted-foreground/50 tracking-wider uppercase bg-secondary/30 px-3 py-1.5 rounded-full border border-border/20">
-          Today
-        </span>
-      </div>
+      <div className="flex flex-col gap-2 px-4 py-4 max-w-2xl mx-auto">
+        {/* Date separator */}
+        <div className="flex items-center justify-center my-2">
+          <span className="text-[10px] font-semibold text-[#5a527a] tracking-wider uppercase bg-white/4 px-3 py-1 rounded-full border border-white/5">
+            Today
+          </span>
+        </div>
 
-      <div className="space-y-4 max-w-2xl mx-auto">
         <AnimatePresence initial={false}>
           {messages.map((msg, idx) => {
             const isUser = msg.role === 'user';
-            
+            const isLastAI = !isUser && idx === messages.length - 1 && !isLoading;
+
             return (
               <motion.div
                 key={idx}
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, ease: 'easeOut' }}
-                className={`flex w-full gap-2 items-end ${isUser ? 'justify-end' : 'justify-start'}`}
+                initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.22, ease: 'easeOut' }}
+                className={`flex w-full gap-2.5 items-end ${isUser ? 'justify-end' : 'justify-start'}`}
               >
                 {/* AI Avatar */}
                 {!isUser && (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-violet-500 flex items-center justify-center shadow-inner shrink-0 mb-1">
-                    <BrainCircuit className="w-4 h-4 text-white" />
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-pink-400 to-violet-600 flex items-center justify-center shrink-0 mb-1 shadow-md shadow-violet-500/20">
+                    <BrainCircuit className="w-3.5 h-3.5 text-white" />
                   </div>
                 )}
 
-                {/* Message Bubble Container */}
                 <div
-                  className={`relative max-w-[75%] px-4 py-2.5 shadow-sm text-[15px] leading-relaxed transition-all duration-200 ${
+                  className={`relative max-w-[78%] text-[14.5px] leading-relaxed break-words ${
                     isUser
-                      ? 'bg-gradient-to-tr from-pink-500 via-rose-500 to-violet-600 text-white rounded-3xl rounded-br-sm'
-                      : 'bg-secondary/45 dark:bg-secondary/20 border border-border/30 text-foreground rounded-3xl rounded-bl-sm'
-                  }`}
+                      ? 'bg-gradient-to-br from-pink-500 to-violet-600 text-white rounded-2xl rounded-br-md px-4 py-2.5 shadow-lg shadow-pink-500/15'
+                      : 'bg-[rgba(255,255,255,0.06)] border border-[rgba(168,85,247,0.12)] text-[#f0eeff] rounded-2xl rounded-bl-md px-4 py-2.5'
+                  } ${isLastAI ? 'fade-in-up' : ''}`}
                 >
-                  {/* Message Content */}
-                  <div className="pr-4 pb-2 whitespace-pre-wrap break-words">
-                    {msg.content}
-                  </div>
+                  {/* Content — whitespace preserved for line breaks */}
+                  <span className="whitespace-pre-wrap">{msg.content}</span>
 
-                  {/* Timestamp aligned nicely in the bottom corner */}
-                  <span
-                    className={`absolute bottom-1.5 right-3 text-[9px] font-medium tracking-tight ${
-                      isUser ? 'text-white/60' : 'text-muted-foreground/60'
+                  {/* Timestamp */}
+                  <div
+                    className={`text-[10px] font-medium mt-1 text-right leading-none ${
+                      isUser ? 'text-white/50' : 'text-[#5a527a]'
                     }`}
                   >
                     {formatTime(msg.timestamp)}
-                  </span>
+                  </div>
                 </div>
 
                 {/* User Avatar */}
                 {isUser && (
-                  <div className="w-8 h-8 rounded-full bg-secondary border border-border flex items-center justify-center shrink-0 mb-1">
-                    <User className="w-4 h-4 text-muted-foreground" />
+                  <div className="w-7 h-7 rounded-full bg-[rgba(255,255,255,0.08)] border border-[rgba(168,85,247,0.15)] flex items-center justify-center shrink-0 mb-1">
+                    <User className="w-3.5 h-3.5 text-[#9d91c4]" />
                   </div>
                 )}
               </motion.div>
@@ -124,20 +112,22 @@ export default function MessageList({ messages, isLoading, aiName }: MessageList
           {/* Typing Indicator */}
           {isLoading && (
             <motion.div
-              key="typing-indicator"
-              initial={{ opacity: 0, y: 10 }}
+              key="typing"
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="flex w-full gap-2 items-end justify-start"
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.2 }}
+              className="flex w-full gap-2.5 items-end justify-start"
             >
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-violet-500 flex items-center justify-center shadow-inner shrink-0 mb-1">
-                <BrainCircuit className="w-4 h-4 text-white" />
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-pink-400 to-violet-600 flex items-center justify-center shrink-0 mb-1 shadow-md shadow-violet-500/20">
+                <BrainCircuit className="w-3.5 h-3.5 text-white" />
               </div>
               <TypingIndicator aiName={aiName} />
             </motion.div>
           )}
         </AnimatePresence>
-        <div ref={bottomRef} className="h-2" />
+
+        <div ref={bottomRef} className="h-1" />
       </div>
     </div>
   );

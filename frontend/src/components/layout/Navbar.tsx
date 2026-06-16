@@ -1,27 +1,33 @@
 'use client';
 
-import { Menu } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Menu, Sparkles } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { Sidebar } from './Sidebar';
 import Link from 'next/link';
-import { Sparkles } from 'lucide-react';
 
 export function Navbar() {
   return (
-    <header className="h-16 border-b border-border/40 bg-card/80 backdrop-blur-md flex items-center justify-between px-6 sticky top-0 z-40 md:hidden">
-      <Link href="/" className="flex items-center gap-2">
-        <Sparkles className="h-5 w-5 text-pink-500" />
-        <span className="font-bold">HerSync</span>
+    <header className="h-14 flex items-center justify-between px-4 sticky top-0 z-40 md:hidden bg-[rgba(10,8,18,0.88)] backdrop-blur-2xl border-b border-[rgba(168,85,247,0.1)] shrink-0">
+      {/* Brand */}
+      <Link href="/" className="flex items-center gap-2 group">
+        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-pink-500 to-violet-600 flex items-center justify-center shadow-md shadow-violet-500/30">
+          <Sparkles className="h-3.5 w-3.5 text-white" />
+        </div>
+        <span className="text-base font-bold gradient-text tracking-tight">HerSync</span>
       </Link>
+
+      {/* Hamburger → Slide-in Sidebar */}
       <Sheet>
-        <SheetTrigger className="md:hidden inline-flex items-center justify-center rounded-md p-2 hover:bg-accent hover:text-accent-foreground">
+        <SheetTrigger className="inline-flex items-center justify-center w-9 h-9 rounded-xl hover:bg-white/5 text-[#9d91c4] transition-colors">
           <Menu className="h-5 w-5" />
         </SheetTrigger>
-        <SheetContent side="left" className="p-0 w-64 border-r-0">
-          <SheetTitle className="sr-only">Menu</SheetTitle>
+        <SheetContent
+          side="left"
+          className="p-0 w-72 border-r-0 bg-transparent"
+        >
+          <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
           <div className="h-full flex flex-col">
-            <Sidebar />
+            <Sidebar className="flex" />
           </div>
         </SheetContent>
       </Sheet>

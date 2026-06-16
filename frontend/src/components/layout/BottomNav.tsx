@@ -2,14 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, CheckSquare, CalendarHeart, Sparkles, User } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, CalendarHeart, BrainCircuit, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const mobileNavItems = [
   { name: 'Home', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Cycle', href: '/cycle', icon: CalendarHeart },
   { name: 'Check-In', href: '/check-in', icon: CheckSquare },
-  { name: 'AI', href: '/companion', icon: Sparkles },
+  { name: 'AI', href: '/companion', icon: BrainCircuit },
   { name: 'Profile', href: '/profile', icon: User },
 ];
 
@@ -17,7 +17,15 @@ export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 h-16 border-t border-border/40 bg-card/85 backdrop-blur-lg flex items-center justify-around px-2 z-40 md:hidden pb-safe">
+    <nav
+      className={cn(
+        'fixed bottom-0 left-0 right-0 z-40 md:hidden',
+        'flex items-center justify-around',
+        'h-16 pb-safe',
+        'bg-[rgba(10,8,18,0.92)] border-t border-[rgba(168,85,247,0.12)]',
+        'backdrop-blur-2xl'
+      )}
+    >
       {mobileNavItems.map((item) => {
         const isActive = pathname === item.href;
         return (
@@ -25,14 +33,33 @@ export function BottomNav() {
             key={item.name}
             href={item.href}
             className={cn(
-              'flex flex-col items-center justify-center flex-1 h-full py-1 text-[10px] font-medium transition-all duration-200 gap-0.5',
-              isActive
-                ? 'text-primary scale-105'
-                : 'text-muted-foreground hover:text-foreground'
+              'flex flex-col items-center justify-center flex-1 h-full gap-1 transition-all duration-200',
+              isActive ? 'text-pink-400' : 'text-[#5a527a] hover:text-[#9d91c4]'
             )}
           >
-            <item.icon className={cn('h-5 w-5', isActive ? 'text-primary stroke-[2.5px]' : 'stroke-[2px]')} />
-            <span className="truncate max-w-[70px]">{item.name}</span>
+            <div
+              className={cn(
+                'flex items-center justify-center w-10 h-7 rounded-xl transition-all duration-200',
+                isActive
+                  ? 'bg-gradient-to-r from-pink-500/20 to-violet-500/20'
+                  : ''
+              )}
+            >
+              <item.icon
+                className={cn(
+                  'h-5 w-5 transition-all duration-200',
+                  isActive ? 'stroke-[2px]' : 'stroke-[1.8px]'
+                )}
+              />
+            </div>
+            <span
+              className={cn(
+                'text-[10px] font-medium leading-none',
+                isActive ? 'text-pink-400' : 'text-[#5a527a]'
+              )}
+            >
+              {item.name}
+            </span>
           </Link>
         );
       })}
