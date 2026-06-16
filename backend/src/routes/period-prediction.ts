@@ -1,18 +1,14 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
-import { CycleIntelligenceEngine, CycleEntry, CheckInEntry } from '@/lib/cycle-intelligence';
+import { Response, Router } from 'express';
+import { AuthenticatedRequest } from '../middleware/auth';
+import { CycleIntelligenceEngine, CycleEntry, CheckInEntry } from '../lib/cycle-intelligence';
 
-export async function GET() {
+const router = Router();
+
+const handlePeriodPrediction = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const supabase = await createClient();
-    
-    // Get user session
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const supabase = req.supabase!;
+    const user = req.user!;
 
-    // Fetch cycle logs from Supabase
     const { data: dbCycles, error: cyclesError } = await supabase
       .from('cycle_logs')
       .select('*')
@@ -20,14 +16,13 @@ export async function GET() {
       .order('start_date', { ascending: false });
 
     if (cyclesError) {
-      console.warn('Error fetching cycles (table may be missing or empty):', cyclesError);
-      return NextResponse.json({ 
+      console.warn('Error fetching cycles:', cyclesError);
+      return res.json({ 
         hasData: false, 
         message: "Not enough data yet." 
       });
     }
 
-    // Fetch recent check-ins from daily_logs
     const { data: dbCheckIns, error: checkInsError } = await supabase
       .from('daily_logs')
       .select('*')
@@ -38,7 +33,6 @@ export async function GET() {
       console.error('Error fetching check-ins:', checkInsError);
     }
 
-    // Map db values to types expected by CycleIntelligenceEngine
     const cyclesMapped: CycleEntry[] = (dbCycles || []).map(c => ({
       startDate: new Date(c.start_date).toISOString(),
       endDate: new Date(c.end_date).toISOString(),
@@ -64,7 +58,6 @@ export async function GET() {
       });
     }
 
-    // Check PCOS mode from user memory
     const { data: memory } = await supabase
       .from('user_memory')
       .select('common_concerns')
@@ -73,18 +66,17 @@ export async function GET() {
 
     const hasPCOS = memory?.common_concerns?.includes('PCOS') || false; 
 
-    // Instantiate prediction engine V2
     const engine = new CycleIntelligenceEngine(cyclesMapped, checkInsMapped, hasPCOS);
     const prediction = engine.predictNextPeriod();
 
     if (!prediction) {
-      return NextResponse.json({ 
+      return res.json({ 
         hasData: false, 
         message: "Not enough data yet." 
       });
     }
 
-    return NextResponse.json({
+    return res.json({
       hasData: true,
       prediction: {
         earliestDate: prediction.earliestDate,
@@ -100,6 +92,11 @@ export async function GET() {
     });
   } catch (error) {
     console.error('API Error in /api/period-prediction:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return res.status(500).json({ error: 'Internal Server Error' });
   }
-}
+};
+
+router.get('/', handlePeriodPrediction);
+router.post('/', handlePeriodPrediction);
+
+export default router;

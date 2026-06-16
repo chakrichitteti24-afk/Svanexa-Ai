@@ -1,37 +1,28 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
-import { HealthMonitorService } from '@/lib/health-monitor';
-import { AIService } from '@/lib/ai-service';
+import { Response, Router } from 'express';
+import { AuthenticatedRequest } from '../middleware/auth';
+import { HealthMonitorService } from '../lib/health-monitor';
+import { AIService } from '../lib/ai-service';
 
-export async function POST(req: NextRequest) {
+const router = Router();
+
+router.post('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const supabase = await createClient();
-    
-    // Get user session
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Parse request body
-    const body = await req.json().catch(() => ({}));
-    const { message, history, conversationId: reqConversationId } = body;
+    const supabase = req.supabase!;
+    const user = req.user!;
+    const { message, history, conversationId: reqConversationId } = req.body || {};
 
     if (!message) {
-      return NextResponse.json({ error: 'Message is required' }, { status: 400 });
+      return res.status(400).json({ error: 'Message is required' });
     }
 
-    // Map incoming history to what AIService expects
     const formattedHistory = (history || []).map((msg: any) => ({
       role: msg.role === 'model' || msg.role === 'assistant' ? ('assistant' as const) : ('user' as const),
       content: msg.content || msg.text || ''
     }));
 
-    // 1. Load Health Summary
     const healthMonitor = new HealthMonitorService(supabase);
     const summary = await healthMonitor.generateHealthSummary(user.id);
 
-    // 2. Load User Memory
     const { data: profile } = await supabase
       .from('profiles')
       .select('username, ai_name')
@@ -47,7 +38,6 @@ export async function POST(req: NextRequest) {
     const userName = profile?.username || 'there';
     const aiName = profile?.ai_name || 'Luna';
 
-    // Enrich wellness context with memory profile parameters
     const userMemoryText = JSON.stringify({
       preferred_language: memory?.preferred_language || 'en',
       communication_style: memory?.communication_style || 'friendly',
@@ -68,7 +58,6 @@ export async function POST(req: NextRequest) {
 
     const contextContext = `[HEALTH SUMMARY]: ${healthSummaryText}\n[USER MEMORY]: ${userMemoryText}`;
 
-    // 3. Load Current Message & 4. Determine context & 5. Generate response
     const ai = new AIService();
     const result = await ai.generateCompanionResponse(
       message,
@@ -76,10 +65,9 @@ export async function POST(req: NextRequest) {
       contextContext,
       aiName,
       userName,
-      false // Run Llama 3.1 8B with automatic Gemini failover
+      false
     );
 
-    // Context Audit System (track utilized parameters)
     const lowerRes = result.response.toLowerCase();
     const contextAudit = {
       used_sleep_data: lowerRes.includes('sleep') || lowerRes.includes('hour') || lowerRes.includes('rest') || lowerRes.includes('tired'),
@@ -89,11 +77,9 @@ export async function POST(req: NextRequest) {
       used_symptom_data: lowerRes.includes('bloat') || lowerRes.includes('cramp') || lowerRes.includes('fatigue') || lowerRes.includes('acne') || lowerRes.includes('hair') || lowerRes.includes('symptom')
     };
 
-    // Save Chat Session in Conversations & Messages tables for 7 days storage
     let conversationId = reqConversationId;
     try {
       if (!conversationId) {
-        // Find most recent conversation, or create a new one
         const { data: latestConv } = await supabase
           .from('conversations')
           .select('id')
@@ -115,14 +101,12 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Insert user message
       await supabase.from('messages').insert({
         conversation_id: conversationId,
         role: 'user',
         content: message
       });
 
-      // Insert assistant message with context audit
       await supabase.from('messages').insert({
         conversation_id: conversationId,
         role: 'assistant',
@@ -130,7 +114,6 @@ export async function POST(req: NextRequest) {
         context_audit: contextAudit
       });
 
-      // Update conversation updated_at date
       await supabase
         .from('conversations')
         .update({ updated_at: new Date().toISOString() })
@@ -139,7 +122,7 @@ export async function POST(req: NextRequest) {
       console.error('Failed to log message session to database:', saveError);
     }
 
-    return NextResponse.json({
+    return res.json({
       success: true,
       response: result.response,
       modelUsed: result.modelUsed,
@@ -147,7 +130,9 @@ export async function POST(req: NextRequest) {
       error: result.error
     });
   } catch (error) {
-    console.error('API Error in /api/chat:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error('API Error in POST /api/chat:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
   }
-}
+});
+
+export default router;

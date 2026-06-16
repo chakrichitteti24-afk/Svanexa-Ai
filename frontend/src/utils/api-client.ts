@@ -30,7 +30,7 @@ export async function apiFetch(input: string, init?: RequestInit): Promise<Respo
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+  const backendUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || '';
   const url = input.startsWith('/') ? `${backendUrl}${input}` : input;
 
   return fetch(url, {
