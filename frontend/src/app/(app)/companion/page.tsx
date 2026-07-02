@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useVisualViewport } from '@/hooks/useVisualViewport';
-import { createClient } from '@/utils/supabase/client';
 import { ArrowLeft, MoreVertical, Trash2, Plus, BrainCircuit } from 'lucide-react';
 import Link from 'next/link';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -21,7 +20,6 @@ export interface ChatSession {
 }
 
 export default function CompanionPage() {
-  const supabase = createClient();
   const viewportHeight = useVisualViewport();
 
   const [userName, setUserName] = useState<string>('there');
@@ -35,23 +33,12 @@ export default function CompanionPage() {
 
   // Load profile
   useEffect(() => {
-    async function loadProfile() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data } = await supabase
-          .from('profiles')
-          .select('username, ai_name')
-          .eq('id', user.id)
-          .single();
-        if (data) {
-          setUserName(data.username);
-          setAiName(data.ai_name);
-        }
-      }
-      setLoadingProfile(false);
-    }
-    loadProfile();
-  }, [supabase]);
+    const storedName = localStorage.getItem('hersync_username') || 'Guest';
+    const storedAiName = localStorage.getItem('hersync_ai_name') || 'Luna';
+    setUserName(storedName);
+    setAiName(storedAiName);
+    setLoadingProfile(false);
+  }, []);
 
   // Init session
   useEffect(() => {

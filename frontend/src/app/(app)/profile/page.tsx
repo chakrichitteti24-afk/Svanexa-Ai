@@ -1,7 +1,6 @@
 'use client';
 
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,18 +15,14 @@ import { useState, useEffect } from 'react';
 
 export default function ProfilePage() {
   const router = useRouter();
-  const supabase = createClient();
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Supabase state
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [dob, setDob] = useState('');
-  const [companionName, setCompanionName] = useState('Luna');
-
-  // Local Storage state (for non-database preferences right now)
+  // Local Storage state
+  const [name, setName] = useLocalStorage('hersync_username', 'Guest');
+  const [dob, setDob] = useLocalStorage('hersync_user_dob', '');
+  const [companionName, setCompanionName] = useLocalStorage('hersync_ai_name', 'Luna');
   const [weight, setWeight] = useLocalStorage('hersync_user_weight', '62');
   const [hasPCOS, setHasPCOS] = useLocalStorage('hersync_has_pcos', false);
   const [avgCycleLength, setAvgCycleLength] = useLocalStorage('hersync_avg_cycle_length', 28);
@@ -36,55 +31,16 @@ export default function ProfilePage() {
   const [personality, setPersonality] = useLocalStorage('hersync_personality', 'Friendly');
 
   useEffect(() => {
-    async function loadProfile() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setEmail(user.email || '');
-        const { data } = await supabase
-          .from('profiles')
-          .select('username, ai_name, date_of_birth')
-          .eq('id', user.id)
-          .single();
-        
-        if (data) {
-          setName(data.username);
-          setCompanionName(data.ai_name);
-          setDob(data.date_of_birth);
-        }
-      }
-      setLoading(false);
-    }
-    loadProfile();
-  }, [supabase]);
+    setLoading(false);
+  }, []);
 
-  const handleSaveProfile = async (e: React.FormEvent) => {
+  const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          username: name,
-          ai_name: companionName,
-          date_of_birth: dob
-        })
-        .eq('id', user.id);
-
-      if (error) {
-        toast.error(error.message);
-      } else {
-        toast.success('Profile settings updated successfully!');
-      }
-    }
-    setSaving(false);
-  };
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.push('/login');
-    router.refresh();
+    setTimeout(() => {
+      toast.success('Profile settings updated successfully!');
+      setSaving(false);
+    }, 400);
   };
 
   const handleClearAllData = () => {
@@ -110,11 +66,8 @@ export default function ProfilePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight mb-1">My Profile</h1>
-          <p className="text-xs text-muted-foreground">{email}</p>
+          <p className="text-xs text-muted-foreground">Local Wellness Account</p>
         </div>
-        <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-muted-foreground hover:text-foreground">
-          <LogOut className="w-4 h-4 mr-2" /> Sign Out
-        </Button>
       </div>
 
       <form onSubmit={handleSaveProfile} className="space-y-6">

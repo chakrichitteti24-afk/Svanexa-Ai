@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { requireAuth } from './middleware/auth';
 
 // Route imports
 import chatRouter from './routes/chat';
@@ -16,9 +15,9 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 8080;
 
-// CORS configuration - support both dynamic dev environments and Vercel production origin
 const allowedOrigins = [
   'http://localhost:3000',
+  'http://localhost:3001',
   'http://localhost:5173',
   'https://hersync.vercel.app',
 ];
@@ -28,7 +27,7 @@ app.use(cors({
     // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.vercel.app')) {
+    if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.vercel.app') || origin.startsWith('http://localhost:')) {
       return callback(null, true);
     }
     
@@ -52,11 +51,11 @@ app.get('/api/health', (req, res) => {
 });
 
 // Authenticated route mounts
-app.use('/api/chat', requireAuth, chatRouter);
-app.use('/api/analyze', requireAuth, analyzeRouter);
-app.use('/api/health-summary', requireAuth, healthSummaryRouter);
-app.use('/api/period-prediction', requireAuth, periodPredictionRouter);
-app.use('/api/wellness-plan', requireAuth, wellnessPlanRouter);
+app.use('/api/chat', chatRouter);
+app.use('/api/analyze', analyzeRouter);
+app.use('/api/health-summary', healthSummaryRouter);
+app.use('/api/period-prediction', periodPredictionRouter);
+app.use('/api/wellness-plan', wellnessPlanRouter);
 
 // Start server
 app.listen(port, () => {

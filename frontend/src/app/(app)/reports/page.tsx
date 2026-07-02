@@ -1,51 +1,48 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@/utils/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { FileText, CalendarHeart, Droplets, Activity, Brain, Loader2 } from 'lucide-react';
 import { differenceInDays } from 'date-fns';
 
 export default function ReportsPage() {
-  const supabase = createClient();
   const [loading, setLoading] = useState(true);
   const [dailyLogs, setDailyLogs] = useState<any[]>([]);
   const [cycleLogs, setCycleLogs] = useState<any[]>([]);
   const [skinLogs, setSkinLogs] = useState<any[]>([]);
 
   useEffect(() => {
-    async function loadReportsData() {
+    function loadReportsData() {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          // Fetch daily logs
-          const { data: dbDaily } = await supabase
-            .from('daily_logs')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('log_date', { ascending: true });
-          
-          if (dbDaily) setDailyLogs(dbDaily);
+        // Fetch daily logs
+        const checkInsRaw = localStorage.getItem('hersync_checkins') || '{}';
+        const checkIns = JSON.parse(checkInsRaw);
+        const mappedDaily = Object.entries(checkIns).map(([date, data]: [string, any]) => ({
+          log_date: date,
+          ...data
+        })).sort((a, b) => a.log_date.localeCompare(b.log_date));
+        setDailyLogs(mappedDaily);
 
-          // Fetch cycle logs
-          const { data: dbCycles } = await supabase
-            .from('cycle_logs')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('start_date', { ascending: false });
-          
-          if (dbCycles) setCycleLogs(dbCycles);
+        // Fetch cycle logs
+        const cyclesRaw = localStorage.getItem('hersync_cycles') || '[]';
+        const cycles = JSON.parse(cyclesRaw);
+        const mappedCycles = cycles.map((c: any) => ({
+          start_date: c.startDate,
+          end_date: c.endDate,
+          notes: c.notes || ''
+        })).sort((a: any, b: any) => b.start_date.localeCompare(a.start_date));
+        setCycleLogs(mappedCycles);
 
-          // Fetch skin logs
-          const { data: dbSkin } = await supabase
-            .from('skin_logs')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('log_date', { ascending: false });
-          
-          if (dbSkin) setSkinLogs(dbSkin);
-        }
+        // Fetch skin logs
+        const skinRaw = localStorage.getItem('hersync_skin') || '[]';
+        const skin = JSON.parse(skinRaw);
+        const mappedSkin = skin.map((s: any) => ({
+          log_date: s.date,
+          acne: s.acne,
+          oiliness: s.oiliness
+        })).sort((a: any, b: any) => b.log_date.localeCompare(a.log_date));
+        setSkinLogs(mappedSkin);
       } catch (err) {
         console.error('Failed to load reports data:', err);
       } finally {
@@ -53,7 +50,7 @@ export default function ReportsPage() {
       }
     }
     loadReportsData();
-  }, [supabase]);
+  }, []);
 
   if (loading) {
     return (

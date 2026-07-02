@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { addDays, format, differenceInDays } from 'date-fns';
 import { CalendarHeart, Sparkles, Trash2, CalendarDays, Plus } from 'lucide-react';
-import { createClient } from '@/utils/supabase/client';
 
 type CycleEntry = {
   id?: string;
@@ -21,7 +20,7 @@ export default function CycleTrackerPage() {
   const [cycles, setCycles] = useLocalStorage<CycleEntry[]>('hersync_cycles', []);
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
 
-  const handleSaveCycle = async () => {
+  const handleSaveCycle = () => {
     if (!dateRange.from || !dateRange.to) {
       toast.error('Please select both start and end dates');
       return;
@@ -33,74 +32,25 @@ export default function CycleTrackerPage() {
       return;
     }
 
-    try {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+    const newCycle: CycleEntry = {
+      id: Date.now().toString(),
+      startDate: dateRange.from.toISOString(),
+      endDate: dateRange.to.toISOString(),
+      notes: '',
+    };
 
-      const { data: inserted, error } = await supabase
-        .from('cycle_logs')
-        .insert({
-          user_id: user.id,
-          start_date: format(dateRange.from, 'yyyy-MM-dd'),
-          end_date: format(dateRange.to, 'yyyy-MM-dd'),
-          notes: ''
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      const newCycle: CycleEntry = {
-        id: inserted.id,
-        startDate: dateRange.from.toISOString(),
-        endDate: dateRange.to.toISOString(),
-        notes: '',
-      };
-
-      const updated = [...cycles, newCycle].sort(
-        (a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
-      );
-      setCycles(updated);
-      setDateRange({});
-      toast.success('Period dates saved successfully!');
-    } catch (err) {
-      console.error('Failed to sync cycle to Supabase:', err);
-      // Fallback local save
-      const newCycle: CycleEntry = {
-        startDate: dateRange.from.toISOString(),
-        endDate: dateRange.to.toISOString(),
-        notes: '',
-      };
-      const updated = [...cycles, newCycle].sort(
-        (a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
-      );
-      setCycles(updated);
-      setDateRange({});
-      toast.success('Period dates saved locally! Cloud sync pending.');
-    }
+    const updated = [...cycles, newCycle].sort(
+      (a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+    );
+    setCycles(updated);
+    setDateRange({});
+    toast.success('Period dates saved successfully!');
   };
 
-  const handleDeleteCycle = async (index: number) => {
-    const cycleToDelete = cycles[index];
+  const handleDeleteCycle = (index: number) => {
     const updated = cycles.filter((_, idx) => idx !== index);
     setCycles(updated);
-
-    try {
-      if (cycleToDelete.id) {
-        const supabase = createClient();
-        const { error } = await supabase
-          .from('cycle_logs')
-          .delete()
-          .eq('id', cycleToDelete.id);
-        
-        if (error) throw error;
-      }
-      toast.success('Cycle entry deleted.');
-    } catch (err) {
-      console.error('Failed to delete cycle from Supabase:', err);
-      toast.success('Deleted locally! Sync to database pending.');
-    }
+    toast.success('Cycle entry deleted.');
   };
 
   const getPrediction = () => {

@@ -3,7 +3,7 @@
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Navbar } from '@/components/layout/Navbar';
 import { BottomNav } from '@/components/layout/BottomNav';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -15,6 +15,7 @@ export default function AppLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -22,9 +23,14 @@ export default function AppLayout({
     const handle = requestAnimationFrame(() => {
       setMounted(true);
       setLoading(false);
+      
+      const onboardingCompleted = localStorage.getItem('hersync_onboarding_completed');
+      if (onboardingCompleted !== 'true') {
+        router.replace('/onboarding');
+      }
     });
     return () => cancelAnimationFrame(handle);
-  }, []);
+  }, [router]);
 
   if (!mounted || loading) return <div className="min-h-screen bg-background" />;
 

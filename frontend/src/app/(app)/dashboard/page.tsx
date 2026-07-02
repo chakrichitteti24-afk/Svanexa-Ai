@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@/utils/supabase/client';
 import { Button } from '@/components/ui/button';
 import {
   Target, AlertCircle, ArrowRight, BrainCircuit, Loader2,
@@ -71,7 +70,6 @@ function TrendChip({ label, value, icon: Icon, color }: { label: string; value: 
 }
 
 export default function DashboardPage() {
-  const supabase = createClient();
   const [userName, setUserName] = useState<string>('there');
   const [aiName, setAiName] = useState<string>('Luna');
   const [loading, setLoading] = useState(true);
@@ -82,21 +80,19 @@ export default function DashboardPage() {
   useEffect(() => {
     async function loadData() {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: profile } = await supabase
-            .from('profiles').select('username, ai_name').eq('id', user.id).single();
-          if (profile) { setUserName(profile.username); setAiName(profile.ai_name); }
-
-          const [sumRes, predRes, wellRes] = await Promise.all([
-            apiFetch('/api/health-summary'),
-            apiFetch('/api/period-prediction'),
-            apiFetch('/api/wellness-plan'),
-          ]);
-          if (sumRes.ok) setSummary(await sumRes.json());
-          if (predRes.ok) setPrediction(await predRes.json());
-          if (wellRes.ok) setWellnessPlan(await wellRes.json());
-        }
+        const storedName = localStorage.getItem('hersync_username') || 'Guest';
+        const storedAiName = localStorage.getItem('hersync_ai_name') || 'Luna';
+        setUserName(storedName); 
+        setAiName(storedAiName);
+        
+        const [sumRes, predRes, wellRes] = await Promise.all([
+          apiFetch('/api/health-summary'),
+          apiFetch('/api/period-prediction'),
+          apiFetch('/api/wellness-plan'),
+        ]);
+        if (sumRes.ok) setSummary(await sumRes.json());
+        if (predRes.ok) setPrediction(await predRes.json());
+        if (wellRes.ok) setWellnessPlan(await wellRes.json());
       } catch (err) {
         console.error('Dashboard load error:', err);
       } finally {
@@ -104,7 +100,7 @@ export default function DashboardPage() {
       }
     }
     loadData();
-  }, [supabase]);
+  }, []);
 
   // Wellness score
   let wellnessScore = 0;
