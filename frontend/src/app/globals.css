@@ -81,7 +81,7 @@
   --sidebar-border: rgba(168, 85, 247, 0.1);
   --sidebar-ring: #a855f7;
 
-  /* HerSync Brand Tokens */
+  /* HerSync Brand Tokens (Default / General Mode - Purple + Lavender) */
   --hs-pink: #ec4899;
   --hs-violet: #8b5cf6;
   --hs-purple: #a855f7;
@@ -90,6 +90,48 @@
   --hs-glow-violet: rgba(139, 92, 246, 0.3);
   --hs-glass: rgba(18, 16, 28, 0.7);
   --hs-glass-border: rgba(168, 85, 247, 0.15);
+  --bg-gradient-color1: rgba(139, 92, 246, 0.12);
+  --bg-gradient-color2: rgba(236, 72, 153, 0.08);
+}
+
+/* ── PCOS MODE (Pink, Purple, Rose) ── */
+body[data-mode="pcos"] {
+  --primary: #f43f5e;
+  --ring: #e11d48;
+  --sidebar-primary: #f43f5e;
+  --sidebar-ring: #e11d48;
+  
+  --hs-pink: #f43f5e;
+  --hs-violet: #d946ef;
+  --hs-purple: #e11d48;
+  --hs-fuchsia: #be123c;
+  --hs-glow-pink: rgba(244, 63, 94, 0.3);
+  --hs-glow-violet: rgba(217, 70, 239, 0.3);
+  --bg-gradient-color1: rgba(244, 63, 94, 0.15);
+  --bg-gradient-color2: rgba(217, 70, 239, 0.1);
+  --hs-glass-border: rgba(244, 63, 94, 0.2);
+}
+
+/* ── PREGNANCY MODE (Soft Peach, Lavender, Warm White) ── */
+body[data-mode="pregnancy"] {
+  --background: #141010;
+  --card: rgba(25, 20, 20, 0.85);
+  --popover: #1a1515;
+  --primary: #fb923c;
+  --ring: #f97316;
+  --sidebar-primary: #fb923c;
+  --sidebar-ring: #f97316;
+  
+  --hs-pink: #fb923c;
+  --hs-violet: #a78bfa;
+  --hs-purple: #fdba74;
+  --hs-fuchsia: #f97316;
+  --hs-glow-pink: rgba(251, 146, 60, 0.3);
+  --hs-glow-violet: rgba(167, 139, 250, 0.3);
+  --bg-gradient-color1: rgba(251, 146, 60, 0.12);
+  --bg-gradient-color2: rgba(167, 139, 250, 0.1);
+  --hs-glass: rgba(25, 20, 20, 0.7);
+  --hs-glass-border: rgba(251, 146, 60, 0.15);
 }
 
 /* =====================================================
@@ -113,9 +155,10 @@
     min-height: 100dvh;
     overflow-x: hidden;
     background-image:
-      radial-gradient(ellipse 80% 60% at 50% -10%, rgba(139, 92, 246, 0.12) 0%, transparent 60%),
-      radial-gradient(ellipse 40% 40% at 90% 100%, rgba(236, 72, 153, 0.08) 0%, transparent 50%);
+      radial-gradient(ellipse 80% 60% at 50% -10%, var(--bg-gradient-color1) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 40% at 90% 100%, var(--bg-gradient-color2) 0%, transparent 50%);
     background-attachment: fixed;
+    transition: background-color 0.4s ease, background-image 0.4s ease;
   }
 
   /* Remove default scrollbar in Chrome for chat areas */
@@ -163,9 +206,9 @@
     border-color: rgba(168, 85, 247, 0.25);
   }
 
-  /* Premium pink-violet gradient text */
+  /* Premium gradient text responding to mode */
   .gradient-text {
-    background: linear-gradient(135deg, #ec4899 0%, #a855f7 50%, #8b5cf6 100%);
+    background: linear-gradient(135deg, var(--hs-pink) 0%, var(--hs-purple) 50%, var(--hs-violet) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -173,14 +216,14 @@
 
   /* Primary action button */
   .btn-primary {
-    background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
+    background: linear-gradient(135deg, var(--hs-pink) 0%, var(--hs-violet) 100%);
     color: white;
     border: none;
     border-radius: 9999px;
     font-weight: 600;
     letter-spacing: 0.01em;
     transition: all 0.2s;
-    box-shadow: 0 4px 20px rgba(139, 92, 246, 0.25);
+    box-shadow: 0 4px 20px var(--hs-glow-violet);
   }
 
   .btn-primary:hover {
@@ -225,7 +268,7 @@
     inset: 0;
     border-radius: inherit;
     padding: 1px;
-    background: linear-gradient(135deg, rgba(236, 72, 153, 0.4), rgba(139, 92, 246, 0.4));
+    background: linear-gradient(135deg, var(--hs-glow-pink), var(--hs-glow-violet));
     -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;

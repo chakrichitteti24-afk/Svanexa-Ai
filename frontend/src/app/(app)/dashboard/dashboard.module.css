@@ -1,0 +1,383 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+.dashboardContainer {
+  max-width: 430px;
+  margin: 0 auto;
+  padding: 0 16px 96px 16px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  background-color: #05050A;
+  color: #FFFFFF;
+  font-family: 'Inter', sans-serif;
+  flex: 1 0 auto;
+  overflow-x: hidden;
+}
+
+.welcomeContainer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(145deg, #1A1333 0%, #0A0815 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  text-align: center;
+  padding: 24px;
+}
+
+.welcomeAvatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--hs-pink) 0%, var(--hs-violet) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+  box-shadow: 0 12px 30px var(--hs-glow-violet);
+}
+
+.welcomeGreeting {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  letter-spacing: -0.5px;
+  color: #FFFFFF;
+}
+
+.welcomeMessage {
+  font-size: 16px;
+  color: #B3A8D6;
+  font-weight: 400;
+  max-width: 280px;
+  line-height: 1.5;
+}
+
+.pageHeader {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pageTitle {
+  font-size: 28px;
+  font-weight: 700;
+  color: #FFFFFF;
+  letter-spacing: -0.5px;
+}
+
+.pageSubtitle {
+  font-size: 15px;
+  color: #8C82A6;
+  font-weight: 400;
+}
+
+.sectionTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: #8C82A6;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 16px;
+  padding-left: 4px;
+}
+
+.premiumCard {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.emptyStateContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.emptyStateText {
+  font-size: 14px;
+  color: #8C82A6;
+  line-height: 1.6;
+  font-weight: 400;
+  max-width: 280px;
+}
+
+/* AI Wellness Snapshot */
+.snapshotGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.snapshotItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.snapshotIcon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.snapshotData {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.snapshotLabel {
+  font-size: 11px;
+  color: #8C82A6;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.snapshotValue {
+  font-size: 15px;
+  color: #FFFFFF;
+  font-weight: 700;
+}
+
+/* Luna's Observation */
+.observationCard {
+  background: linear-gradient(160deg, rgba(30, 20, 50, 0.7) 0%, rgba(15, 10, 25, 0.8) 100%);
+  border: 1px solid var(--hs-glass-border);
+}
+
+.observationHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.observationAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--hs-pink) 0%, var(--hs-violet) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px var(--hs-glow-violet);
+}
+
+.observationText {
+  font-size: 16px;
+  line-height: 1.6;
+  color: #E2DDF0;
+  font-weight: 400;
+}
+
+/* Timeline */
+.timelineContainer {
+  padding: 0 8px;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 20px;
+  top: 24px;
+  bottom: 24px;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.05);
+  z-index: 0;
+}
+
+.timelineItem {
+  display: flex;
+  gap: 16px;
+  padding: 16px 0;
+  position: relative;
+  z-index: 1;
+}
+
+.timelineIconWrapper {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #0A0A0F;
+  border: 2px solid var(--hs-glass-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--hs-violet);
+}
+
+.timelineContent {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  padding: 16px;
+  backdrop-filter: blur(12px);
+}
+
+.timelineTime {
+  font-size: 13px;
+  color: var(--hs-violet);
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.timelineDataRow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  color: #E2DDF0;
+}
+
+.timelineDataRow span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.timelineDataRow span::before {
+  content: '';
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #8C82A6;
+}
+
+/* Wellness Plan Goals */
+.goalsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.goalCard {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  padding: 20px;
+  backdrop-filter: blur(12px);
+}
+
+.goalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.goalTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.goalName {
+  font-size: 16px;
+  font-weight: 600;
+  color: #FFFFFF;
+}
+
+.goalMetric {
+  font-size: 14px;
+  color: #8C82A6;
+  font-weight: 500;
+}
+
+.progressBarBg {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progressBarFill {
+  height: 100%;
+  border-radius: 4px;
+}
+
+.goalCompletedBadge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ADE80;
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Stats */
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.statCard {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  flex-shrink: 0;
+  backdrop-filter: blur(12px);
+}
+
+.statValue {
+  font-size: 24px;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-bottom: 4px;
+}
+
+.statLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: #8C82A6;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

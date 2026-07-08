@@ -1,18 +1,19 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Slider } from '@/components/ui/slider';
 import { toast } from 'sonner';
-import { Smile, Moon, Droplet, Dumbbell, Activity, ShieldAlert, Sparkles } from 'lucide-react';
+import { Smile, Moon, Droplet, Dumbbell, Activity, ShieldAlert, Sparkles, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { createClient } from '@/utils/supabase/client';
+import { useRouter } from 'next/navigation';
+import { useHerSync } from '@/context/HerSyncContext';
 
 const checkInSchema = z.object({
   mood: z.string().min(1, 'Mood is required'),
@@ -42,36 +43,82 @@ const MOODS = [
 const SYMPTOM_SEVERITIES = ['none', 'mild', 'moderate', 'severe'];
 
 export default function CheckInPage() {
-  const [entries, setEntries] = useLocalStorage<Record<string, CheckInFormValues>>('hersync_checkins', {});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const { refreshAll } = useHerSync();
+  
   const today = format(new Date(), 'yyyy-MM-dd');
-
-  const currentValues = entries[today] || {
-    mood: 'calm',
-    sleep: 7.0,
-    water: 2.0,
-    exercise: 30,
-    stress: 5,
-    acne: 3,
-    hairFall: 'none',
-    bloating: 'none',
-    fatigue: 'none',
-    cramps: 'none',
-    notes: '',
-  };
+  const supabase = createClient();
+  const router = useRouter();
 
   const { register, handleSubmit, setValue, watch, reset } = useForm<CheckInFormValues>({
     resolver: zodResolver(checkInSchema),
-    defaultValues: currentValues,
+    defaultValues: {
+      mood: 'calm',
+      sleep: 7.0,
+      water: 2.0,
+      exercise: 30,
+      stress: 5,
+      acne: 3,
+      hairFall: 'none',
+      bloating: 'none',
+      fatigue: 'none',
+      cramps: 'none',
+      notes: '',
+    },
   });
 
-  // Sync loaded entries into the form when localStorage resolves
   useEffect(() => {
-    if (entries[today]) {
-      reset(entries[today]);
-    }
-  }, [entries, today, reset]);
+    async function fetchTodayData() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          router.push('/login');
+          return;
+        }
+        setUserId(user.id);
 
-  // Keep fields watched for state displays
+        const [
+          { data: sleepData },
+          { data: waterData },
+          { data: exerciseData },
+          { data: moodData },
+          { data: checkinData },
+          { data: skinData }
+        ] = await Promise.all([
+          supabase.from('sleep_logs').select('*').eq('user_id', user.id).eq('date', today).single(),
+          supabase.from('water_logs').select('*').eq('user_id', user.id).eq('date', today).single(),
+          supabase.from('exercise_logs').select('*').eq('user_id', user.id).eq('date', today).single(),
+          supabase.from('mood_logs').select('*').eq('user_id', user.id).eq('date', today).single(),
+          supabase.from('daily_checkins').select('*').eq('user_id', user.id).eq('date', today).single(),
+          supabase.from('skin_logs').select('*').eq('user_id', user.id).eq('date', today).single()
+        ]);
+
+        const formValues: any = {
+          sleep: sleepData ? sleepData.duration_hours : 7.0,
+          water: waterData ? waterData.amount_ml / 1000 : 2.0,
+          exercise: exerciseData ? exerciseData.duration_minutes : 30,
+          mood: moodData ? moodData.mood : 'calm',
+          stress: moodData ? moodData.intensity : 5,
+          notes: checkinData ? checkinData.summary : '',
+          acne: skinData && skinData.condition ? Number(skinData.condition) : 3,
+          hairFall: 'none',
+          bloating: 'none',
+          fatigue: 'none',
+          cramps: 'none'
+        };
+
+        reset(formValues);
+      } catch (err) {
+        console.error("No existing data for today or error fetching");
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchTodayData();
+  }, [supabase, today, router, reset]);
+
   const watchedMood = watch('mood');
   const watchedSleep = watch('sleep');
   const watchedWater = watch('water');
@@ -83,14 +130,32 @@ export default function CheckInPage() {
   const watchedFatigue = watch('fatigue');
   const watchedCramps = watch('cramps');
 
-  const onSubmit = (data: CheckInFormValues) => {
-    setEntries({ ...entries, [today]: data });
-    toast.success('Habits logged successfully!', {
-      description: 'Your wellness factors are saved for today.'
-    });
+  const onSubmit = async (data: CheckInFormValues) => {
+    if (!userId) return;
+    setSaving(true);
+    
+    try {
+      await Promise.all([
+        supabase.from('daily_checkins').upsert({ user_id: userId, date: today, summary: data.notes }, { onConflict: 'user_id,date' }),
+        supabase.from('mood_logs').upsert({ user_id: userId, date: today, mood: data.mood, intensity: data.stress }, { onConflict: 'id' }),
+        supabase.from('sleep_logs').upsert({ user_id: userId, date: today, duration_hours: data.sleep }, { onConflict: 'id' }),
+        supabase.from('water_logs').upsert({ user_id: userId, date: today, amount_ml: Math.round(data.water * 1000) }, { onConflict: 'id' }),
+        supabase.from('exercise_logs').upsert({ user_id: userId, date: today, duration_minutes: data.exercise, type: 'General' }, { onConflict: 'id' }),
+        supabase.from('skin_logs').upsert({ user_id: userId, date: today, condition: String(data.acne) }, { onConflict: 'id' })
+      ]);
+
+      toast.success('Habits logged successfully!', {
+        description: 'Your wellness data is now synced across all modules.'
+      });
+      // Broadcast to all connected modules: Dashboard, Reports, Wellness Plan, AI Companion
+      await refreshAll();
+    } catch (err: any) {
+      toast.error('Failed to save log', { description: err.message });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  // Stepper utility functions
   const adjustSleep = (amount: number) => {
     const nextVal = Math.max(0, Math.min(24, Math.round((watchedSleep + amount) * 2) / 2));
     setValue('sleep', nextVal);
@@ -106,20 +171,28 @@ export default function CheckInPage() {
     setValue('exercise', nextVal);
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-pink-500" />
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-md mx-auto space-y-6 pb-24 animate-in fade-in duration-500">
       <div>
         <h1 className="text-2xl font-bold tracking-tight mb-1">Daily Log</h1>
-        <p className="text-xs text-muted-foreground">Log your status for: <span className="font-semibold text-pink-500">{new Date().toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span></p>
+        <p className="text-xs text-muted-foreground">Log your status for: <span className="font-semibold" style={{ color: 'var(--hs-pink)' }}>{new Date().toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span></p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         
         {/* 1. Mood Selection */}
-        <Card className="border-border/40 bg-card/60 backdrop-blur-xs">
+        <Card className="border-border/40 bg-card/60 backdrop-blur-xs shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
-              <Smile className="w-4.5 h-4.5 text-pink-500" /> {"How's your mood today?"}
+              <Smile className="w-4.5 h-4.5" style={{ color: 'var(--hs-pink)' }} /> {"How's your mood today?"}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -133,9 +206,10 @@ export default function CheckInPage() {
                     onClick={() => setValue('mood', m.value)}
                     className={`h-16 flex flex-col items-center justify-center rounded-xl border text-center transition-all ${
                       isActive 
-                        ? 'bg-pink-500/10 border-pink-500 text-pink-500 font-semibold scale-[1.03] shadow-xs' 
+                        ? 'font-semibold scale-[1.03] shadow-xs' 
                         : 'border-border/40 hover:bg-secondary/40 text-muted-foreground'
                     }`}
+                    style={isActive ? { background: 'var(--hs-glow-pink)', borderColor: 'var(--hs-pink)', color: 'var(--hs-pink)' } : {}}
                   >
                     <span className="text-xl mb-0.5">{m.emoji}</span>
                     <span className="text-[10px]">{m.label}</span>
@@ -147,7 +221,7 @@ export default function CheckInPage() {
         </Card>
 
         {/* 2. Stepper Trackers (Sleep, Water, Exercise) */}
-        <Card className="border-border/40 bg-card/60 backdrop-blur-xs">
+        <Card className="border-border/40 bg-card/60 backdrop-blur-xs shadow-sm">
           <CardContent className="pt-6 space-y-6">
             
             {/* Sleep Counter */}
@@ -235,7 +309,7 @@ export default function CheckInPage() {
         </Card>
 
         {/* 3. Sliders for Stress & Acne */}
-        <Card className="border-border/40 bg-card/60 backdrop-blur-xs">
+        <Card className="border-border/40 bg-card/60 backdrop-blur-xs shadow-sm">
           <CardContent className="pt-6 space-y-6">
             {/* Stress Counter */}
             <div className="flex items-center justify-between">
@@ -294,10 +368,10 @@ export default function CheckInPage() {
         </Card>
 
         {/* 4. Symptoms Segmented Pills */}
-        <Card className="border-border/40 bg-card/60 backdrop-blur-xs">
+        <Card className="border-border/40 bg-card/60 backdrop-blur-xs shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
-              <ShieldAlert className="w-4.5 h-4.5 text-pink-500" /> Physical Symptoms
+              <ShieldAlert className="w-4.5 h-4.5" style={{ color: 'var(--hs-pink)' }} /> Physical Symptoms
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -339,9 +413,10 @@ export default function CheckInPage() {
                       onClick={() => setValue('bloating', sev)}
                       className={`py-1.5 text-[10px] font-semibold rounded-md uppercase transition-all ${
                         isActive 
-                          ? 'bg-pink-600 text-white shadow-xs' 
+                          ? 'text-white shadow-xs' 
                           : 'text-muted-foreground hover:bg-secondary/40'
                       }`}
+                      style={isActive ? { background: 'var(--hs-pink)' } : {}}
                     >
                       {sev}
                     </button>
@@ -363,9 +438,10 @@ export default function CheckInPage() {
                       onClick={() => setValue('fatigue', sev)}
                       className={`py-1.5 text-[10px] font-semibold rounded-md uppercase transition-all ${
                         isActive 
-                          ? 'bg-pink-600 text-white shadow-xs' 
+                          ? 'text-white shadow-xs' 
                           : 'text-muted-foreground hover:bg-secondary/40'
                       }`}
+                      style={isActive ? { background: 'var(--hs-pink)' } : {}}
                     >
                       {sev}
                     </button>
@@ -387,9 +463,10 @@ export default function CheckInPage() {
                       onClick={() => setValue('hairFall', sev)}
                       className={`py-1.5 text-[10px] font-semibold rounded-md uppercase transition-all ${
                         isActive 
-                          ? 'bg-pink-600 text-white shadow-xs' 
+                          ? 'text-white shadow-xs' 
                           : 'text-muted-foreground hover:bg-secondary/40'
                       }`}
+                      style={isActive ? { background: 'var(--hs-pink)' } : {}}
                     >
                       {sev}
                     </button>
@@ -415,9 +492,11 @@ export default function CheckInPage() {
         {/* Submit */}
         <Button 
           type="submit" 
-          className="w-full h-12 rounded-full bg-gradient-to-r from-pink-600 to-violet-600 hover:from-pink-500 hover:to-violet-500 text-white font-medium text-sm flex items-center justify-center gap-1 transition-transform active:scale-98"
+          disabled={saving}
+          className="w-full h-12 rounded-xl text-white font-medium text-sm flex items-center justify-center gap-1 transition-transform active:scale-98 shadow-md"
+          style={{ background: 'linear-gradient(135deg, var(--hs-violet), var(--hs-pink))' }}
         >
-          Save Log
+          {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Save Log'}
         </Button>
       </form>
     </div>

@@ -1,350 +1,460 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
 import {
-  Target, AlertCircle, ArrowRight, BrainCircuit, Loader2,
-  CalendarHeart, Smile, Moon, Activity, Sparkles, CheckCircle2
+  BrainCircuit, Loader2, Droplets, Dumbbell,
+  Check, Moon, Smile, Activity, Flame, Heart,
+  Calendar, BarChart2, Sun, Sunset, Sparkles,
+  ArrowRight
 } from 'lucide-react';
+import { useHerSync } from '@/context/HerSyncContext';
+import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
-import { apiFetch } from '@/utils/api-client';
-
-interface HealthSummary {
-  sleep_avg: number | null;
-  stress_trend: 'low' | 'moderate' | 'high' | 'insufficient_data';
-  mood_trend: 'improving' | 'declining' | 'stable' | 'insufficient_data';
-  cycle_status: string;
-  risk_flags: string[];
-  total_logs_count: number;
-  has_checked_in_today: boolean;
-  today_log: any;
-}
-
-interface PeriodPrediction {
-  hasData: boolean;
-  prediction?: {
-    expectedPeriod: string;
-    confidenceScore: number;
-    confidenceLabel: string;
-    isPCOSMode: boolean;
-    explanation: string;
-  };
-}
-
-interface WellnessPlanData {
-  hasData: boolean;
-  plan: { id: string; tasks: { id: string; text: string; category: string; completed: boolean }[] } | null;
-  streak: { currentStreak: number; longestStreak: number } | null;
-  message?: string;
-}
-
-/* ── Small glassmorphism card wrapper ── */
-function GlassCard({ children, className = '', style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
-  return (
-    <div
-      className={`rounded-2xl p-4 border ${className}`}
-      style={{
-        background: 'rgba(18,16,28,0.7)',
-        borderColor: 'rgba(168,85,247,0.12)',
-        backdropFilter: 'blur(16px)',
-        ...style,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-/* ── Trend chip ── */
-function TrendChip({ label, value, icon: Icon, color }: { label: string; value: string; icon: any; color: string }) {
-  return (
-    <div
-      className="flex flex-col items-center justify-between gap-2 py-3 px-2 rounded-xl"
-      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(168,85,247,0.1)' }}
-    >
-      <Icon className={`w-4 h-4 ${color}`} />
-      <span className="text-[10px] text-[#5a527a] font-semibold uppercase tracking-wider">{label}</span>
-      <span className="text-xs font-bold text-white capitalize">{value}</span>
-    </div>
-  );
-}
+import styles from './dashboard.module.css';
 
 export default function DashboardPage() {
-  const [userName, setUserName] = useState<string>('there');
-  const [aiName, setAiName] = useState<string>('Luna');
-  const [loading, setLoading] = useState(true);
-  const [summary, setSummary] = useState<HealthSummary | null>(null);
-  const [prediction, setPrediction] = useState<PeriodPrediction | null>(null);
-  const [wellnessPlan, setWellnessPlan] = useState<WellnessPlanData | null>(null);
+  const {
+    profile,
+    preferences,
+    todayLog: l,
+    hasCheckedInToday,
+    totalCheckIns,
+    currentStreak,
+    cycleStatus,
+    wellnessTasks,
+    pregnancyDueDate,
+    wellnessMode,
+    userName,
+    aiName,
+    isLoading,
+  } = useHerSync();
+
+  const [showWelcome, setShowWelcome] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return !sessionStorage.getItem('hersync_welcome_shown');
+    }
+    return true;
+  });
 
   useEffect(() => {
-    async function loadData() {
-      try {
-        const storedName = localStorage.getItem('hersync_username') || 'Guest';
-        const storedAiName = localStorage.getItem('hersync_ai_name') || 'Luna';
-        setUserName(storedName); 
-        setAiName(storedAiName);
-        
-        const [sumRes, predRes, wellRes] = await Promise.all([
-          apiFetch('/api/health-summary'),
-          apiFetch('/api/period-prediction'),
-          apiFetch('/api/wellness-plan'),
-        ]);
-        if (sumRes.ok) setSummary(await sumRes.json());
-        if (predRes.ok) setPrediction(await predRes.json());
-        if (wellRes.ok) setWellnessPlan(await wellRes.json());
-      } catch (err) {
-        console.error('Dashboard load error:', err);
-      } finally {
-        setLoading(false);
-      }
+    if (showWelcome && !isLoading) {
+      sessionStorage.setItem('hersync_welcome_shown', 'true');
+      const timer = setTimeout(() => setShowWelcome(false), 2800);
+      return () => clearTimeout(timer);
     }
-    loadData();
-  }, []);
+  }, [isLoading, showWelcome]);
 
-  // Wellness score
-  let wellnessScore = 0;
-  const hasCheckedIn = summary?.has_checked_in_today || false;
-  if (hasCheckedIn && summary?.today_log) {
-    const l = summary.today_log;
-    wellnessScore = Math.round(
-      Math.min(25, (Number(l.sleep) / 8) * 25) +
-      Math.min(25, (Number(l.water) / 2.5) * 25) +
-      Math.min(20, (Number(l.exercise) / 30) * 20) +
-      Math.min(15, (10 - Number(l.stress)) * 1.5) +
-      (l.mood === 'happy' ? 15 : l.mood === 'calm' ? 13 : l.mood === 'anxious' ? 8 : l.mood === 'sad' || l.mood === 'angry' ? 5 : 10)
-    );
-  }
-
-  const getTodayInsight = () => {
-    if (!summary || summary.total_logs_count < 3) return "Add a few more daily check-ins so I can generate personalized insights for you.";
-    if (!hasCheckedIn) return `Morning, ${userName}! Log today's check-in to unlock your personalized insight.`;
-    const l = summary.today_log;
-    if (l?.sleep < 6.5) return "Your sleep is a bit low today — rest supports your hormonal balance. A short nap can help.";
-    if (l?.stress > 7) return "Stress is elevated today. High cortisol can affect your cycle timing. Try a 3-minute breathing exercise.";
-    if (l?.water < 1.5) return "Your hydration is below target. Drinking more water reduces bloating and supports your metabolism.";
-    return "Your wellness habits look balanced today! Keep it up. 💜";
+  const getGreetingTime = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Morning';
+    if (hour < 18) return 'Afternoon';
+    return 'Evening';
   };
 
-  if (loading) {
+  const greeting = `Good ${getGreetingTime()}`;
+  const isMorning = getGreetingTime() === 'Morning';
+  const isEvening = getGreetingTime() === 'Evening';
+
+  const hasDataToday = hasCheckedInToday && !!l && (l.sleep || l.water || l.mood || l.stress || l.exercise);
+
+  const generateObservation = () => {
+    if (!hasDataToday) {
+      return "Complete your daily check-in so I can provide personalized wellness insights just for you today.";
+    }
+    let obs = '';
+    if (l.sleep) {
+      if (Number(l.sleep) < 6.5) obs += `Your sleep was a bit short last night (${l.sleep}h). Try to get to bed a little earlier tonight. `;
+      else obs += `Your sleep looks great today (${l.sleep}h)! `;
+    }
+    if (l.water) {
+      if (Number(l.water) < 2.0) obs += `Hydration is at ${l.water}L — a bit below target. Try to finish another glass before your next meal. `;
+      else obs += `Excellent hydration today (${l.water}L)! `;
+    }
+    if (l.mood) {
+      if (['anxious', 'sad', 'angry'].includes(l.mood)) obs += `It looks like your mood is a bit low today. Take it slow and be gentle with yourself. `;
+      else obs += `It's wonderful to see you're feeling ${l.mood} today. `;
+    }
+    if (wellnessMode === 'pregnancy') {
+      obs += "Staying hydrated and well-rested is especially important for you and your baby right now.";
+    } else if (wellnessMode === 'pcos' && l.stress && Number(l.stress) > 6) {
+      obs += "Keeping stress in check can really help with cycle regularity — a short walk or breathing exercise could help.";
+    }
+    return obs.trim() || "Your vitals are logged for today. Keep up the healthy habits!";
+  };
+
+  const getPregnancyWeek = () => {
+    if (!pregnancyDueDate) return null;
+    const due = new Date(pregnancyDueDate);
+    const start = new Date(due);
+    start.setDate(due.getDate() - 280);
+    const today = new Date();
+    const week = Math.floor((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 7));
+    return week > 0 && week <= 42 ? week : null;
+  };
+
+  const pregWeek = getPregnancyWeek();
+
+  const waterTarget = wellnessMode === 'pcos' ? 2.5 : wellnessMode === 'pregnancy' ? 3.0 : 2.0;
+  const waterLogged = l?.water ? Number(l.water) : 0;
+  const waterPct = Math.min(100, (waterLogged / waterTarget) * 100);
+
+  const exerciseTarget = 30;
+  const exerciseLogged = l?.exercise ? Number(l.exercise) : 0;
+  const exercisePct = Math.min(100, (exerciseLogged / exerciseTarget) * 100);
+
+  const completedTasks = wellnessTasks.filter(t => t.completed).length;
+  const totalTasks = wellnessTasks.length;
+
+  if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0a0a0f' }}>
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-pink-400" />
-          <p className="text-xs text-[#5a527a]">Loading your dashboard…</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--hs-pink)' }} />
       </div>
     );
   }
 
-  const hasLogs = (summary?.total_logs_count || 0) > 0;
-  const isPCOSMode = prediction?.prediction?.isPCOSMode || false;
-
-  // Wellness plan progress
-  const planTasks = wellnessPlan?.plan?.tasks || [];
-  const planCompleted = planTasks.filter(t => t.completed).length;
-  const planTotal = planTasks.length;
-  const planPct = planTotal > 0 ? Math.round((planCompleted / planTotal) * 100) : 0;
-
   return (
-    <div className="max-w-md mx-auto space-y-4 pb-24 px-0.5">
-
-      {/* Greeting */}
-      <div className="pt-1 pb-2">
-        <h1 className="text-[22px] font-bold text-white leading-tight">
-          Good day, {userName} 🌸
-        </h1>
-        <p className="text-sm text-pink-300/70 mt-0.5 font-medium">{aiName} is here for you 💜</p>
-      </div>
-
-      {/* PCOS Mode Banner */}
-      {isPCOSMode && (
-        <div className="flex items-start gap-2.5 px-3.5 py-2.5 rounded-xl bg-pink-500/10 border border-pink-500/20 text-xs text-pink-300">
-          <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-pink-400" />
-          <span><strong>PCOS Mode active:</strong> predictions are calibrated for cycle variability.</span>
-        </div>
-      )}
-
-      {/* ── Wellness Score Ring ── */}
-      <GlassCard className="flex flex-col items-center text-center py-6">
-        <p className="text-[10px] font-bold text-[#5a527a] uppercase tracking-widest mb-4">Today's Wellness Score</p>
-        <div className="relative w-32 h-32 flex items-center justify-center mb-4">
-          <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-            <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="7" />
-            <circle
-              cx="50" cy="50" r="42" fill="none"
-              stroke="url(#scoreGrad)" strokeWidth="7" strokeLinecap="round"
-              strokeDasharray="263.9"
-              strokeDashoffset={263.9 - (263.9 * (hasCheckedIn ? wellnessScore : 0)) / 100}
-              className="transition-all duration-1000"
-            />
-            <defs>
-              <linearGradient id="scoreGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#ec4899" />
-                <stop offset="100%" stopColor="#8b5cf6" />
-              </linearGradient>
-            </defs>
-          </svg>
-          <div className="absolute flex flex-col items-center">
-            <span className="text-3xl font-extrabold text-white">{hasCheckedIn ? `${wellnessScore}%` : '--'}</span>
-            <span className="text-[10px] text-[#5a527a] mt-0.5">{hasCheckedIn ? 'Today' : 'Log first'}</span>
-          </div>
-        </div>
-
-        {!hasCheckedIn ? (
-          <Link href="/check-in" className="w-full max-w-[240px]">
-            <Button className="w-full h-10 rounded-full bg-gradient-to-r from-pink-500 to-violet-600 text-white text-xs font-semibold border-0 hover:opacity-90 shadow-lg shadow-violet-500/20">
-              Log Today's Check-In
-            </Button>
-          </Link>
-        ) : (
-          <div className="flex items-center gap-1.5 text-xs text-green-400 font-medium">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Check-in complete!
-          </div>
+    <div className={styles.dashboardContainer}>
+      <AnimatePresence>
+        {showWelcome && (
+          <motion.div
+            className={styles.welcomeContainer}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.6, ease: "easeInOut" }}
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.7, type: "spring", bounce: 0.4 }}
+              className={styles.welcomeAvatar}
+            >
+              <BrainCircuit className="w-10 h-10 text-white" />
+            </motion.div>
+            <motion.h1
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.4, duration: 0.6 }}
+              className={styles.welcomeGreeting}
+            >
+              {greeting}, {userName} {isMorning ? '☀️' : isEvening ? '🌙' : '☀️'}
+            </motion.h1>
+            <motion.p
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.6, duration: 0.6 }}
+              className={styles.welcomeMessage}
+            >
+              Small healthy habits create lasting results.
+            </motion.p>
+          </motion.div>
         )}
-      </GlassCard>
+      </AnimatePresence>
 
-      {/* ── Wellness Plan Progress ── */}
-      <GlassCard
-        className="relative overflow-hidden"
-        style={{ borderColor: 'rgba(139,92,246,0.25)' }}
+      <motion.header
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1, duration: 0.5 }}
+        className={styles.pageHeader}
       >
-        <div className="absolute top-0 right-0 w-28 h-28 bg-violet-500/10 blur-3xl rounded-full pointer-events-none" />
-        <div className="relative z-10">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-bold text-violet-300 uppercase tracking-widest flex items-center gap-1">
-              <Sparkles className="w-3 h-3" /> Daily Wellness Plan
-            </span>
-            {wellnessPlan?.streak && wellnessPlan.streak.currentStreak > 0 && (
-              <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
-                🔥 {wellnessPlan.streak.currentStreak}d
-              </span>
-            )}
-          </div>
+        <div>
+          <h1 className={styles.pageTitle}>{greeting}, {userName}</h1>
+          <p className={styles.pageSubtitle}>Here is your wellness overview for today.</p>
+        </div>
+        {!hasCheckedInToday && (
+          <Link
+            href="/check-in"
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full transition-all"
+            style={{ 
+              color: 'var(--hs-pink)', 
+              backgroundColor: 'var(--hs-glow-pink)', 
+              border: '1px solid var(--hs-glass-border)'
+            }}
+          >
+            Log Today <ArrowRight className="w-3 h-3" />
+          </Link>
+        )}
+      </motion.header>
 
-          {!wellnessPlan ? (
-            <div className="flex items-center gap-2 py-2">
-              <Loader2 className="w-4 h-4 animate-spin text-violet-400" />
-              <span className="text-xs text-[#5a527a]">Loading plan…</span>
-            </div>
-          ) : !wellnessPlan.hasData ? (
-            <div className="space-y-2">
-              <p className="text-xs text-[#7c71a4] leading-relaxed">Log check-ins for 3+ days to unlock your AI Wellness Plan.</p>
-              <Link href="/check-in">
-                <Button size="sm" variant="ghost" className="text-xs text-violet-400 hover:text-violet-300 p-0 h-auto gap-1">
-                  Start logging <ArrowRight className="w-3 h-3" />
-                </Button>
+      {/* AI WELLNESS SNAPSHOT */}
+      <motion.section
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2, duration: 0.5 }}
+      >
+        <h2 className={styles.sectionTitle}>AI Wellness Snapshot</h2>
+        <div className={styles.premiumCard}>
+          {!hasDataToday ? (
+            <div className={styles.emptyStateContainer}>
+              <Sparkles className="w-8 h-8 mb-3 opacity-50" style={{ color: 'var(--hs-pink)' }} />
+              <p className={styles.emptyStateText}>
+                Complete today's check-in to see your personalized wellness snapshot.
+              </p>
+              <Link href="/check-in" className="mt-3 text-xs font-semibold transition-colors hover:opacity-80" style={{ color: 'var(--hs-pink)' }}>
+                Log Now →
               </Link>
             </div>
           ) : (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-[#7c71a4]">{planCompleted}/{planTotal} tasks done</span>
-                <span className="font-bold text-white">{planPct}%</span>
-              </div>
-              <div className="w-full h-1.5 rounded-full overflow-hidden bg-white/5">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-violet-500 to-pink-500 transition-all duration-700"
-                  style={{ width: `${planPct}%` }}
-                />
-              </div>
-              <Link href="/wellness-plan">
-                <Button size="sm" className="text-xs h-8 rounded-full bg-violet-600 hover:bg-violet-500 text-white border-0 gap-1.5 mt-1">
-                  Open Plan <ArrowRight className="w-3 h-3" />
-                </Button>
-              </Link>
+            <div className={styles.snapshotGrid}>
+              {l.mood && (
+                <div className={styles.snapshotItem}>
+                  <div className={styles.snapshotIcon}><Smile className="w-4 h-4" style={{ color: 'var(--hs-pink)' }} /></div>
+                  <div className={styles.snapshotData}>
+                    <span className={styles.snapshotLabel}>Mood</span>
+                    <span className={styles.snapshotValue} style={{ textTransform: 'capitalize' }}>{l.mood}</span>
+                  </div>
+                </div>
+              )}
+              {l.sleep && (
+                <div className={styles.snapshotItem}>
+                  <div className={styles.snapshotIcon}><Moon className="w-4 h-4" style={{ color: 'var(--hs-violet)' }} /></div>
+                  <div className={styles.snapshotData}>
+                    <span className={styles.snapshotLabel}>Sleep</span>
+                    <span className={styles.snapshotValue}>{l.sleep}h</span>
+                  </div>
+                </div>
+              )}
+              {l.water && (
+                <div className={styles.snapshotItem}>
+                  <div className={styles.snapshotIcon}><Droplets className="w-4 h-4 text-blue-400" /></div>
+                  <div className={styles.snapshotData}>
+                    <span className={styles.snapshotLabel}>Hydration</span>
+                    <span className={styles.snapshotValue}>{l.water}L</span>
+                  </div>
+                </div>
+              )}
+              {l.stress && (
+                <div className={styles.snapshotItem}>
+                  <div className={styles.snapshotIcon}><Activity className="w-4 h-4 text-emerald-400" /></div>
+                  <div className={styles.snapshotData}>
+                    <span className={styles.snapshotLabel}>Stress</span>
+                    <span className={styles.snapshotValue}>{l.stress}/10</span>
+                  </div>
+                </div>
+              )}
+              {cycleStatus && wellnessMode !== 'pregnancy' && (
+                <div className={styles.snapshotItem}>
+                  <div className={styles.snapshotIcon}><Calendar className="w-4 h-4 text-rose-400" /></div>
+                  <div className={styles.snapshotData}>
+                    <span className={styles.snapshotLabel}>Cycle</span>
+                    <span className={styles.snapshotValue} style={{ textTransform: 'capitalize' }}>
+                      {cycleStatus.replace(/_/g, ' ').replace('phase', '').trim() || 'Unknown'}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {wellnessMode === 'pregnancy' && pregWeek && (
+                <div className={styles.snapshotItem}>
+                  <div className={styles.snapshotIcon}><Heart className="w-4 h-4 text-blue-400" /></div>
+                  <div className={styles.snapshotData}>
+                    <span className={styles.snapshotLabel}>Pregnancy</span>
+                    <span className={styles.snapshotValue}>Week {pregWeek}</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
-      </GlassCard>
+      </motion.section>
 
-      {/* ── Period Prediction ── */}
-      <GlassCard>
-        <div className="flex items-center gap-1.5 mb-2.5">
-          <Target className="w-4 h-4 text-pink-400" />
-          <span className="text-[10px] font-bold text-[#5a527a] uppercase tracking-widest">Expected Period Window</span>
-        </div>
-        {prediction?.hasData && prediction.prediction ? (
-          <div className="space-y-1.5">
-            <p className="text-base font-bold text-white">{prediction.prediction.expectedPeriod}</p>
-            <div className="flex items-center gap-2 text-xs text-[#7c71a4]">
-              <span>Confidence:</span>
-              <span className="text-pink-400 font-bold">{prediction.prediction.confidenceScore}%</span>
-              <span>({prediction.prediction.confidenceLabel})</span>
+      {/* AI COMPANION INSIGHT */}
+      <motion.section
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3, duration: 0.5 }}
+      >
+        <h2 className={styles.sectionTitle}>{aiName}'s Insight</h2>
+        <div className={`${styles.premiumCard} ${styles.observationCard}`}>
+          <div className={styles.observationHeader}>
+            <div className={styles.observationAvatar}>
+              <BrainCircuit className="w-5 h-5 text-white" />
             </div>
-            <p className="text-xs text-[#5a527a] leading-relaxed">{prediction.prediction.explanation}</p>
-            <p className="text-[10px] text-[#3d3558] mt-1">Predictions are estimates, not medical advice.</p>
           </div>
-        ) : (
-          <p className="text-sm text-[#5a527a]">Not enough data yet.</p>
-        )}
-      </GlassCard>
-
-      {/* ── Wellness Trends Grid ── */}
-      {hasLogs && summary ? (
-        <div className="space-y-2.5">
-          <p className="text-[10px] font-bold text-[#5a527a] uppercase tracking-widest px-0.5">Wellness Trends</p>
-          <div className="grid grid-cols-3 gap-2">
-            <TrendChip
-              label="Sleep"
-              value={summary.sleep_avg ? `${summary.sleep_avg}h` : 'N/A'}
-              icon={Moon}
-              color="text-violet-400"
-            />
-            <TrendChip
-              label="Mood"
-              value={summary.mood_trend === 'insufficient_data' ? 'N/A' : summary.mood_trend}
-              icon={Smile}
-              color="text-pink-400"
-            />
-            <TrendChip
-              label="Stress"
-              value={summary.stress_trend === 'insufficient_data' ? 'N/A' : summary.stress_trend}
-              icon={Activity}
-              color="text-emerald-400"
-            />
-          </div>
-        </div>
-      ) : (
-        <GlassCard className="border-dashed text-center">
-          <p className="text-xs text-[#5a527a]">No wellness trends yet. Log daily check-ins to build your data.</p>
-        </GlassCard>
-      )}
-
-      {/* ── AI Insight ── */}
-      <GlassCard className="relative overflow-hidden" style={{ borderColor: 'rgba(139,92,246,0.2)' }}>
-        <div className="absolute top-0 right-0 w-24 h-24 bg-violet-500/8 blur-2xl rounded-full pointer-events-none" />
-        <div className="relative z-10 space-y-2">
-          <div className="flex items-center gap-1.5">
-            <BrainCircuit className="w-4 h-4 text-violet-400" />
-            <span className="text-[10px] font-bold text-violet-300 uppercase tracking-widest">{aiName}'s Insight</span>
-          </div>
-          <p className="text-sm text-[#ddd6fe] leading-relaxed font-medium">{getTodayInsight()}</p>
-          <Link href="/companion">
-            <Button size="sm" className="text-xs h-8 rounded-full bg-violet-600/80 hover:bg-violet-600 text-white border-0 gap-1.5 mt-1">
-              Chat with {aiName} <ArrowRight className="w-3 h-3" />
-            </Button>
+          <p className={styles.observationText}>{generateObservation()}</p>
+          <Link
+            href="/companion"
+            className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold transition-colors hover:opacity-80"
+            style={{ color: 'var(--hs-pink)' }}
+          >
+            Chat with {aiName} <ArrowRight className="w-3 h-3" />
           </Link>
         </div>
-      </GlassCard>
+      </motion.section>
 
-      {/* ── Quick Actions ── */}
-      <div className="space-y-2">
-        <p className="text-[10px] font-bold text-[#5a527a] uppercase tracking-widest px-0.5">Quick Actions</p>
-        <div className="grid grid-cols-2 gap-2.5">
-          <Link href="/check-in">
-            <button className="w-full h-12 rounded-xl text-xs font-semibold text-[#c4b8f0] hover:text-white transition-all" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(168,85,247,0.12)' }}>
-              Log Mood & Symptoms
-            </button>
-          </Link>
-          <Link href="/cycle">
-            <button className="w-full h-12 rounded-xl text-xs font-semibold text-[#c4b8f0] hover:text-white transition-all" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(168,85,247,0.12)' }}>
-              Track Period
-            </button>
+      {/* DAILY TIMELINE */}
+      <motion.section
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4, duration: 0.5 }}
+      >
+        <h2 className={styles.sectionTitle}>Daily Timeline</h2>
+        <div className={styles.timelineContainer}>
+          {!hasDataToday ? (
+            <div className={styles.emptyStateContainer} style={{ background: 'rgba(255,255,255,0.02)' }}>
+              <p className={styles.emptyStateText}>No wellness data recorded today.</p>
+            </div>
+          ) : (
+            <div className={styles.timeline}>
+              {(l.sleep || l.mood) && (
+                <div className={styles.timelineItem}>
+                  <div className={styles.timelineIconWrapper}><Sun className="w-4 h-4" /></div>
+                  <div className={styles.timelineContent}>
+                    <div className={styles.timelineTime}>Morning 🌅</div>
+                    <div className={styles.timelineDataRow}>
+                      {l.sleep && <span>Sleep: {l.sleep}h</span>}
+                      {l.mood && <span>Mood: <span style={{ textTransform: 'capitalize' }}>{l.mood}</span></span>}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {(l.water || l.stress) && (
+                <div className={styles.timelineItem}>
+                  <div className={styles.timelineIconWrapper}><Activity className="w-4 h-4" /></div>
+                  <div className={styles.timelineContent}>
+                    <div className={styles.timelineTime}>Afternoon ☀️</div>
+                    <div className={styles.timelineDataRow}>
+                      {l.water && <span>Water: {l.water}L</span>}
+                      {l.stress && <span>Stress: {l.stress}/10</span>}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {l.exercise && (
+                <div className={styles.timelineItem}>
+                  <div className={styles.timelineIconWrapper}><Sunset className="w-4 h-4" /></div>
+                  <div className={styles.timelineContent}>
+                    <div className={styles.timelineTime}>Evening 🌙</div>
+                    <div className={styles.timelineDataRow}>
+                      <span>Activity: {l.exercise}m</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </motion.section>
+
+      {/* TODAY'S WELLNESS GOALS */}
+      <motion.section
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5, duration: 0.5 }}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h2 className={styles.sectionTitle} style={{ marginBottom: 0 }}>Daily Goals</h2>
+          <Link href="/wellness-plan" className="text-xs font-semibold transition-colors hover:opacity-80" style={{ color: 'var(--hs-violet)' }}>
+            View Plan →
           </Link>
         </div>
-      </div>
+        <div className={styles.goalsContainer}>
+          {/* Water Goal */}
+          <div className={styles.goalCard}>
+            <div className={styles.goalHeader}>
+              <div className={styles.goalTitleRow}>
+                <Droplets className="w-5 h-5 text-blue-400" />
+                <span className={styles.goalName}>Water</span>
+              </div>
+              <span className={styles.goalMetric}>{waterLogged.toFixed(1)} / {waterTarget}L</span>
+            </div>
+            <div className={styles.progressBarBg}>
+              <motion.div
+                className={styles.progressBarFill}
+                initial={{ width: 0 }}
+                animate={{ width: `${waterPct}%` }}
+                transition={{ duration: 1, delay: 0.5, ease: "easeOut" }}
+                style={{ background: 'linear-gradient(90deg, #3B82F6, #60A5FA)' }}
+              />
+            </div>
+          </div>
 
+          {/* Exercise Goal */}
+          <div className={styles.goalCard}>
+            <div className={styles.goalHeader}>
+              <div className={styles.goalTitleRow}>
+                <Dumbbell className="w-5 h-5 text-emerald-400" />
+                <span className={styles.goalName}>Exercise</span>
+              </div>
+              <span className={styles.goalMetric}>{exerciseLogged} / {exerciseTarget} mins</span>
+            </div>
+            <div className={styles.progressBarBg}>
+              <motion.div
+                className={styles.progressBarFill}
+                initial={{ width: 0 }}
+                animate={{ width: `${exercisePct}%` }}
+                transition={{ duration: 1, delay: 0.6, ease: "easeOut" }}
+                style={{ background: 'linear-gradient(90deg, #10B981, #34D399)' }}
+              />
+            </div>
+          </div>
+
+          {/* Sleep Tracking */}
+          <div className={styles.goalCard}>
+            <div className={styles.goalHeader}>
+              <div className={styles.goalTitleRow}>
+                <Moon className="w-5 h-5" style={{ color: 'var(--hs-violet)' }} />
+                <span className={styles.goalName}>Sleep Tracking</span>
+              </div>
+              {l?.sleep ? (
+                <div className={styles.goalCompletedBadge}>
+                  <Check className="w-3 h-3" /> Logged
+                </div>
+              ) : (
+                <span className={styles.goalMetric}>Pending</span>
+              )}
+            </div>
+          </div>
+
+          {/* Wellness Plan Tasks Progress */}
+          {totalTasks > 0 && (
+            <div className={styles.goalCard}>
+              <div className={styles.goalHeader}>
+                <div className={styles.goalTitleRow}>
+                  <Sparkles className="w-5 h-5" style={{ color: 'var(--hs-violet)' }} />
+                  <span className={styles.goalName}>Wellness Tasks</span>
+                </div>
+                <span className={styles.goalMetric}>{completedTasks}/{totalTasks}</span>
+              </div>
+              <div className={styles.progressBarBg}>
+                <motion.div
+                  className={styles.progressBarFill}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0}%` }}
+                  transition={{ duration: 1, delay: 0.7, ease: "easeOut" }}
+                  style={{ background: 'linear-gradient(90deg, var(--hs-violet), var(--hs-pink))' }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </motion.section>
+
+      {/* PROGRESS STATS */}
+      <motion.section
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.6, duration: 0.5 }}
+      >
+        <h2 className={styles.sectionTitle}>Your Progress</h2>
+        <div className={styles.statsGrid}>
+          <motion.div className={styles.statCard} whileHover={{ y: -2 }}>
+            <Flame className="w-5 h-5 text-[#FFB347] mb-2" />
+            <span className={styles.statValue}>{currentStreak}</span>
+            <span className={styles.statLabel}>Day Streak</span>
+          </motion.div>
+          <motion.div className={styles.statCard} whileHover={{ y: -2 }}>
+            <Calendar className="w-5 h-5 mb-2" style={{ color: 'var(--hs-violet)' }} />
+            <span className={styles.statValue}>{totalCheckIns}</span>
+            <span className={styles.statLabel}>Check-ins</span>
+          </motion.div>
+          <motion.div className={styles.statCard} whileHover={{ y: -2 }}>
+            <Droplets className="w-5 h-5 text-[#3B82F6] mb-2" />
+            <span className={styles.statValue}>{waterLogged >= waterTarget ? '✓' : `${Math.round(waterPct)}%`}</span>
+            <span className={styles.statLabel}>Water Goal</span>
+          </motion.div>
+        </div>
+      </motion.section>
     </div>
   );
 }

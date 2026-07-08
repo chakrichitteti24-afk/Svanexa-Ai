@@ -1,37 +1,45 @@
 import { Request, Response, NextFunction } from 'express';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from '../config/supabase';
+import { AppError } from '../utils/AppError';
+import { catchAsync } from '../utils/catchAsync';
 
-export interface AuthenticatedRequest extends Request {
-  user?: any;
-  supabase?: SupabaseClient;
-}
-
-export async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-  try {
-    req.user = { id: 'dummy-123', email: 'guest@hersync.com' };
-    req.supabase = {
-      from: () => ({
-        select: () => ({
-          eq: () => ({
-            order: () => ({
-              limit: () => ({ data: [] }),
-              maybeSingle: () => ({ data: null }),
-              single: () => ({ data: null }),
-            }),
-            single: () => ({ data: null }),
-            maybeSingle: () => ({ data: null }),
-          }),
-          order: () => ({ limit: () => ({ data: [] }) }),
-          single: () => ({ data: null }),
-        }),
-        insert: () => ({ select: () => ({ single: () => ({ data: { id: '1' } }) }) }),
-        update: () => ({ eq: () => ({ select: () => ({ single: () => ({ data: { id: '1' } }) }) }) }),
-        upsert: () => ({ select: () => ({ single: () => ({ data: { id: '1' } }) }) }),
-      })
-    } as any;
-    next();
-  } catch (err) {
-    console.error('Auth Middleware Error:', err);
-    return res.status(500).json({ error: 'Internal Server Error' });
+// Extend Express Request to include user
+declare global {
+  namespace Express {
+    interface Request {
+      user?: any;
+    }
   }
 }
+
+export const protect = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  // 1) Getting token and check if it's there
+  let token;
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith('Bearer')
+  ) {
+    token = req.headers.authorization.split(' ')[1];
+  } else if (req.cookies?.sb_access_token) {
+    token = req.cookies.sb_access_token;
+  }
+
+  if (!token) {
+    return next(
+      new AppError('You are not logged in! Please log in to get access.', 401)
+    );
+  }
+
+  // 2) Verification token via Supabase
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+
+  if (error || !user) {
+    return next(
+      new AppError('The user belonging to this token does no longer exist or token is invalid.', 401)
+    );
+  }
+
+  // GRANT ACCESS TO PROTECTED ROUTE
+  req.user = user;
+  next();
+});

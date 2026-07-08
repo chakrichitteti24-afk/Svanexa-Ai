@@ -60,7 +60,6 @@ USER CONTEXT:
 
     return chatCompletion.choices[0]?.message?.content || "I'm having trouble thinking right now. Could you please try again? 🌸";
   } catch (error) {
-    console.error("Groq API Error:", error);
     if (error instanceof Error && error.message.includes("does not exist")) {
         return `Oops! The model "llama-3.1-8b-instant" wasn't found on the Groq API. Please check your model name! 🌸`;
     }
@@ -86,7 +85,6 @@ export async function generateChatTitle(firstMessage: string): Promise<string> {
     title = title.replace(/^["']|["']$/g, '');
     return title;
   } catch (error) {
-    console.error("Failed to generate title:", error);
     return "New Conversation";
   }
 }

@@ -34,16 +34,15 @@ export function BottomNav() {
             href={item.href}
             className={cn(
               'flex flex-col items-center justify-center flex-1 h-full gap-1 transition-all duration-200',
-              isActive ? 'text-pink-400' : 'text-[#5a527a] hover:text-[#9d91c4]'
+              isActive ? '' : 'text-[#5a527a] hover:text-[#9d91c4]'
             )}
+            style={isActive ? { color: 'var(--hs-pink)' } : {}}
           >
             <div
               className={cn(
-                'flex items-center justify-center w-10 h-7 rounded-xl transition-all duration-200',
-                isActive
-                  ? 'bg-gradient-to-r from-pink-500/20 to-violet-500/20'
-                  : ''
+                'flex items-center justify-center w-10 h-7 rounded-xl transition-all duration-200'
               )}
+              style={isActive ? { background: 'var(--hs-glow-pink)' } : {}}
             >
               <item.icon
                 className={cn(
@@ -55,8 +54,9 @@ export function BottomNav() {
             <span
               className={cn(
                 'text-[10px] font-medium leading-none',
-                isActive ? 'text-pink-400' : 'text-[#5a527a]'
+                isActive ? '' : 'text-[#5a527a]'
               )}
+              style={isActive ? { color: 'var(--hs-pink)' } : {}}
             >
               {item.name}
             </span>

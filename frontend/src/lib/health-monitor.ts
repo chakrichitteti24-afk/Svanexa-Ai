@@ -33,7 +33,6 @@ export class HealthMonitorService {
       .limit(14);
 
     if (checkInsError) {
-      console.error('Error fetching check-ins:', checkInsError);
     }
 
     // 2. Fetch cycles from cycle_logs (last 12 entries for Period Engine V2)
@@ -45,7 +44,6 @@ export class HealthMonitorService {
       .limit(12);
 
     if (cyclesError) {
-      console.error('Error fetching cycles:', cyclesError);
     }
 
     // 3. Process Check-In Analytics (Sleep, Stress, Mood, Water, Exercise)

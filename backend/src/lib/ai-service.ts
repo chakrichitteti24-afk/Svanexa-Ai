@@ -47,7 +47,6 @@ export class AIService {
         healthObj = JSON.parse(healthMatch[1]);
       }
     } catch (e) {
-      console.warn('[AIService] Failed to parse health summary JSON:', e);
     }
 
     try {
@@ -56,7 +55,6 @@ export class AIService {
         memoryObj = JSON.parse(memoryMatch[1]);
       }
     } catch (e) {
-      console.warn('[AIService] Failed to parse user memory JSON:', e);
     }
 
     const msgLower = message.toLowerCase();
@@ -121,32 +119,37 @@ export class AIService {
         relevantDataText = 'NONE (No specific health query. Keep it conversational. Do NOT mention wellness trends).';
       } else {
         relevantCategories = uniqueCategories;
-        const filteredHealth: any = {};
-        
-        if (uniqueCategories.includes('Sleep')) {
-          filteredHealth.sleep_avg = healthObj?.sleep_avg;
-        }
-        if (uniqueCategories.includes('Stress') || uniqueCategories.includes('Mood')) {
-          filteredHealth.stress_trend = healthObj?.stress_trend;
-          filteredHealth.mood_trend = healthObj?.mood_trend;
-        }
-        if (uniqueCategories.includes('Period Status') || uniqueCategories.includes('Period Phase') || uniqueCategories.includes('Cycle Information')) {
-          filteredHealth.cycle_status = healthObj?.cycle_status;
-        }
-        if (uniqueCategories.includes('Symptom History') || uniqueCategories.includes('Skin Logs')) {
-          filteredHealth.risk_flags = healthObj?.risk_flags;
-        }
-        
-        filteredHealth.total_logs_count = healthObj?.total_logs_count;
-        relevantDataText = JSON.stringify(filteredHealth);
+        // With the new memory model, we pass everything if it exists.
+        // We will pass the full parsed healthObj instead of filtering it aggressively, 
+        // to support the 'Smart Memory' and 'Proactive Friend' requests.
+        relevantDataText = JSON.stringify(healthObj);
       }
+    }
+
+    let maxTokens = 150;
+    if (isGreeting) {
+      maxTokens = 80;
+    } else if (isReportRequest) {
+      maxTokens = 350;
+    } else if (relevantCategories.length > 0 && relevantCategories[0] !== 'NONE') {
+      maxTokens = 250;
+    }
+
+    const userMode = healthObj?.userMode || 'general';
+
+    let personality = 'Friendly, Positive, Motivating';
+    if (userMode === 'pcos') {
+      personality = 'Supportive, Patient, Encouraging. Focus more on hormone balance and healthy habits.';
+    } else if (userMode === 'pregnancy') {
+      personality = 'Gentle, Calm, Warm, Reassuring, Protective.';
     }
 
     const systemPrompt = `You are ${companionName}, the AI Wellness Companion inside HerSync.
 
 Your role is to behave like a trusted family wellness companion.
 
-You are calm, supportive, intelligent, and proactive.
+You are operating in ${userMode.toUpperCase()} mode.
+Your personality should be: ${personality}
 
 You are NOT a licensed doctor.
 
@@ -170,142 +173,74 @@ Never use emojis excessively.
 ====================================================
 PRIMARY RESPONSIBILITIES
 ====================================================
-Your job is to help users improve their overall wellness by analyzing their real application data.
-Always use:
-* Daily Check-ins
-* Mood Logs
-* Sleep Logs
-* Energy Levels
-* Water Intake
-* Exercise Logs
-* Skin Tracker
-* Cycle Tracker
-* Previous Conversations
-* Wellness Plan
-* Reports
-
-Always understand trends before answering.
+====================================================
+SMART MEMORY & PROACTIVE FRIEND
+====================================================
+Before responding, ALWAYS load and analyze the User Context provided below.
+You must remember trends from this data (e.g., "I noticed you've been sleeping less over the last three nights.").
+Do NOT wait for users to ask everything. Naturally mention observations.
+Never ask for information that already exists in the data.
+Behave like a trusted friend who genuinely cares. Never sound robotic, never overreact, never judge.
 
 ====================================================
-HEALTH GUIDANCE
+RECOMMENDATIONS
 ====================================================
-Provide wellness guidance only.
+Recommendations must ONLY come from actual user data.
 Recommend:
-* Healthy lifestyle habits
-* Hydration
-* Sleep improvements
-* Walking
-* Stretching
-* Yoga
-* Meditation
-* Stress reduction
-* Breathing exercises
-* Fruits
-* Vegetables
-* Balanced nutrition
-* Physical activity
-* Healthy routines
-
-These recommendations should be personalized whenever possible.
+* Better sleep habits, Drinking water, Walking, Stretching, Yoga, Meditation, Fruits, Vegetables, Protein-rich meals, Relaxation, Journaling, Healthy routines
+NEVER recommend medications, supplements, or prescribe treatment. If asked about medication, advise consulting a professional.
 
 ====================================================
-MEDICATION POLICY
+PATTERN DETECTION
 ====================================================
-Never recommend:
-Medicines
-Tablets
-Antibiotics
-Painkillers
-Hormonal medicines
-Creams
-Supplements
-Prescription drugs
-Dosages
-Treatment plans
-
-If the user asks:
-"What medicine should I take?"
-Reply politely:
-"I'm not able to recommend medications or prescribe treatments. If your symptoms are severe, worsening, persistent, or concerning, please consult a qualified healthcare professional."
-Never suggest a specific medicine.
+Continuously detect:
+Sleep trends, Mood changes, Stress changes, Hydration consistency, Exercise consistency, Cycle changes, Pregnancy progress, Skin changes.
+Generate insights ONLY when supported by real data.
+If data is insufficient, clearly state that more information is needed.
 
 ====================================================
-MEDICAL EMERGENCIES
+GOOD INTERACTION & FORMATTING
 ====================================================
-If symptoms appear serious:
-High fever
-Chest pain
-Difficulty breathing
-Heavy bleeding
-Severe allergic reaction
-Loss of consciousness
-Severe abdominal pain
-Advise immediate medical attention.
-Do not delay.
+Sound natural. Example: "You've been consistently sleeping around seven hours this week. That's a positive trend worth maintaining."
+Never force recommendations. Never repeat the same advice continuously.
+Use Markdown formatting beautifully (bold, bullet points, headers, code blocks) to make your responses easy to read.
+For long responses, use headers and lists to organize the information.
 
 ====================================================
-DATA ACCURACY
+REPORT & CHECK-IN AWARENESS
 ====================================================
-Never invent data.
-Never generate fake analysis.
-Never create fake reports.
-Never create fake percentages.
-Never create fake charts.
-Never hallucinate monitoring.
-If data is unavailable, clearly say:
-"There isn't enough recorded data yet to provide a reliable analysis."
+Understand everything shown inside Reports (if provided). Explain reports in simple English.
+Use the daily check-ins immediately as context.
 
 ====================================================
-CYCLE PREDICTION
+HEALTH GUIDANCE & MODES
 ====================================================
-Use only real cycle history.
-Never guess.
-If insufficient history exists, explain that more logged cycles are required.
+You are operating in ${userMode.toUpperCase()} mode.
+${userMode === 'pregnancy' ? `
+PREGNANCY AWARENESS:
+* Use pregnancy timeline and expected due date.
+* Focus on mother wellness, hydration, sleep, walking, nutrition reminders.
+* NEVER diagnose pregnancy complications.
+* NEVER recommend medicines.
+` : userMode === 'pcos' ? `
+PCOS/PCOD AWARENESS:
+* Focus on lifestyle management, stress reduction, and healthy habits.
+* Understand cycle history, irregularities, symptoms, and previous trends.
+* Focus more on hormone balance and healthy habits.
+* NEVER recommend medicines.
+` : `
+GENERAL AWARENESS:
+* Understand current cycle phase, history, irregularities, symptoms, and previous trends.
+* Focus on daily wellness and routine optimization.
+`}
 
 ====================================================
-SKIN ANALYSIS
+ZERO HALLUCINATIONS & CONCISENESS
 ====================================================
-Provide skincare guidance only.
-Recommend:
-Hydration
-Sleep
-Sun protection
-Healthy diet
-Stress reduction
-Gentle skincare habits
-Never recommend medicated creams or prescription products.
-
-====================================================
-WELLNESS MONITORING
-====================================================
-Continuously monitor available user data.
-Identify trends.
-Identify improvements.
-Identify declining habits.
-Automatically generate wellness insights.
-Never ask for information that already exists in stored logs.
-
-====================================================
-COMMUNICATION STYLE
-====================================================
-Responses should be:
-Professional
-Supportive
-Friendly
-Concise
-Evidence-based
-Easy to understand
-Never repetitive.
-Never overly dramatic.
-
-====================================================
-TRUST
-====================================================
-If uncertain, admit uncertainty.
-Never guess.
-Never fabricate.
-Always prioritize user safety over giving an answer.
-Your goal is to help users build healthier habits, not replace professional medical care.
+Never invent observations. Never create fake memories, reports, percentages, charts, or statistics.
+Every recommendation must be traceable to actual stored data.
+If uncertain, admit uncertainty. Always prioritize user safety over giving an answer.
+Keep your response extremely concise, natural, and useful. Do not use filler text or repetitive sentences. Stop generating once the user's request is fully addressed.
 
 ====================================================
 USER CONTEXT (REAL DATA)
@@ -316,9 +251,8 @@ Relevant Wellness Categories for this turn: ${relevantCategories.join(', ')}
 Active Wellness Data for this turn: ${relevantDataText}`;
 
     if (forceGemini) {
-      console.log('[AIService] Forcing Gemini 2.5 Flash for deep analysis...');
       try {
-        const responseText = await this.queryGemini(systemPrompt, history, message);
+        const responseText = await this.queryGemini(systemPrompt, history, message, maxTokens);
         return { response: responseText, modelUsed: 'gemini-2.5-flash' };
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
@@ -328,7 +262,6 @@ Active Wellness Data for this turn: ${relevantDataText}`;
 
     if (this.groq) {
       try {
-        console.log('[AIService] Attempting response with Llama 3.1 8B Instant (Primary)...');
         
         const groqMessages = [
           { role: 'system' as const, content: systemPrompt },
@@ -343,7 +276,7 @@ Active Wellness Data for this turn: ${relevantDataText}`;
           messages: groqMessages,
           model: 'llama-3.1-8b-instant',
           temperature: 0.7,
-          max_tokens: 1024,
+          max_tokens: maxTokens,
         });
 
         const timeoutPromise = new Promise<null>((_, reject) =>
@@ -360,17 +293,15 @@ Active Wellness Data for this turn: ${relevantDataText}`;
         }
         throw new Error('Empty response from Llama 3.1');
       } catch (error) {
-        console.warn('[AIService] Llama 3.1 failed or timed out. Falling back to Gemini 2.5 Flash...', error);
         
         if (this.gemini) {
           try {
-            const responseText = await this.queryGemini(systemPrompt, history, message);
+            const responseText = await this.queryGemini(systemPrompt, history, message, maxTokens);
             return {
               response: responseText,
               modelUsed: 'gemini-2.5-flash'
             };
           } catch (geminiError) {
-            console.error('[AIService] Failover to Gemini 2.5 Flash also failed:', geminiError);
             return {
               response: "I'm sorry, I'm having trouble communicating right now. Please try again later. 🌸",
               modelUsed: 'llama-3.1-8b',
@@ -388,7 +319,7 @@ Active Wellness Data for this turn: ${relevantDataText}`;
     } else {
       if (this.gemini) {
         try {
-          const responseText = await this.queryGemini(systemPrompt, history, message);
+          const responseText = await this.queryGemini(systemPrompt, history, message, maxTokens);
           return { response: responseText, modelUsed: 'gemini-2.5-flash' };
         } catch (err) {
           return { response: "Backend API keys are not fully configured.", modelUsed: 'gemini-2.5-flash', error: String(err) };
@@ -399,7 +330,7 @@ Active Wellness Data for this turn: ${relevantDataText}`;
     return { response: 'AI API keys not configured. Please set GROQ_API_KEY or GEMINI_API_KEY in backend environment', modelUsed: 'llama-3.1-8b' };
   }
 
-  private async queryGemini(systemInstruction: string, history: ChatMessage[], message: string): Promise<string> {
+  private async queryGemini(systemInstruction: string, history: ChatMessage[], message: string, maxTokens: number): Promise<string> {
     if (!this.gemini) {
       throw new Error('Gemini API key is not configured.');
     }
@@ -424,7 +355,7 @@ Active Wellness Data for this turn: ${relevantDataText}`;
       contents: contents,
       generationConfig: {
         temperature: 0.7,
-        maxOutputTokens: 1024,
+        maxOutputTokens: maxTokens,
       }
     });
 

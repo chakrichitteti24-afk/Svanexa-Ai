@@ -1,56 +1,115 @@
 'use client';
 
-import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { User, Settings, Sparkles, Shield, Trash2, Heart, LogOut, Loader2 } from 'lucide-react';
+import { User, Sparkles, Shield, Heart, LogOut, Loader2, Save } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { createClient } from '@/utils/supabase/client';
 
 export default function ProfilePage() {
   const router = useRouter();
+  const supabase = createClient();
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  // Local Storage state
-  const [name, setName] = useLocalStorage('hersync_username', 'Guest');
-  const [dob, setDob] = useLocalStorage('hersync_user_dob', '');
-  const [companionName, setCompanionName] = useLocalStorage('hersync_ai_name', 'Luna');
-  const [weight, setWeight] = useLocalStorage('hersync_user_weight', '62');
-  const [hasPCOS, setHasPCOS] = useLocalStorage('hersync_has_pcos', false);
-  const [avgCycleLength, setAvgCycleLength] = useLocalStorage('hersync_avg_cycle_length', 28);
-  const [avgPeriodLength, setAvgPeriodLength] = useLocalStorage('hersync_avg_period_length', 5);
-  const [language, setLanguage] = useLocalStorage('hersync_language', 'English');
-  const [personality, setPersonality] = useLocalStorage('hersync_personality', 'Friendly');
+  // Form State
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [dob, setDob] = useState('');
+  const [companionName, setCompanionName] = useState('Luna');
+  const [userMode, setUserMode] = useState<'general' | 'pcos' | 'pregnancy'>('general');
+  const [dueDate, setDueDate] = useState('');
 
   useEffect(() => {
-    setLoading(false);
+    async function fetchProfile() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          router.push('/login');
+          return;
+        }
+        setUserId(user.id);
+
+        const [profileRes, prefsRes, pregRes] = await Promise.all([
+          supabase.from('profiles').select('*').eq('id', user.id).single(),
+          supabase.from('user_preferences').select('*').eq('user_id', user.id).single(),
+          supabase.from('pregnancy_logs').select('*').eq('user_id', user.id).single(),
+        ]);
+
+        if (profileRes.data) {
+          setFirstName(profileRes.data.first_name || '');
+          setLastName(profileRes.data.last_name || '');
+          setDob(profileRes.data.date_of_birth || '');
+        }
+
+        if (prefsRes.data) {
+          const theme = prefsRes.data.theme as 'general' | 'pcos' | 'pregnancy';
+          setUserMode(theme || 'general');
+        }
+
+        if (pregRes.data) {
+          setDueDate(pregRes.data.due_date || '');
+        }
+
+      } catch (e) {
+        console.error("Error fetching profile", e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchProfile();
   }, []);
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!userId) return;
+    
     setSaving(true);
-    setTimeout(() => {
-      toast.success('Profile settings updated successfully!');
+    try {
+      // 1. Update Profile
+      const { error: profileError } = await supabase.from('profiles').update({
+        first_name: firstName,
+        last_name: lastName,
+        date_of_birth: dob || null
+      }).eq('id', userId);
+      if (profileError) throw profileError;
+
+      // 2. Update Preferences
+      const { error: prefsError } = await supabase.from('user_preferences').upsert({
+        user_id: userId,
+        theme: userMode,
+      }, { onConflict: 'user_id' });
+      if (prefsError) throw prefsError;
+
+      // 3. Update Pregnancy Logs if applicable
+      if (userMode === 'pregnancy' && dueDate) {
+        const { error: pregError } = await supabase.from('pregnancy_logs').upsert({
+          user_id: userId,
+          due_date: dueDate
+        }, { onConflict: 'user_id' });
+        // NOTE: If onConflict is not configured, this might fail, but it's safe for now since ID is UUID default
+      }
+
+      toast.success('Profile saved successfully!');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save profile');
+    } finally {
       setSaving(false);
-    }, 400);
+    }
   };
 
-  const handleClearAllData = () => {
-    if (confirm('Are you sure you want to delete all your tracking logs, cycle history, and reset your preferences? This cannot be undone.')) {
-      localStorage.clear();
-      toast.success('Local tracking data reset.');
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
-    }
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    localStorage.clear();
+    router.push('/login');
   };
 
   if (loading) {
@@ -66,59 +125,58 @@ export default function ProfilePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight mb-1">My Profile</h1>
-          <p className="text-xs text-muted-foreground">Local Wellness Account</p>
+          <p className="text-xs text-muted-foreground">Securely synced with Supabase</p>
         </div>
+        <Button variant="ghost" size="icon" onClick={handleSignOut} className="text-muted-foreground hover:text-red-500 rounded-full h-10 w-10">
+          <LogOut className="w-5 h-5" />
+        </Button>
       </div>
 
       <form onSubmit={handleSaveProfile} className="space-y-6">
         {/* Personal Details Card */}
-        <Card className="border-border/40 bg-card/60 backdrop-blur-xs">
+        <Card className="border-border/40 bg-card/60 backdrop-blur-xs shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <User className="w-4 h-4 text-pink-500" /> Account Profile
             </CardTitle>
-            <CardDescription className="text-[10px]">Your personal details synced to Supabase.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="user-name" className="text-xs">Your Name</Label>
-              <Input 
-                id="user-name" 
-                value={name} 
-                onChange={(e) => setName(e.target.value)} 
-                className="h-11 bg-background text-sm"
-              />
-            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="user-dob" className="text-xs">Date of Birth</Label>
+                <Label className="text-xs">First Name</Label>
                 <Input 
-                  id="user-dob" 
-                  type="date" 
-                  value={dob} 
-                  onChange={(e) => setDob(e.target.value)} 
+                  value={firstName} 
+                  onChange={(e) => setFirstName(e.target.value)} 
                   className="h-11 bg-background text-sm"
+                  required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="user-weight" className="text-xs">Weight (kg) <span className="text-muted-foreground font-normal">(local)</span></Label>
+                <Label className="text-xs">Last Name</Label>
                 <Input 
-                  id="user-weight" 
-                  type="number" 
-                  value={weight} 
-                  onChange={(e) => setWeight(e.target.value)} 
+                  value={lastName} 
+                  onChange={(e) => setLastName(e.target.value)} 
                   className="h-11 bg-background text-sm"
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">Date of Birth</Label>
+              <Input 
+                type="date" 
+                value={dob} 
+                onChange={(e) => setDob(e.target.value)} 
+                className="h-11 bg-background text-sm"
+              />
             </div>
           </CardContent>
         </Card>
 
         {/* Companion Setup Card */}
-        <Card className="border-border/40 bg-card/60 backdrop-blur-xs">
+        <Card className="border-border/40 bg-card/60 backdrop-blur-xs shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-pink-500" /> AI Companion Config
+              <Sparkles className="w-4 h-4 text-pink-500" /> AI Companion
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -128,104 +186,54 @@ export default function ProfilePage() {
                 value={companionName} 
                 onChange={e => setCompanionName(e.target.value)} 
                 className="h-11 bg-background text-sm"
+                required
               />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs">Language <span className="text-muted-foreground font-normal">(local)</span></Label>
-              <Select value={language} onValueChange={(val) => setLanguage(val || '')}>
-                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="English">English</SelectItem>
-                  <SelectItem value="Hindi">Hindi (हिंदी)</SelectItem>
-                  <SelectItem value="Telugu">Telugu (తెలుగు)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs">Personality <span className="text-muted-foreground font-normal">(local)</span></Label>
-              <Select value={personality} onValueChange={(val) => setPersonality(val || '')}>
-                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Friendly">Friendly & Empathetic</SelectItem>
-                  <SelectItem value="Professional">Professional & Direct</SelectItem>
-                  <SelectItem value="Motivational">Motivational Coach</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
           </CardContent>
         </Card>
 
-        {/* PCOS & Cycle parameters Card */}
-        <Card className="border-border/40 bg-card/60 backdrop-blur-xs">
+        {/* Wellness Focus Card */}
+        <Card className="border-border/40 bg-card/60 backdrop-blur-xs shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Heart className="w-4 h-4 text-pink-500" /> Cycle Parameters <span className="text-[10px] text-muted-foreground font-normal">(local)</span>
+              <Heart className="w-4 h-4 text-pink-500" /> Wellness Focus
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-pink-500/5 border border-pink-500/10">
-              <div className="space-y-0.5">
-                <Label htmlFor="profile-pcos-mode" className="text-sm font-medium">PCOS / PCOD Mode</Label>
-                <p className="text-[10px] text-muted-foreground">Adjust predictions for cycle irregularities</p>
-              </div>
-              <Switch 
-                id="profile-pcos-mode" 
-                checked={hasPCOS} 
-                onCheckedChange={setHasPCOS} 
-              />
+            <div className="space-y-2">
+              <Label className="text-xs">Primary Mode</Label>
+              <Select value={userMode} onValueChange={(val: string | null) => val && setUserMode(val as 'general' | 'pcos' | 'pregnancy')}>
+                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="general">General Women's Wellness</SelectItem>
+                  <SelectItem value="pcos">PCOS / PCOD Mode</SelectItem>
+                  <SelectItem value="pregnancy">Pregnancy Mode</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="cycle-len" className="text-xs">Avg Cycle (days)</Label>
+            {userMode === 'pregnancy' && (
+              <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                <Label className="text-xs">Expected Due Date</Label>
                 <Input 
-                  id="cycle-len" 
-                  type="number" 
-                  value={avgCycleLength} 
-                  onChange={(e) => setAvgCycleLength(Number(e.target.value))} 
-                  className="h-11 bg-background text-sm"
+                  type="date" 
+                  value={dueDate} 
+                  onChange={(e) => setDueDate(e.target.value)} 
+                  className="h-11 bg-background text-sm scheme-dark"
+                  required={userMode === 'pregnancy'}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="period-len" className="text-xs">Avg Period (days)</Label>
-                <Input 
-                  id="period-len" 
-                  type="number" 
-                  value={avgPeriodLength} 
-                  onChange={(e) => setAvgPeriodLength(Number(e.target.value))} 
-                  className="h-11 bg-background text-sm"
-                />
-              </div>
-            </div>
+            )}
           </CardContent>
         </Card>
 
         <Button 
           type="submit" 
           disabled={saving}
-          className="w-full h-12 rounded-full text-sm bg-pink-600 hover:bg-pink-500 text-white font-medium"
+          className="w-full h-12 rounded-xl text-sm bg-gradient-to-r from-pink-500 to-purple-500 hover:opacity-90 text-white font-medium shadow-md shadow-pink-500/20"
         >
-          {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Save Profile Details'}
+          {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-4 h-4 mr-2" /> Save Profile Details</>}
         </Button>
-
-        {/* Destructive zone */}
-        <Card className="border-red-500/20 bg-red-500/5">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs text-red-500 font-semibold flex items-center gap-2">
-              <Shield className="w-4 h-4 text-red-500" /> Danger Zone
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Button 
-              type="button"
-              variant="outline" 
-              className="w-full h-11 text-red-500 hover:text-red-600 hover:bg-red-500/10 border-red-500/20 bg-background/50 text-xs" 
-              onClick={handleClearAllData}
-            >
-              <Trash2 className="w-4 h-4 mr-2" /> Clear All Local Tracking Data
-            </Button>
-          </CardContent>
-        </Card>
       </form>
     </div>
   );

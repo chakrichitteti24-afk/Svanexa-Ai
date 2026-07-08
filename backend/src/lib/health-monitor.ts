@@ -28,7 +28,6 @@ export class HealthMonitorService {
       .limit(14);
 
     if (checkInsError) {
-      console.error('Error fetching check-ins:', checkInsError);
     }
 
     const { data: cycles, error: cyclesError } = await this.supabase
@@ -39,7 +38,6 @@ export class HealthMonitorService {
       .limit(12);
 
     if (cyclesError) {
-      console.error('Error fetching cycles:', cyclesError);
     }
 
     const logCount = checkIns?.length || 0;

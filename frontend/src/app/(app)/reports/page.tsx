@@ -5,52 +5,82 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { FileText, CalendarHeart, Droplets, Activity, Brain, Loader2 } from 'lucide-react';
 import { differenceInDays } from 'date-fns';
+import { createClient } from '@/utils/supabase/client';
+import { useRouter } from 'next/navigation';
 
 export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [dailyLogs, setDailyLogs] = useState<any[]>([]);
   const [cycleLogs, setCycleLogs] = useState<any[]>([]);
   const [skinLogs, setSkinLogs] = useState<any[]>([]);
+  
+  const supabase = createClient();
+  const router = useRouter();
 
   useEffect(() => {
-    function loadReportsData() {
+    async function loadReportsData() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push('/login');
+        return;
+      }
+      
       try {
-        // Fetch daily logs
-        const checkInsRaw = localStorage.getItem('hersync_checkins') || '{}';
-        const checkIns = JSON.parse(checkInsRaw);
-        const mappedDaily = Object.entries(checkIns).map(([date, data]: [string, any]) => ({
-          log_date: date,
-          ...data
-        })).sort((a, b) => a.log_date.localeCompare(b.log_date));
-        setDailyLogs(mappedDaily);
+        const [
+          { data: sleep },
+          { data: water },
+          { data: exercise },
+          { data: mood },
+          { data: checkin },
+          { data: skin },
+          { data: cycle }
+        ] = await Promise.all([
+          supabase.from('sleep_logs').select('*').eq('user_id', user.id).order('date', { ascending: true }),
+          supabase.from('water_logs').select('*').eq('user_id', user.id).order('date', { ascending: true }),
+          supabase.from('exercise_logs').select('*').eq('user_id', user.id).order('date', { ascending: true }),
+          supabase.from('mood_logs').select('*').eq('user_id', user.id).order('date', { ascending: true }),
+          supabase.from('daily_checkins').select('*').eq('user_id', user.id).order('date', { ascending: true }),
+          supabase.from('skin_logs').select('*').eq('user_id', user.id).order('date', { ascending: false }),
+          supabase.from('cycle_logs').select('*').eq('user_id', user.id).order('start_date', { ascending: false })
+        ]);
 
-        // Fetch cycle logs
-        const cyclesRaw = localStorage.getItem('hersync_cycles') || '[]';
-        const cycles = JSON.parse(cyclesRaw);
-        const mappedCycles = cycles.map((c: any) => ({
-          start_date: c.startDate,
-          end_date: c.endDate,
-          notes: c.notes || ''
-        })).sort((a: any, b: any) => b.start_date.localeCompare(a.start_date));
-        setCycleLogs(mappedCycles);
+        // Aggregate by date
+        const allDates = new Set([
+          ...(sleep?.map(d => d.date) || []),
+          ...(water?.map(d => d.date) || []),
+          ...(exercise?.map(d => d.date) || []),
+          ...(mood?.map(d => d.date) || []),
+          ...(checkin?.map(d => d.date) || [])
+        ]);
 
-        // Fetch skin logs
-        const skinRaw = localStorage.getItem('hersync_skin') || '[]';
-        const skin = JSON.parse(skinRaw);
-        const mappedSkin = skin.map((s: any) => ({
-          log_date: s.date,
-          acne: s.acne,
-          oiliness: s.oiliness
-        })).sort((a: any, b: any) => b.log_date.localeCompare(a.log_date));
-        setSkinLogs(mappedSkin);
+        const aggregatedDaily = Array.from(allDates).map(date => {
+          const s = sleep?.find(x => x.date === date);
+          const w = water?.find(x => x.date === date);
+          const e = exercise?.find(x => x.date === date);
+          const m = mood?.find(x => x.date === date);
+          const c = checkin?.find(x => x.date === date);
+          return {
+            log_date: date,
+            sleep: s?.duration_hours || 0,
+            water: w ? (w.amount_ml / 1000) : 0,
+            exercise: e?.duration_minutes || 0,
+            mood: m?.mood || 'calm',
+            stress: m?.intensity || 5,
+            summary: c?.summary || ''
+          };
+        }).sort((a, b) => a.log_date.localeCompare(b.log_date));
+
+        setDailyLogs(aggregatedDaily);
+        setSkinLogs(skin || []);
+        setCycleLogs(cycle || []);
       } catch (err) {
-        console.error('Failed to load reports data:', err);
+        console.error("Error loading reports", err);
       } finally {
         setLoading(false);
       }
     }
     loadReportsData();
-  }, []);
+  }, [supabase, router]);
 
   if (loading) {
     return (
@@ -86,6 +116,15 @@ export default function ReportsPage() {
     ? Math.round(cycleLogs.slice(0, -1).reduce((acc, curr, idx) => acc + differenceInDays(new Date(curr.start_date), new Date(cycleLogs[idx+1].start_date)), 0) / (cycleLogs.length - 1))
     : 'N/A';
 
+  const parseSkinLog = (skinEntry: any) => {
+    try {
+      if (skinEntry.notes && skinEntry.notes.startsWith('{')) {
+        return JSON.parse(skinEntry.notes);
+      }
+    } catch (e) {}
+    return { oiliness: 'N/A' };
+  };
+
   return (
     <div className="max-w-md mx-auto space-y-6 pb-24 animate-in fade-in duration-500">
       <div>
@@ -95,28 +134,28 @@ export default function ReportsPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 gap-3">
-        <Card className="bg-gradient-to-br from-pink-500/10 to-transparent border-pink-500/20">
+        <Card className="bg-gradient-to-br from-pink-500/10 to-transparent border-pink-500/20 shadow-sm">
           <CardContent className="p-6 flex flex-col items-center text-center">
             <FileText className="w-8 h-8 text-pink-500 mb-3" />
             <p className="text-sm text-muted-foreground">Total Logs</p>
             <p className="text-3xl font-bold">{totalEntries}</p>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-violet-500/10 to-transparent border-violet-500/20">
+        <Card className="bg-gradient-to-br from-violet-500/10 to-transparent border-violet-500/20 shadow-sm">
           <CardContent className="p-6 flex flex-col items-center text-center">
             <CalendarHeart className="w-8 h-8 text-violet-500 mb-3" />
             <p className="text-sm text-muted-foreground">Avg Cycle</p>
             <p className="text-3xl font-bold">{avgCycleLength === 'N/A' ? 'N/A' : `${avgCycleLength}d`}</p>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-blue-500/10 to-transparent border-blue-500/20">
+        <Card className="bg-gradient-to-br from-blue-500/10 to-transparent border-blue-500/20 shadow-sm">
           <CardContent className="p-6 flex flex-col items-center text-center">
             <Droplets className="w-8 h-8 text-blue-500 mb-3" />
             <p className="text-sm text-muted-foreground">Avg Water</p>
             <p className="text-3xl font-bold">{avgWater}L</p>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-indigo-500/10 to-transparent border-indigo-500/20">
+        <Card className="bg-gradient-to-br from-indigo-500/10 to-transparent border-indigo-500/20 shadow-sm">
           <CardContent className="p-6 flex flex-col items-center text-center">
             <Activity className="w-8 h-8 text-indigo-500 mb-3" />
             <p className="text-sm text-muted-foreground">Avg Sleep</p>
@@ -128,7 +167,7 @@ export default function ReportsPage() {
       {chartData.length >= 3 ? (
         <div className="space-y-6">
           {/* Stress & Mood Chart */}
-          <Card>
+          <Card className="shadow-sm">
             <CardHeader>
               <CardTitle>Mood & Stress Relationship</CardTitle>
               <CardDescription>How your stress levels impact your overall mood.</CardDescription>
@@ -145,7 +184,7 @@ export default function ReportsPage() {
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#333" />
                   <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} />
                   <YAxis fontSize={12} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: '#1f2937', borderRadius: '8px' }} />
+                  <Tooltip contentStyle={{ backgroundColor: '#1f2937', borderRadius: '8px', border: 'none' }} />
                   <Area type="monotone" dataKey="mood" stroke="#ec4899" fillOpacity={1} fill="url(#colorMoodRep)" />
                   <Area type="monotone" dataKey="stress" stroke="#8b5cf6" fillOpacity={0.3} fill="#8b5cf6" />
                 </AreaChart>
@@ -154,7 +193,7 @@ export default function ReportsPage() {
           </Card>
 
           {/* Sleep & Exercise Chart */}
-          <Card>
+          <Card className="shadow-sm">
             <CardHeader>
               <CardTitle>Activity & Rest</CardTitle>
               <CardDescription>Daily exercise minutes vs sleep hours.</CardDescription>
@@ -165,7 +204,7 @@ export default function ReportsPage() {
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#333" />
                   <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} />
                   <YAxis fontSize={12} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: '#1f2937', borderRadius: '8px' }} />
+                  <Tooltip contentStyle={{ backgroundColor: '#1f2937', borderRadius: '8px', border: 'none' }} />
                   <Bar dataKey="exercise" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -186,7 +225,7 @@ export default function ReportsPage() {
 
       {/* Skin & Cycle text summary */}
       <div className="space-y-6">
-        <Card>
+        <Card className="shadow-sm">
           <CardHeader>
             <CardTitle>Skin Health Summary</CardTitle>
           </CardHeader>
@@ -194,16 +233,16 @@ export default function ReportsPage() {
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">Total Logs: <span className="font-bold text-foreground">{skinLogs.length}</span></p>
               {skinLogs.length > 0 && (
-                <div className="text-sm">
-                  <p>Latest Acne Severity: <span className="font-bold text-pink-500">{skinLogs[0].acne}/10</span></p>
-                  <p>Latest Oiliness: <span className="font-bold text-blue-500">{skinLogs[0].oiliness}/10</span></p>
+                <div className="text-sm space-y-1">
+                  <p>Latest Acne Severity: <span className="font-bold text-pink-500">{skinLogs[0].condition}/10</span></p>
+                  <p>Latest Oiliness: <span className="font-bold text-blue-500">{parseSkinLog(skinLogs[0]).oiliness}/10</span></p>
                 </div>
               )}
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-sm">
           <CardHeader>
             <CardTitle>Cycle Summary</CardTitle>
           </CardHeader>
@@ -211,7 +250,7 @@ export default function ReportsPage() {
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">Logged Cycles: <span className="font-bold text-foreground">{cycleLogs.length}</span></p>
               {cycleLogs.length > 0 && (
-                <div className="text-sm">
+                <div className="text-sm space-y-1">
                   <p>Last Period: <span className="font-bold text-violet-500">{new Date(cycleLogs[0].start_date).toLocaleDateString()}</span></p>
                   {cycleLogs.length > 1 && (
                      <p>Cycle Regularity: <span className="font-bold text-green-500">

@@ -14,7 +14,6 @@ export async function chatWithCompanion(
     const reply = await getCompanionResponse(message, history, language, personality, companionName, healthSummary);
     return { success: true, text: reply };
   } catch (error) {
-    console.error('Server Action Error:', error);
     return { success: false, text: "I'm sorry, I'm having trouble connecting right now." };
   }
 }

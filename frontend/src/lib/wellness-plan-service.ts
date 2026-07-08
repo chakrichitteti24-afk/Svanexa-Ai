@@ -42,7 +42,6 @@ export class WellnessPlanService {
       .maybeSingle();
 
     if (fetchPlanError) {
-      console.error('Error fetching wellness plan:', fetchPlanError);
     }
 
     if (existingPlan) {
@@ -143,7 +142,6 @@ export class WellnessPlanService {
         oilinessAvg,
       });
     } catch (e) {
-      console.warn('AI Task generation failed, falling back to rule-based tasks:', e);
       tasks = this.generateTasksWithRules({
         sleepAvg,
         stressTrend,
@@ -209,7 +207,6 @@ export class WellnessPlanService {
       .single();
 
     if (insertError) {
-      console.error('Error saving new wellness plan:', insertError);
       // Fallback in memory if insert fails (to avoid crashing UX)
       return {
         hasData: true,
@@ -314,7 +311,6 @@ export class WellnessPlanService {
       .maybeSingle();
 
     if (error) {
-      console.error('Error fetching streak:', error);
     }
 
     if (streak) {

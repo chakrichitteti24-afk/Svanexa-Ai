@@ -41,7 +41,6 @@ export class AIService {
         healthObj = JSON.parse(healthMatch[1]);
       }
     } catch (e) {
-      console.warn('[AIService] Failed to parse health summary JSON:', e);
     }
 
     try {
@@ -50,7 +49,6 @@ export class AIService {
         memoryObj = JSON.parse(memoryMatch[1]);
       }
     } catch (e) {
-      console.warn('[AIService] Failed to parse user memory JSON:', e);
     }
 
     // Relevance Scoring & Context Filtering
@@ -194,7 +192,6 @@ USER MEMORY PROFILE:
 
 
     if (forceGemini) {
-      console.log('[AIService] Forcing Gemini 2.5 Flash for deep analysis...');
       try {
         const responseText = await this.queryGemini(systemPrompt, history, message);
         return { response: responseText, modelUsed: 'gemini-2.5-flash' };
@@ -207,7 +204,6 @@ USER MEMORY PROFILE:
     // Attempt Primary Model (Llama 3.1 8B Instant via Groq)
     if (this.groq) {
       try {
-        console.log('[AIService] Attempting response with Llama 3.1 8B Instant (Primary)...');
         
         // Convert history format to Groq format
         const groqMessages = [
@@ -242,7 +238,6 @@ USER MEMORY PROFILE:
         }
         throw new Error('Empty response from Llama 3.1');
       } catch (error) {
-        console.warn('[AIService] Llama 3.1 failed or timed out. Falling back to Gemini 2.5 Flash...', error);
         
         // Failover system kicks in
         if (this.gemini) {
@@ -253,7 +248,6 @@ USER MEMORY PROFILE:
               modelUsed: 'gemini-2.5-flash'
             };
           } catch (geminiError) {
-            console.error('[AIService] Failover to Gemini 2.5 Flash also failed:', geminiError);
             return {
               response: "I'm sorry, I'm having trouble communicating right now. Please try again later. 🌸",
               modelUsed: 'llama-3.1-8b',

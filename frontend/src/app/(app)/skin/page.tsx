@@ -1,73 +1,99 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { Camera, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { Image as ImageIcon, Trash2, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { createClient } from '@/utils/supabase/client';
+import { useHerSync } from '@/context/HerSyncContext';
 
 type SkinEntry = {
   id: string;
   date: string;
-  image: string;
-  acne: number;
-  oiliness: number;
-  dryness: number;
+  condition: string;
   notes: string;
+  parsedNotes?: { oiliness: number; dryness: number; text: string };
 };
 
 export default function SkinTrackerPage() {
-  const [entries, setEntries] = useLocalStorage<SkinEntry[]>('hersync_skin', []);
-  const [preview, setPreview] = useState<string>('');
+  const { skinLogs, isLoading: loading, refreshSkinLogs } = useHerSync();
+  const [saving, setSaving] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  
   const [acne, setAcne] = useState(5);
   const [oiliness, setOiliness] = useState(5);
   const [dryness, setDryness] = useState(2);
   const [notes, setNotes] = useState('');
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) { // 2MB limit for localstorage sanity
-        toast.error('Image is too large. Please select an image under 2MB.');
-        return;
+  const supabase = createClient();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setUserId(user.id);
+    });
+  }, [supabase]);
+
+  const entries = skinLogs.map(d => {
+    let parsedNotes = { oiliness: 5, dryness: 2, text: d.notes || '' };
+    try {
+      if (d.notes && d.notes.startsWith('{')) {
+        parsedNotes = JSON.parse(d.notes);
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    } catch (e) {}
+    return { ...d, parsedNotes };
+  });
+
+  const handleSave = async () => {
+    if (!userId) return;
+    setSaving(true);
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const complexNotes = JSON.stringify({ oiliness, dryness, text: notes });
+
+    try {
+      const { error } = await supabase.from('skin_logs').insert({
+        user_id: userId,
+        date: today,
+        condition: String(acne),
+        notes: complexNotes,
+        breakouts: acne > 5
+      });
+      if (error) throw error;
+      setAcne(5);
+      setOiliness(5);
+      setDryness(2);
+      setNotes('');
+      toast.success('Skin progress saved!');
+      // Broadcast to Dashboard, Reports, AI Companion
+      await refreshSkinLogs();
+    } catch (err: any) {
+      toast.error('Failed to save skin log', { description: err.message });
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleSave = () => {
-    const newEntry: SkinEntry = {
-      id: Date.now().toString(),
-      date: new Date().toISOString(),
-      image: preview,
-      acne,
-      oiliness,
-      dryness,
-      notes,
-    };
-
-    setEntries([newEntry, ...entries]);
-    setPreview('');
-    setAcne(5);
-    setOiliness(5);
-    setDryness(2);
-    setNotes('');
-    toast.success('Skin progress saved successfully!');
+  const handleDelete = async (id: string) => {
+    try {
+      const { error } = await supabase.from('skin_logs').delete().eq('id', id);
+      if (error) throw error;
+      toast.success('Entry deleted.');
+      await refreshSkinLogs();
+    } catch (err: any) {
+      toast.error('Failed to delete entry');
+    }
   };
 
-  const handleDelete = (id: string) => {
-    setEntries(entries.filter(e => e.id !== id));
-    toast.success('Entry deleted.');
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-pink-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-md mx-auto space-y-6 pb-24 animate-in fade-in duration-500">
@@ -77,38 +103,12 @@ export default function SkinTrackerPage() {
       </div>
 
       <div className="space-y-6">
-        <Card className="border-border/40 bg-card/60 backdrop-blur-xs">
+        <Card className="border-border/40 bg-card/60 backdrop-blur-xs shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold">{"Log Today's Skin"}</CardTitle>
-            <CardDescription className="text-[10px]">Upload a photo to keep track of visual changes.</CardDescription>
+            <CardDescription className="text-[10px]">Record daily skin severity</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            
-            <div className="space-y-4">
-              <Label>Skin Photo</Label>
-              {preview ? (
-                <div className="relative rounded-2xl overflow-hidden aspect-[4/3] border border-border group">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={preview} alt="Skin Preview" className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <Button variant="destructive" size="sm" onClick={() => setPreview('')}>
-                      Remove
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center w-full">
-                  <label htmlFor="dropzone-file" className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-2xl cursor-pointer bg-secondary/20 border-border hover:bg-secondary/40 transition-colors">
-                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                      <Camera className="w-10 h-10 mb-3 text-muted-foreground" />
-                      <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Click to upload</span></p>
-                      <p className="text-xs text-muted-foreground">PNG, JPG up to 2MB</p>
-                    </div>
-                    <input id="dropzone-file" type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
-                  </label>
-                </div>
-              )}
-            </div>
 
             {/* Acne Counter */}
             <div className="flex items-center justify-between">
@@ -195,15 +195,16 @@ export default function SkinTrackerPage() {
             </div>
 
             <Button 
-              className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white" 
+              className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:opacity-90 text-white shadow-md shadow-blue-500/20" 
               onClick={handleSave}
+              disabled={saving}
             >
-              Save Skin Progress
+              {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Save Skin Progress'}
             </Button>
           </CardContent>
         </Card>
 
-        <Card className="h-full">
+        <Card className="h-full shadow-sm">
           <CardHeader>
             <CardTitle>Progress Timeline</CardTitle>
             <CardDescription>Your recent skin entries.</CardDescription>
@@ -212,7 +213,7 @@ export default function SkinTrackerPage() {
             {entries.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-muted-foreground py-12">
                 <ImageIcon className="w-12 h-12 mb-4 opacity-20" />
-                <p>No photos uploaded yet.</p>
+                <p>No records yet.</p>
               </div>
             ) : (
               <div className="space-y-6">
@@ -226,23 +227,18 @@ export default function SkinTrackerPage() {
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
-                    {entry.image ? (
-                      <>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={entry.image} alt="Skin Log" className="w-24 h-24 object-cover rounded-xl border border-border" />
-                      </>
-                    ) : (
-                      <div className="w-24 h-24 bg-muted rounded-xl flex items-center justify-center border border-border">
-                        <Camera className="w-6 h-6 text-muted-foreground opacity-50" />
-                      </div>
-                    )}
                     <div className="flex-1 space-y-1">
                       <p className="font-semibold text-sm">{new Date(entry.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</p>
-                      <div className="text-xs text-muted-foreground flex gap-2">
-                        <span className="bg-pink-500/10 text-pink-500 px-2 py-0.5 rounded-full">Acne: {entry.acne}</span>
-                        <span className="bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded-full">Oil: {entry.oiliness}</span>
+                      <div className="text-xs text-muted-foreground flex gap-2 mt-1">
+                        <span className="bg-pink-500/10 text-pink-500 px-2 py-0.5 rounded-full font-medium">Acne: {entry.condition}</span>
+                        {entry.parsedNotes && (
+                          <>
+                            <span className="bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded-full font-medium">Oil: {entry.parsedNotes.oiliness}</span>
+                            <span className="bg-amber-500/10 text-amber-500 px-2 py-0.5 rounded-full font-medium">Dry: {entry.parsedNotes.dryness}</span>
+                          </>
+                        )}
                       </div>
-                      {entry.notes && <p className="text-sm mt-2 line-clamp-2 italic text-muted-foreground">{`"${entry.notes}"`}</p>}
+                      {entry.parsedNotes?.text && <p className="text-sm mt-3 line-clamp-2 italic text-muted-foreground border-l-2 border-primary/20 pl-2">{`"${entry.parsedNotes.text}"`}</p>}
                     </div>
                   </div>
                 ))}
