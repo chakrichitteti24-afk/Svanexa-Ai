@@ -165,6 +165,7 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       let currentStreak = 0;
       let cycleStatus = 'insufficient_data';
       let pregnancyDueDate: string | null = null;
+      let wellnessTasks: WellnessTask[] = [];
 
       if (healthRes.ok) {
         const { data } = await healthRes.json();
@@ -178,6 +179,7 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         cycleStatus = data.cycle_status;
         pregnancyDueDate = data.pregnancy?.due_date || null;
         todayLog = data.today_log || todayLog;
+        wellnessTasks = data.wellness_tasks || [];
       }
 
       // Fetch cycle history and skin logs directly from Supabase client
@@ -203,6 +205,7 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         pregnancyDueDate,
         cycleHistory: (cycleRes.data as CycleLog[]) || [],
         skinLogs: (skinRes.data as SkinLog[]) || [],
+        wellnessTasks,
         isLoading: false,
         lastRefreshed: Date.now(),
       }));

@@ -26,11 +26,11 @@ export async function GET() {
       { data: sleep },
       { data: water },
       { data: mood },
-      { data: exercise }
+      { data: exercise },
+      { data: todayPlan }
     ] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', userId).single(),
       supabase.from('user_preferences').select('*').eq('user_id', userId).maybeSingle(),
-      // Read slot completion from daily_checkins.summary (JSON stored there)
       supabase.from('daily_checkins').select('summary').eq('user_id', userId).eq('date', today).maybeSingle(),
       supabase.from('daily_checkins').select('date').eq('user_id', userId).order('date', { ascending: false }).limit(365),
       supabase.from('cycle_logs').select('*').eq('user_id', userId).order('start_date', { ascending: false }).limit(1),
@@ -39,7 +39,13 @@ export async function GET() {
       supabase.from('water_logs').select('*').eq('user_id', userId).eq('date', today).maybeSingle(),
       supabase.from('mood_logs').select('*').eq('user_id', userId).eq('date', today).maybeSingle(),
       supabase.from('exercise_logs').select('*').eq('user_id', userId).eq('date', today).maybeSingle(),
+      supabase.from('wellness_plans').select('content').eq('user_id', userId).eq('title', today).maybeSingle(),
     ]);
+
+    let wellness_tasks = [];
+    if (todayPlan?.content) {
+      try { wellness_tasks = JSON.parse(todayPlan.content); } catch { wellness_tasks = []; }
+    }
 
     // Parse slot meta from daily_checkins.summary
     let slotMeta: Record<string, any> = {};
@@ -106,6 +112,7 @@ export async function GET() {
         today_log,
         checkin_slots: slotsMap,
         all_slots_complete: allSlotsComplete,
+        wellness_tasks,
         message: 'Health summary generated successfully.',
       },
     });

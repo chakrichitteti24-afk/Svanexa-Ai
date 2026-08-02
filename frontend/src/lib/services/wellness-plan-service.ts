@@ -26,11 +26,6 @@ export class WellnessPlanService {
     const streak = await this.getOrCreateStreak(userId);
     const metrics = await this.loadMetrics(userId, todayStr);
     
-    // Always ensure at least the morning slot is available so tasks are generated immediately
-    if (metrics.completedSlots.length === 0) {
-      metrics.completedSlots = ['morning'];
-    }
-
     // Load existing plan
     const { data: existing } = await this.supabase
       .from('wellness_plans')
@@ -38,6 +33,15 @@ export class WellnessPlanService {
       .eq('user_id', userId)
       .eq('title', todayStr)
       .maybeSingle();
+
+    if (!existing && metrics.completedSlots.length === 0) {
+      return {
+        hasData: false,
+        plan: null,
+        streak,
+        message: "No Check-in logged today yet."
+      };
+    }
 
     let tasks: WellnessTask[] = existing ? JSON.parse(existing.content) : [];
     let isUpdated = false;
