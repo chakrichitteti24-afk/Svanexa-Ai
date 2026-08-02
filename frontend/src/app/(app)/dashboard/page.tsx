@@ -36,6 +36,18 @@ export default function DashboardPage() {
   } = useHerSync();
   const [showWelcome, setShowWelcome] = useState(false);
   const [togglingTask, setTogglingTask] = useState<string | null>(null);
+  const [lunaReaction, setLunaReaction] = useState<string | null>(null);
+  const [showSparkles, setShowSparkles] = useState<string | null>(null);
+
+  const LUNA_REACTIONS = [
+    "Great job! Keep going. 🌸",
+    "You're building healthy habits. ✨",
+    "One step closer to today's goal. 💜",
+    "I'm proud of your consistency. 😊",
+    "Nice work! Let's continue. 🎉",
+    "Every small step makes a big difference! 🌟",
+    "You're glowing today! Keep it up. ✨"
+  ];
 
   useEffect(() => {
     if (isLoading) return;
@@ -129,10 +141,22 @@ export default function DashboardPage() {
   const handleToggleTask = async (taskId: string, planId: string) => {
     if (togglingTask) return;
     setTogglingTask(taskId);
+
+    const targetTask = wellnessTasks.find(t => t.id === taskId);
+    const isCompleting = !targetTask?.completed;
+
+    if (isCompleting) {
+      const randomMsg = LUNA_REACTIONS[Math.floor(Math.random() * LUNA_REACTIONS.length)];
+      setLunaReaction(randomMsg);
+      setShowSparkles(taskId);
+      setTimeout(() => setLunaReaction(null), 3000);
+      setTimeout(() => setShowSparkles(null), 1200);
+    }
+
     try {
-      const res = await apiFetch('/api/v1/wellness-plan/toggle', {
+      const res = await apiFetch('/api/wellness-plan/toggle', {
         method: 'POST',
-        body: JSON.stringify({ taskId, planId }),
+        body: JSON.stringify({ taskId, planId, status: isCompleting ? 'completed' : 'pending' }),
       });
       if (res.ok) {
         await refreshAll();
@@ -344,23 +368,38 @@ export default function DashboardPage() {
                </Link>
             </div>
           ) : areTasksCompleted ? (
-            <div className="flex flex-col items-center text-center py-6">
-              <Check className="w-12 h-12 text-emerald-500 mb-3 p-2 bg-emerald-500/10 rounded-full" />
-              <h3 className="font-semibold text-emerald-500 mb-2 text-lg">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="flex flex-col items-center text-center py-6 px-4 bg-gradient-to-b from-emerald-500/10 via-card to-card rounded-2xl border border-emerald-500/30 shadow-lg"
+            >
+              <div className="relative mb-3">
+                <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                  <Check className="w-8 h-8 text-emerald-400" />
+                </div>
+                <Sparkles className="w-5 h-5 text-amber-300 absolute -top-1 -right-1 animate-bounce" />
+              </div>
+              
+              <h3 className="font-extrabold text-foreground mb-1 text-lg">
                 {activeSlot === 'evening' 
                   ? "🎉 Today's Wellness Journey Completed" 
                   : activeSlot === 'morning' 
-                    ? "✓ Morning Completed" 
-                    : "✓ Afternoon Completed"}
+                    ? "✓ Morning Tasks Completed" 
+                    : "✓ Afternoon Tasks Completed"}
               </h3>
-              <p className="text-sm text-muted-foreground font-medium">
+              
+              <p className="text-xs text-muted-foreground font-medium max-w-xs mb-4">
                 {activeSlot === 'evening' 
-                  ? "Incredible job completing your wellness goals today!" 
+                  ? "Amazing work today! Keep this consistency going." 
                   : activeSlot === 'morning' 
-                    ? "Then wait for Afternoon." 
-                    : "Then wait for Evening."}
+                    ? "Morning tasks finished! Stand by for Afternoon check-in." 
+                    : "Afternoon tasks finished! Stand by for Evening check-in."}
               </p>
-            </div>
+
+              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/15 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
+                <span>Luna AI:</span> <span>&quot;I&apos;m so proud of your dedication today! 💜&quot;</span>
+              </div>
+            </motion.div>
           ) : (
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-2 mb-2">
@@ -371,14 +410,24 @@ export default function DashboardPage() {
               {slotTasks.map(task => (
                 <div 
                   key={task.id} 
-                  onClick={() => handleToggleTask(task.id, wellnessTasks[0]?.id || '')} // planId is same for all tasks today
-                  className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all cursor-pointer ${task.completed ? 'bg-secondary/40 border-border/30 opacity-60' : 'bg-card border-violet-500/20 hover:border-violet-500/50 shadow-sm'}`}
+                  onClick={() => handleToggleTask(task.id, wellnessTasks[0]?.id || '')}
+                  className={`relative flex items-start gap-3 p-3.5 rounded-xl border transition-all cursor-pointer select-none ${task.completed ? 'bg-secondary/40 border-border/30 opacity-70' : 'bg-card border-violet-500/20 hover:border-violet-500/50 shadow-sm hover:scale-[1.01]'}`}
                 >
-                  <button className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors ${task.completed ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-violet-400 text-transparent'}`}>
+                  {showSparkles === task.id && (
+                    <motion.div 
+                      initial={{ scale: 0, opacity: 1 }}
+                      animate={{ scale: 1.5, opacity: 0 }}
+                      transition={{ duration: 0.8 }}
+                      className="absolute left-4 top-4 text-amber-300 pointer-events-none"
+                    >
+                      ✨
+                    </motion.div>
+                  )}
+                  <button className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all ${task.completed ? 'bg-emerald-500 border-emerald-500 text-white scale-105' : 'border-violet-400 text-transparent hover:border-violet-500'}`}>
                     {togglingTask === task.id ? <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-500" /> : <Check className="w-3.5 h-3.5" />}
                   </button>
                   <div className="flex-1">
-                    <p className={`text-sm font-medium ${task.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                    <p className={`text-sm font-medium transition-all ${task.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                       {task.text}
                     </p>
                     <span className="text-[10px] font-semibold text-violet-400 mt-1 uppercase tracking-wider bg-violet-500/10 px-2 py-0.5 rounded-full inline-block">
@@ -514,6 +563,29 @@ export default function DashboardPage() {
         </div>
       </motion.section>
       </div>
+
+      {/* FLOATING LUNA AI REACTION BUBBLE */}
+      <AnimatePresence>
+        {lunaReaction && (
+          <motion.div
+            initial={{ opacity: 0, y: 30, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 15, scale: 0.9 }}
+            transition={{ type: 'spring', bounce: 0.4 }}
+            className="fixed bottom-6 right-6 z-50 flex items-center gap-3 p-3.5 pr-5 rounded-2xl bg-card/90 backdrop-blur-xl border border-pink-500/30 shadow-2xl shadow-pink-500/20 pointer-events-none"
+          >
+            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-pink-500 to-violet-500 p-0.5 shadow-md flex-shrink-0">
+              <div className="w-full h-full rounded-full bg-card flex items-center justify-center overflow-hidden relative">
+                <Image src="/mascot-cute.jpg" alt="Luna AI" fill className="object-cover" />
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] font-bold text-pink-400 uppercase tracking-wider">Luna AI Companion</div>
+              <div className="text-xs font-semibold text-foreground">{lunaReaction}</div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
     </div>
   );
