@@ -1,0 +1,406 @@
+import { SupabaseClient } from '@supabase/supabase-js';
+import { differenceInDays, addDays, format } from 'date-fns';
+import { WellnessTask, WellnessPlan, PremiumStreak } from '../../types/wellness-plan';
+import Groq from 'groq-sdk';
+
+export class WellnessPlanService {
+  private supabase: SupabaseClient;
+  private groq: Groq | null = null;
+
+  constructor(supabaseClient: SupabaseClient) {
+    this.supabase = supabaseClient;
+    if (process.env.GROQ_API_KEY) {
+      this.groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+    }
+  }
+
+  // ── PUBLIC ─────────────────────────────────────────────────────────────────
+
+  async getDailyWellnessPlan(userId: string, todayStr: string, wellnessMode: string): Promise<{
+    hasData: boolean;
+    plan: WellnessPlan | null;
+    streak: PremiumStreak | null;
+    message?: string;
+    logsCount?: number;
+  }> {
+    const streak = await this.getOrCreateStreak(userId);
+    const metrics = await this.loadMetrics(userId, todayStr);
+    
+    if (metrics.completedSlots.length === 0) {
+      return { hasData: false, plan: null, streak, logsCount: 0,
+        message: 'Complete your Morning Check-in to unlock your first wellness plan of the day!' };
+    }
+
+    // Load existing plan
+    const { data: existing } = await this.supabase
+      .from('wellness_plans')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('title', todayStr)
+      .maybeSingle();
+
+    let tasks: WellnessTask[] = existing ? JSON.parse(existing.content) : [];
+    let isUpdated = false;
+    let planId = existing?.id || 'temp';
+    let createdAt = existing?.created_at || new Date().toISOString();
+    let updatedAt = existing?.updated_at || new Date().toISOString();
+
+    // Check which slots we need to generate
+    const existingSlots = new Set(tasks.map(t => t.timeSlot));
+    const slotsToGenerate = metrics.completedSlots.filter((s: string) => !existingSlots.has(s as any));
+
+    if (slotsToGenerate.length > 0) {
+      // Generate tasks for these specific slots
+      for (const slot of slotsToGenerate) {
+         const newTasks = await this.generateTasksForSlot(metrics, wellnessMode, slot);
+         tasks = [...tasks, ...newTasks];
+      }
+      isUpdated = true;
+    }
+
+    if (isUpdated) {
+      updatedAt = new Date().toISOString();
+      if (existing) {
+        await this.supabase.from('wellness_plans').update({ content: JSON.stringify(tasks), updated_at: updatedAt }).eq('id', existing.id);
+      } else {
+        const { data: newPlan } = await this.supabase.from('wellness_plans').insert({ user_id: userId, title: todayStr, content: JSON.stringify(tasks), is_active: true }).select('*').single();
+        if (newPlan) {
+          planId = newPlan.id;
+          createdAt = newPlan.created_at;
+          updatedAt = newPlan.updated_at;
+        }
+      }
+    }
+
+    const score = this.computeScore(metrics, tasks);
+    const insight = this.generateInsight(metrics, wellnessMode, tasks);
+
+    return {
+      hasData: true,
+      plan: {
+        id: planId, userId, planDate: todayStr, tasks,
+        wellnessScore: score, aiInsight: insight, wellnessMode,
+        createdAt, updatedAt,
+      },
+      streak,
+    };
+  }
+
+  async toggleTask(userId: string, planId: string, taskId: string, todayStr: string) {
+    const { data: planData } = await this.supabase
+      .from('wellness_plans').select('*').eq('id', planId).single();
+    if (!planData) throw new Error('Plan not found');
+
+    const tasks: WellnessTask[] = JSON.parse(planData.content).map((t: any) => {
+      if (t.id === taskId) {
+        const completed = !t.completed;
+        return { ...t, completed, completedAt: completed ? new Date().toISOString() : null };
+      }
+      return t;
+    });
+
+    await this.supabase.from('wellness_plans')
+      .update({ content: JSON.stringify(tasks) }).eq('id', planId);
+
+    if (tasks.every(t => t.completed)) {
+      await this.updateStreak(userId, todayStr);
+    }
+
+    const metrics = await this.loadMetrics(userId, todayStr);
+    const [streak, prefs] = await Promise.all([
+      this.getOrCreateStreak(userId),
+      this.supabase.from('user_preferences').select('theme').eq('user_id', userId).single()
+    ]);
+    const mode = prefs.data?.theme || 'general';
+    const score = this.computeScore(metrics, tasks);
+    const insight = this.generateInsight(metrics, mode, tasks);
+
+    return { tasks, score, insight, streak };
+  }
+
+  // ── METRICS ────────────────────────────────────────────────────────────────
+
+  private async loadMetrics(userId: string, todayStr: string) {
+    const [checkinsRes, todayCheckinRes, cycleRes, skinRes, sleepRes, waterRes, moodRes, exerciseRes] =
+      await Promise.all([
+        this.supabase.from('daily_checkins').select('*').eq('user_id', userId).order('date', { ascending: false }).limit(14),
+        // Read slot completion state from daily_checkins.summary JSON (checkin_slots table doesn't exist)
+        this.supabase.from('daily_checkins').select('summary').eq('user_id', userId).eq('date', todayStr).maybeSingle(),
+        this.supabase.from('cycle_logs').select('*').eq('user_id', userId).order('start_date', { ascending: false }).limit(3),
+        this.supabase.from('skin_logs').select('*').eq('user_id', userId).order('date', { ascending: false }).limit(7),
+        this.supabase.from('sleep_logs').select('*').eq('user_id', userId).eq('date', todayStr).maybeSingle(),
+        this.supabase.from('water_logs').select('*').eq('user_id', userId).eq('date', todayStr).maybeSingle(),
+        this.supabase.from('mood_logs').select('*').eq('user_id', userId).eq('date', todayStr).maybeSingle(),
+        this.supabase.from('exercise_logs').select('*').eq('user_id', userId).eq('date', todayStr).maybeSingle(),
+      ]);
+
+    const checkins = checkinsRes.data || [];
+    const recent = checkins.slice(0, 7);
+
+    const sleepAvg = recent.length
+      ? recent.reduce((s, c) => s + Number(c.sleep_hours || 7), 0) / recent.length : 7;
+    const waterAvg = recent.length
+      ? recent.reduce((s, c) => s + Number(c.water_liters || 2), 0) / recent.length : 2;
+    const exerciseAvg = recent.length
+      ? recent.reduce((s, c) => s + Number(c.exercise_minutes || 30), 0) / recent.length : 30;
+    const stressAvg = recent.length
+      ? recent.reduce((s, c) => s + Number(c.stress_level || 5), 0) / recent.length : 5;
+
+    // Parse slot completion from daily_checkins.summary
+    let slotMeta: Record<string, any> = {};
+    if (todayCheckinRes.data?.summary) {
+      try { slotMeta = JSON.parse(todayCheckinRes.data.summary); } catch { slotMeta = {}; }
+    }
+    if (typeof slotMeta !== 'object' || slotMeta === null) slotMeta = {};
+    const completedSlots = ['morning', 'afternoon', 'evening'].filter(s => slotMeta[s]?.completed);
+    const allSlotsComplete = completedSlots.length === 3;
+
+    const todaySleep = sleepRes.data?.duration_hours ?? null;
+    const todayWater = waterRes.data ? Number(waterRes.data.amount_ml) / 1000 : null;
+    const todayMood = moodRes.data?.mood ?? null;
+    const todayStress = moodRes.data?.intensity ?? null;
+    const todayExercise = exerciseRes.data?.duration_minutes ?? null;
+
+    const skins = skinRes.data || [];
+    const acneAvg = skins.length ? skins.reduce((s, sk) => s + Number(sk.condition || 3), 0) / skins.length : 3;
+
+    const cycles = cycleRes.data || [];
+    let cycleStatus = 'insufficient_data';
+    if (cycles.length > 0) {
+      const diff = differenceInDays(new Date(), new Date(cycles[0].start_date));
+      if (diff <= 5) cycleStatus = 'menstrual';
+      else if (diff <= 13) cycleStatus = 'follicular';
+      else if (diff <= 17) cycleStatus = 'ovulation';
+      else cycleStatus = 'luteal';
+    }
+
+    return {
+      totalLogs: checkins.length,
+      sleepAvg, waterAvg, exerciseAvg, stressAvg,
+      todaySleep, todayWater, todayMood, todayStress, todayExercise,
+      acneAvg, cycleStatus,
+      hasCheckedInToday: completedSlots.length > 0,
+      allSlotsComplete,
+      completedSlotsCount: completedSlots.length,
+      completedSlots, // Expose actual slots
+    };
+  }
+
+  // ── SCORE ──────────────────────────────────────────────────────────────────
+
+  private computeScore(m: any, tasks: WellnessTask[]): number {
+    let score = 50; // base
+    // Sleep 0-20 pts
+    if (m.todaySleep !== null) {
+      const s = Number(m.todaySleep);
+      if (s >= 7 && s <= 9) score += 20;
+      else if (s >= 6) score += 12;
+      else score += 5;
+    }
+    // Hydration 0-15 pts
+    if (m.todayWater !== null) {
+      const w = Number(m.todayWater);
+      if (w >= 2) score += 15;
+      else score += Math.round((w / 2) * 15);
+    }
+    // Exercise 0-10 pts
+    if (m.todayExercise !== null) {
+      const e = Number(m.todayExercise);
+      if (e >= 30) score += 10;
+      else score += Math.round((e / 30) * 10);
+    }
+    // Mood/stress 0-5 pts
+    if (m.todayMood && ['happy', 'calm', 'energetic'].includes(m.todayMood)) score += 5;
+    // Task completion bonus
+    const completedPct = tasks.length > 0 ? tasks.filter(t => t.completed).length / tasks.length : 0;
+    score = Math.round(score + completedPct * 0) ; // tasks affect score dynamically
+    return Math.min(100, Math.max(0, score));
+  }
+
+  // ── INSIGHT ────────────────────────────────────────────────────────────────
+
+  private generateInsight(m: any, mode: string, tasks: WellnessTask[]): string {
+    const completedCount = tasks.filter(t => t.completed).length;
+    const total = tasks.length;
+    const remaining = total - completedCount;
+
+    if (!m.hasCheckedInToday) {
+      return "Complete today's check-in so I can give you personalized wellness guidance based on your real data.";
+    }
+    if (m.todayWater !== null && Number(m.todayWater) < 1.5) {
+      const needed = (2.5 - Number(m.todayWater)).toFixed(1);
+      return `You've had ${Number(m.todayWater).toFixed(1)}L of water today. Drinking ${needed}L more before evening will help you reach your hydration goal.`;
+    }
+    if (m.todaySleep !== null && Number(m.todaySleep) < 6.5) {
+      return `You slept ${Number(m.todaySleep).toFixed(1)} hours last night — a little below your goal. A short nap or early bedtime tonight can help you recover well.`;
+    }
+    if (m.todayStress !== null && Number(m.todayStress) > 6) {
+      return `Your stress is elevated today (${m.todayStress}/10). Try the mindfulness task in your evening plan — even 5 minutes of breathing can make a real difference.`;
+    }
+    if (mode === 'pregnancy') {
+      return `You're doing wonderfully. Remember to rest when needed and keep sipping water throughout the day.`;
+    }
+    if (mode === 'pcos') {
+      return `Consistent sleep and stress management are key for hormonal balance. You have ${remaining} wellness task${remaining !== 1 ? 's' : ''} remaining for today — keep going!`;
+    }
+    if (completedCount === total && total > 0) {
+      return `Incredible! You've completed all ${total} wellness tasks today. You're building powerful healthy habits. 🌟`;
+    }
+    return `Great progress today! You have ${remaining} task${remaining !== 1 ? 's' : ''} remaining. Each one you complete brings you closer to your wellness goals.`;
+  }
+
+  // ── TASK GENERATION ────────────────────────────────────────────────────────
+
+  private async generateTasksForSlot(m: any, mode: string, slot: string): Promise<WellnessTask[]> {
+    const prompt = this.buildPromptForSlot(m, mode, slot);
+    let raw: any[] = [];
+
+    try {
+      if (this.groq) {
+        const resp = await this.groq.chat.completions.create({
+          model: 'llama-3.1-8b-instant',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.55,
+          max_tokens: 800,
+          response_format: { type: 'json_object' },
+        });
+        const parsed = JSON.parse(resp.choices[0]?.message?.content || '{}');
+        raw = parsed.tasks || [];
+      }
+    } catch { /* fallback below */ }
+
+    if (raw.length < 3) {
+      raw = this.ruleTasksForSlot(m, mode, slot);
+    }
+
+    return raw.slice(0, 5).map((t: any, i: number) => ({
+      id: `${slot}-${t.category}-${Date.now()}-${i}`,
+      text: t.text,
+      category: t.category || 'mindfulness',
+      timeSlot: slot as any,
+      priority: (t.priority || 'recommended') as any,
+      completed: false,
+      completedAt: null,
+    }));
+  }
+
+  private buildPromptForSlot(m: any, mode: string, slot: string): string {
+    return `You are a premium AI wellness coach. Generate 3-5 personalized daily tasks ONLY for the ${slot.toUpperCase()} time slot.
+
+USER DATA (USE ONLY THIS — NO FAKE VALUES):
+- Mode: ${mode} (general | pcos | pregnancy)
+- Avg Sleep: ${m.sleepAvg.toFixed(1)}h (today: ${m.todaySleep ?? 'not logged'})
+- Avg Water: ${m.waterAvg.toFixed(1)}L (today: ${m.todayWater ?? 'not logged'}L)
+- Avg Exercise: ${m.exerciseAvg.toFixed(0)}min (today: ${m.todayExercise ?? 'not logged'})
+- Avg Stress: ${m.stressAvg.toFixed(1)}/10 (today: ${m.todayStress ?? 'not logged'})
+- Mood today: ${m.todayMood ?? 'not logged'}
+- Cycle Phase: ${m.cycleStatus}
+- Skin Acne Avg: ${m.acneAvg.toFixed(1)}/10
+
+SMART RULES:
+- Only generate tasks for the '${slot}' slot.
+- If today's water >= 2L, do NOT generate a hydration task
+- If today's exercise >= 30min, do NOT generate another exercise task  
+- PCOS: prioritize stress, cycle, gentle exercise
+- PREGNANCY: gentle tasks only, NO strenuous exercise
+- NEVER recommend medicines or clinical treatments
+
+Return ONLY raw JSON (no markdown):
+{
+  "tasks": [
+    { "text": "...", "category": "hydration|sleep|stress|mood|cycle|skin|exercise|nutrition|mindfulness|pregnancy", "priority": "high|recommended|optional" }
+  ]
+}`;
+  }
+
+  private ruleTasksForSlot(m: any, mode: string, slot: string): any[] {
+    const tasks: any[] = [];
+    const skipWater = m.todayWater !== null && Number(m.todayWater) >= 2;
+    const skipExercise = m.todayExercise !== null && Number(m.todayExercise) >= 30;
+
+    if (slot === 'morning') {
+      tasks.push({ text: 'Drink a full glass of water to start your morning well.', category: 'hydration', priority: 'high' });
+      if (m.sleepAvg < 6.5) {
+        tasks.push({ text: `Your recent sleep average is ${m.sleepAvg.toFixed(1)}h. Plan a consistent bedtime to gradually improve your rest.`, category: 'sleep', priority: 'high' });
+      } else {
+        tasks.push({ text: 'Start with 5 deep breaths to oxygenate your body and set a calm tone.', category: 'mindfulness', priority: 'recommended' });
+      }
+      if (mode === 'pregnancy') {
+        tasks.push({ text: 'Have a nourishing, pregnancy-safe breakfast.', category: 'pregnancy', priority: 'high' });
+      } else {
+        tasks.push({ text: 'Do a gentle 5-minute morning stretch to wake up your muscles.', category: 'exercise', priority: 'recommended' });
+      }
+    } else if (slot === 'afternoon') {
+      if (!skipWater) {
+        tasks.push({ text: 'Drink 2 glasses of water with your lunch to stay hydrated.', category: 'hydration', priority: 'high' });
+      } else {
+        tasks.push({ text: 'Take a 5-minute screen break to rest your eyes and reset focus.', category: 'stress', priority: 'recommended' });
+      }
+      if (m.stressAvg > 6) {
+        tasks.push({ text: 'Practice a 3-minute deep breathing exercise to reduce your stress levels.', category: 'stress', priority: 'high' });
+      } else {
+        tasks.push({ text: 'Eat a piece of fruit or a healthy snack to maintain your energy.', category: 'nutrition', priority: 'recommended' });
+      }
+      if (!skipExercise) {
+        tasks.push({ text: mode === 'pregnancy' ? 'Take a gentle 10-minute walk to support circulation.' : 'Take a 15-minute brisk walk to boost your mood and energy.', category: 'exercise', priority: 'recommended' });
+      }
+    } else if (slot === 'evening') {
+      if (m.acneAvg > 4) {
+        tasks.push({ text: 'Complete your gentle skin cleansing routine to support skin recovery.', category: 'skin', priority: 'high' });
+      }
+      if (mode === 'pcos' && m.cycleStatus === 'menstrual') {
+        tasks.push({ text: 'Sip warm herbal tea and apply a heating pad if experiencing cramps.', category: 'cycle', priority: 'high' });
+      } else {
+        tasks.push({ text: 'Spend 5 minutes journaling one positive moment from today.', category: 'mindfulness', priority: 'recommended' });
+      }
+      tasks.push({ text: 'Wind down 30 minutes before bed — dim lights, put away screens, and relax.', category: 'sleep', priority: 'high' });
+    }
+
+    return tasks;
+  }
+
+  // ── STREAK ─────────────────────────────────────────────────────────────────
+
+  async getOrCreateStreak(userId: string): Promise<PremiumStreak> {
+    const { data } = await this.supabase.from('wellness_streaks').select('*').eq('user_id', userId).maybeSingle();
+    if (data) {
+      return {
+        userId, currentStreak: data.current_streak, longestStreak: data.longest_streak,
+        lastActiveDate: data.last_active_date, weeklyConsistency: data.weekly_consistency || 0,
+        createdAt: data.created_at, updatedAt: data.updated_at,
+      };
+    }
+    const { data: ns } = await this.supabase.from('wellness_streaks')
+      .insert({ user_id: userId, current_streak: 0, longest_streak: 0, weekly_consistency: 0, last_active_date: null })
+      .select('*').single();
+    return {
+      userId, currentStreak: 0, longestStreak: 0,
+      lastActiveDate: null, weeklyConsistency: 0,
+      createdAt: ns?.created_at || new Date().toISOString(),
+      updatedAt: ns?.updated_at || new Date().toISOString(),
+    };
+  }
+
+  private async updateStreak(userId: string, todayStr: string) {
+    const { data: s } = await this.supabase.from('wellness_streaks').select('*').eq('user_id', userId).maybeSingle();
+    if (!s) return;
+    if (s.last_active_date === todayStr) return;
+
+    const yest = format(addDays(new Date(), -1), 'yyyy-MM-dd');
+    const next = (s.last_active_date === yest || s.current_streak === 0) ? s.current_streak + 1 : 1;
+    const longest = Math.max(s.longest_streak, next);
+
+    // Weekly consistency: count days in last 7 with completed plans
+    const { data: recentPlans } = await this.supabase
+      .from('wellness_plans').select('title, content').eq('user_id', userId)
+      .gte('title', format(addDays(new Date(), -6), 'yyyy-MM-dd'));
+    const completedDays = (recentPlans || []).filter(p => {
+      try { const tasks = JSON.parse(p.content); return tasks.every((t: any) => t.completed); }
+      catch { return false; }
+    }).length;
+    const weekly = Math.round((completedDays / 7) * 100);
+
+    await this.supabase.from('wellness_streaks')
+      .upsert({ user_id: userId, current_streak: next, longest_streak: longest, last_active_date: todayStr, weekly_consistency: weekly }, { onConflict: 'user_id' });
+  }
+}

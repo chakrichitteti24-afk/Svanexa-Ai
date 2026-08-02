@@ -11,6 +11,25 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+const ModeCard = ({ mode, title, icon: Icon, description, wellnessMode, setWellnessMode }: { mode: string, title: string, icon: any, description: string, wellnessMode: string, setWellnessMode: (m: any) => void }) => (
+  <div 
+    onClick={() => setWellnessMode(mode as any)}
+    className={`p-4 rounded-xl cursor-pointer border-2 transition-all ${
+      wellnessMode === mode 
+        ? 'border-pink-500 bg-pink-500/10' 
+        : 'border-border hover:border-pink-500/50 bg-card'
+    }`}
+  >
+    <div className="flex items-center gap-3 mb-2">
+      <div className={`p-2 rounded-lg ${wellnessMode === mode ? 'bg-pink-500/20 text-pink-500' : 'bg-secondary text-muted-foreground'}`}>
+        <Icon className="w-5 h-5" />
+      </div>
+      <h3 className={`font-semibold ${wellnessMode === mode ? 'text-pink-500' : 'text-foreground'}`}>{title}</h3>
+    </div>
+    <p className="text-xs text-muted-foreground">{description}</p>
+  </div>
+);
+
 export default function SignUpPage() {
   const [step, setStep] = useState(1);
   const [email, setEmail] = useState('');
@@ -76,24 +95,6 @@ export default function SignUpPage() {
     }
   };
 
-  const ModeCard = ({ mode, title, icon: Icon, description }: { mode: string, title: string, icon: any, description: string }) => (
-    <div 
-      onClick={() => setWellnessMode(mode as any)}
-      className={`p-4 rounded-xl cursor-pointer border-2 transition-all ${
-        wellnessMode === mode 
-          ? 'border-pink-500 bg-pink-500/10' 
-          : 'border-border hover:border-pink-500/50 bg-card'
-      }`}
-    >
-      <div className="flex items-center gap-3 mb-2">
-        <div className={`p-2 rounded-lg ${wellnessMode === mode ? 'bg-pink-500/20 text-pink-500' : 'bg-secondary text-muted-foreground'}`}>
-          <Icon className="w-5 h-5" />
-        </div>
-        <h3 className={`font-semibold ${wellnessMode === mode ? 'text-pink-500' : 'text-foreground'}`}>{title}</h3>
-      </div>
-      <p className="text-xs text-muted-foreground">{description}</p>
-    </div>
-  );
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-background p-4 selection:bg-pink-500/20">
@@ -275,18 +276,24 @@ export default function SignUpPage() {
                         title="General Wellness" 
                         icon={Heart} 
                         description="Focus on sleep, mood, hydration, and overall well-being." 
+                        wellnessMode={wellnessMode}
+                        setWellnessMode={setWellnessMode}
                       />
                       <ModeCard 
                         mode="pcos" 
                         title="PCOS / PCOD" 
                         icon={Activity} 
                         description="Tailored tracking for irregular cycles and hormonal symptoms." 
+                        wellnessMode={wellnessMode}
+                        setWellnessMode={setWellnessMode}
                       />
                       <ModeCard 
                         mode="pregnancy" 
                         title="Pregnancy" 
                         icon={Baby} 
                         description="Track weekly milestones, mother wellness, and baby development." 
+                        wellnessMode={wellnessMode}
+                        setWellnessMode={setWellnessMode}
                       />
                     </div>
                   </div>

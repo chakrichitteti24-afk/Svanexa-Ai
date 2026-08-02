@@ -65,6 +65,7 @@ export interface WellnessTask {
   id: string;
   text: string;
   category: string;
+  timeSlot: 'morning' | 'afternoon' | 'evening';
   completed: boolean;
   completedAt: string | null;
 }
@@ -73,6 +74,12 @@ export interface HealthState {
   profile: UserProfile | null;
   preferences: UserPreferences | null;
   todayLog: TodayLog;
+  checkinSlots: {
+    morning: { completed: boolean; completedAt: string | null };
+    afternoon: { completed: boolean; completedAt: string | null };
+    evening: { completed: boolean; completedAt: string | null };
+  };
+  allSlotsComplete: boolean;
   hasCheckedInToday: boolean;
   totalCheckIns: number;
   currentStreak: number;
@@ -120,6 +127,12 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
     profile: null,
     preferences: null,
     todayLog: { sleep: null, water: null, mood: null, stress: null, exercise: null },
+    checkinSlots: {
+      morning: { completed: false, completedAt: null },
+      afternoon: { completed: false, completedAt: null },
+      evening: { completed: false, completedAt: null },
+    },
+    allSlotsComplete: false,
     hasCheckedInToday: false,
     totalCheckIns: 0,
     currentStreak: 0,
@@ -141,6 +154,12 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       let profile: UserProfile | null = null;
       let preferences: UserPreferences | null = null;
       let todayLog: TodayLog = { sleep: null, water: null, mood: null, stress: null, exercise: null };
+      let checkinSlots = {
+        morning: { completed: false, completedAt: null },
+        afternoon: { completed: false, completedAt: null },
+        evening: { completed: false, completedAt: null },
+      };
+      let allSlotsComplete = false;
       let hasCheckedInToday = false;
       let totalCheckIns = 0;
       let currentStreak = 0;
@@ -152,6 +171,8 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         profile = data.profile;
         preferences = data.preferences;
         hasCheckedInToday = data.has_checked_in_today;
+        checkinSlots = data.checkin_slots || checkinSlots;
+        allSlotsComplete = data.all_slots_complete || false;
         totalCheckIns = data.total_logs_count;
         currentStreak = data.current_streak;
         cycleStatus = data.cycle_status;
@@ -173,6 +194,8 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         profile,
         preferences,
         todayLog,
+        checkinSlots,
+        allSlotsComplete,
         hasCheckedInToday,
         totalCheckIns,
         currentStreak,

@@ -180,7 +180,7 @@ body[data-mode="pregnancy"] {
 }
 
 /* =====================================================
-   GLASSMORPHISM UTILITY CLASSES
+   GLASSMORPHISM & PREMIUM UTILITY CLASSES
    ===================================================== */
 @layer components {
   .glass {
@@ -198,12 +198,13 @@ body[data-mode="pregnancy"] {
   }
 
   .glass-hover {
-    transition: background 0.2s, border-color 0.2s;
+    transition: background 0.3s, border-color 0.3s, box-shadow 0.3s, transform 0.3s;
   }
 
   .glass-hover:hover {
     background: rgba(24, 20, 40, 0.85);
     border-color: rgba(168, 85, 247, 0.25);
+    box-shadow: 0 8px 32px rgba(139, 92, 246, 0.08);
   }
 
   /* Premium gradient text responding to mode */
@@ -222,13 +223,13 @@ body[data-mode="pregnancy"] {
     border-radius: 9999px;
     font-weight: 600;
     letter-spacing: 0.01em;
-    transition: all 0.2s;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 4px 20px var(--hs-glow-violet);
   }
 
   .btn-primary:hover {
-    box-shadow: 0 6px 28px rgba(139, 92, 246, 0.4);
-    transform: translateY(-1px);
+    box-shadow: 0 8px 32px rgba(139, 92, 246, 0.45);
+    transform: translateY(-2px);
   }
 
   .btn-primary:active {
@@ -244,14 +245,35 @@ body[data-mode="pregnancy"] {
     box-shadow: 0 0 24px rgba(139, 92, 246, 0.2), 0 0 60px rgba(139, 92, 246, 0.08);
   }
 
+  /* Premium Card — enhanced glassmorphism */
+  .premium-card {
+    background: rgba(18, 16, 28, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 1.25rem;
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    box-shadow:
+      0 20px 50px -12px rgba(0, 0, 0, 0.4),
+      0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+    transition: border-color 0.4s ease, box-shadow 0.4s ease, transform 0.3s ease;
+  }
+
+  .premium-card:hover {
+    border-color: rgba(139, 92, 246, 0.2);
+    box-shadow:
+      0 20px 50px -12px rgba(0, 0, 0, 0.4),
+      0 0 30px rgba(139, 92, 246, 0.06),
+      0 0 0 1px rgba(139, 92, 246, 0.08) inset;
+  }
+
   /* Card glow on hover */
   .card-hover {
-    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s, border-color 0.3s;
   }
 
   .card-hover:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 32px rgba(168, 85, 247, 0.12);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 40px rgba(168, 85, 247, 0.12);
     border-color: rgba(168, 85, 247, 0.25);
   }
 

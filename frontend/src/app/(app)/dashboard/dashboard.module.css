@@ -1,18 +1,37 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 .dashboardContainer {
-  max-width: 430px;
+  max-width: 1200px;
+  width: 100%;
   margin: 0 auto;
   padding: 0 16px 96px 16px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   gap: 32px;
-  background-color: #05050A;
   color: #FFFFFF;
   font-family: 'Inter', sans-serif;
   flex: 1 0 auto;
   overflow-x: hidden;
+}
+
+@media (min-width: 768px) {
+  .dashboardContainer {
+    padding: 0 0 32px 0;
+  }
+}
+
+.dashboardGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+}
+
+@media (min-width: 1024px) {
+  .dashboardGrid {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
 }
 
 .welcomeContainer {
@@ -90,16 +109,26 @@
 }
 
 .premiumCard {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(18, 16, 28, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 24px;
   padding: 24px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  box-shadow:
+    0 20px 50px -12px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   position: relative;
   overflow: hidden;
   flex-shrink: 0;
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+.premiumCard:hover {
+  border-color: rgba(139, 92, 246, 0.2);
+  box-shadow:
+    0 20px 50px -12px rgba(0, 0, 0, 0.35),
+    0 0 30px rgba(139, 92, 246, 0.06);
 }
 
 .emptyStateContainer {
@@ -124,7 +153,7 @@
 /* AI Wellness Snapshot */
 .snapshotGrid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 16px;
 }
 
@@ -132,10 +161,17 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(18, 16, 28, 0.5);
   padding: 14px;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: border-color 0.3s, background 0.3s, transform 0.3s;
+}
+
+.snapshotItem:hover {
+  border-color: rgba(139, 92, 246, 0.2);
+  background: rgba(30, 25, 45, 0.6);
+  transform: translateY(-1px);
 }
 
 .snapshotIcon {
@@ -350,13 +386,13 @@
 /* Stats */
 .statsGrid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
   gap: 12px;
 }
 
 .statCard {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(18, 16, 28, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 20px;
   padding: 20px 12px;
   display: flex;
@@ -364,7 +400,13 @@
   align-items: center;
   text-align: center;
   flex-shrink: 0;
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(16px);
+  transition: border-color 0.3s, box-shadow 0.3s, transform 0.3s;
+}
+
+.statCard:hover {
+  border-color: rgba(139, 92, 246, 0.25);
+  box-shadow: 0 8px 24px rgba(139, 92, 246, 0.1);
 }
 
 .statValue {

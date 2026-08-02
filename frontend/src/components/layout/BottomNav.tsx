@@ -9,7 +9,6 @@ const mobileNavItems = [
   { name: 'Home', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Cycle', href: '/cycle', icon: CalendarHeart },
   { name: 'Check-In', href: '/check-in', icon: CheckSquare },
-  { name: 'AI', href: '/companion', icon: BrainCircuit },
   { name: 'Profile', href: '/profile', icon: User },
 ];
 

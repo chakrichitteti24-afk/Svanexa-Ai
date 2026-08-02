@@ -1,174 +1,238 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { toast } from 'sonner';
-import { Smile, Moon, Droplet, Dumbbell, Activity, ShieldAlert, Sparkles, Loader2 } from 'lucide-react';
-import { format } from 'date-fns';
-import { createClient } from '@/utils/supabase/client';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import { BrainCircuit, CheckCircle2, ChevronRight, Loader2, Sparkles, Send } from 'lucide-react';
+import { format } from 'date-fns';
 import { useHerSync } from '@/context/HerSyncContext';
+import { apiFetch } from '@/utils/api-client';
+import Image from 'next/image';
 
-const checkInSchema = z.object({
-  mood: z.string().min(1, 'Mood is required'),
-  sleep: z.number().min(0).max(24),
-  water: z.number().min(0).max(10),
-  exercise: z.number().min(0).max(360),
-  stress: z.number().min(1).max(10),
-  acne: z.number().min(1).max(10),
-  hairFall: z.string(),
-  bloating: z.string(),
-  fatigue: z.string(),
-  cramps: z.string(),
-  notes: z.string().optional(),
-});
+type SlotType = 'morning' | 'afternoon' | 'evening';
 
-type CheckInFormValues = z.infer<typeof checkInSchema>;
+// ── Conversational Wizard Types ──
+type QuestionType = 'choice' | 'slider' | 'text' | 'number';
 
-const MOODS = [
-  { value: 'happy', emoji: '😊', label: 'Happy' },
-  { value: 'calm', emoji: '😌', label: 'Calm' },
-  { value: 'anxious', emoji: '😰', label: 'Anxious' },
-  { value: 'sad', emoji: '😢', label: 'Sad' },
-  { value: 'angry', emoji: '😠', label: 'Angry' },
-  { value: 'mood_swings', emoji: '🎢', label: 'Swings' },
+interface Question {
+  id: string;
+  text: string;
+  type: QuestionType;
+  options?: { value: string | number; label: string; emoji?: string }[];
+  min?: number;
+  max?: number;
+  placeholder?: string;
+  condition?: (answers: any, mode: string) => boolean; // Only show if condition met
+}
+
+const MORNING_QUESTIONS: Question[] = [
+  { id: 'sleep', text: 'Good morning! How many hours did you sleep last night?', type: 'number', min: 0, max: 24, placeholder: 'e.g. 7.5' },
+  { id: 'mood', text: 'How do you feel after waking up?', type: 'choice', options: [
+      { value: 'happy', label: 'Happy', emoji: '😊' },
+      { value: 'calm', label: 'Calm', emoji: '😌' },
+      { value: 'tired', label: 'Tired', emoji: '🥱' },
+      { value: 'anxious', label: 'Anxious', emoji: '😰' },
+      { value: 'sad', label: 'Sad', emoji: '😢' },
+  ]},
+  { id: 'energy', text: 'What is your energy level right now?', type: 'choice', options: [
+      { value: 'Very Low', label: 'Very Low', emoji: '🪫' },
+      { value: 'Medium', label: 'Medium', emoji: '🔋' },
+      { value: 'Excellent', label: 'Excellent', emoji: '⚡' },
+  ]},
+  { id: 'water', text: 'Did you drink water after waking up?', type: 'choice', options: [
+      { value: 'yes', label: 'Yes', emoji: '💧' },
+      { value: 'no', label: 'Not yet', emoji: '🏜️' },
+  ]},
+  { id: 'breakfast', text: 'Did you have breakfast?', type: 'choice', options: [
+      { value: 'yes', label: 'Yes', emoji: '🍳' },
+      { value: 'no', label: 'Skipped it', emoji: '❌' },
+  ]},
+  { id: 'pcos_symptoms', text: 'Are you experiencing any PCOS symptoms today (bloating, cramps, acne)?', type: 'choice', condition: (a, mode) => mode === 'pcos', options: [
+      { value: 'none', label: 'None', emoji: '✨' },
+      { value: 'mild', label: 'Mild', emoji: '🤏' },
+      { value: 'severe', label: 'Severe', emoji: '😣' },
+  ]},
+  { id: 'pregnancy_nausea', text: 'Experiencing any morning sickness or nausea?', type: 'choice', condition: (a, mode) => mode === 'pregnancy', options: [
+      { value: 'none', label: 'No', emoji: '😌' },
+      { value: 'mild', label: 'A little', emoji: '🤢' },
+      { value: 'severe', label: 'Yes, a lot', emoji: '🤮' },
+  ]},
+  { id: 'notes', text: 'Anything else you\'d like to tell me before we start the day?', type: 'text', placeholder: 'Journal your thoughts...' },
 ];
 
-const SYMPTOM_SEVERITIES = ['none', 'mild', 'moderate', 'severe'];
+const AFTERNOON_QUESTIONS: Question[] = [
+  { id: 'water_so_far', text: 'Good afternoon! How many liters of water have you had so far today?', type: 'number', min: 0, max: 10, placeholder: 'e.g. 1.5' },
+  { id: 'lunch', text: 'Have you had lunch?', type: 'choice', options: [
+      { value: 'yes', label: 'Yes, healthy', emoji: '🥗' },
+      { value: 'yes_heavy', label: 'Yes, heavy', emoji: '🍔' },
+      { value: 'no', label: 'Not yet', emoji: '🕒' },
+  ]},
+  { id: 'exercise', text: 'Did you exercise or take a walk?', type: 'choice', options: [
+      { value: 'yes', label: 'Yes', emoji: '🏃‍♀️' },
+      { value: 'no', label: 'Not yet', emoji: '🛋️' },
+  ]},
+  { id: 'stress', text: 'How is your stress level right now?', type: 'slider', min: 1, max: 10 },
+  { id: 'mood', text: 'Current mood?', type: 'choice', options: [
+      { value: 'happy', label: 'Happy', emoji: '😊' },
+      { value: 'focused', label: 'Focused', emoji: '🧠' },
+      { value: 'stressed', label: 'Stressed', emoji: '😰' },
+      { value: 'tired', label: 'Tired', emoji: '🥱' },
+  ]},
+  { id: 'energy', text: 'Energy level?', type: 'choice', options: [
+      { value: 'high', label: 'High', emoji: '⚡' },
+      { value: 'medium', label: 'Medium', emoji: '🔋' },
+      { value: 'low', label: 'Crashing', emoji: '🪫' },
+  ]},
+  { id: 'notes', text: 'Any afternoon notes?', type: 'text', placeholder: 'How is the day going?' },
+];
 
-export default function CheckInPage() {
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
-  const { refreshAll } = useHerSync();
-  
-  const today = format(new Date(), 'yyyy-MM-dd');
-  const supabase = createClient();
+const EVENING_QUESTIONS: Question[] = [
+  { id: 'dinner', text: 'Good evening! Did you have dinner?', type: 'choice', options: [
+      { value: 'light', label: 'Light dinner', emoji: '🥗' },
+      { value: 'heavy', label: 'Heavy dinner', emoji: '🍝' },
+      { value: 'no', label: 'Skipped', emoji: '❌' },
+  ]},
+  { id: 'activity', text: 'Did you complete any physical activity today?', type: 'choice', options: [
+      { value: 'yes', label: 'Yes', emoji: '💪' },
+      { value: 'no', label: 'Rest day', emoji: '🧘‍♀️' },
+  ]},
+  { id: 'skin', text: 'Did you complete your skincare routine?', type: 'choice', options: [
+      { value: 'yes', label: 'Yes', emoji: '🧴' },
+      { value: 'no', label: 'Skipped', emoji: '💤' },
+  ]},
+  { id: 'total_water', text: 'Total water intake today (Liters)?', type: 'number', min: 0, max: 10, placeholder: 'e.g. 2.5' },
+  { id: 'overall_mood', text: 'Overall mood today?', type: 'choice', options: [
+      { value: 'great', label: 'Great', emoji: '🌟' },
+      { value: 'okay', label: 'Okay', emoji: '👍' },
+      { value: 'tough', label: 'Tough day', emoji: '🌧️' },
+  ]},
+  { id: 'health_rating', text: 'Rate your overall health today (1-5 stars)', type: 'slider', min: 1, max: 5 },
+  { id: 'reflection', text: 'Evening reflection: What went well today?', type: 'text', placeholder: 'Reflect on your day...' },
+];
+
+/** Returns which slot is active right now based on local time */
+function getCurrentSlot(): SlotType {
+  const h = new Date().getHours();
+  if (h >= 5  && h < 12) return 'morning';
+  if (h >= 12 && h < 18) return 'afternoon';
+  return 'evening';
+}
+
+export default function ConversationalCheckInPage() {
   const router = useRouter();
+  const { wellnessMode, aiName, refreshAll, allSlotsComplete } = useHerSync();
+  const activeSlot = getCurrentSlot();
 
-  const { register, handleSubmit, setValue, watch, reset } = useForm<CheckInFormValues>({
-    resolver: zodResolver(checkInSchema),
-    defaultValues: {
-      mood: 'calm',
-      sleep: 7.0,
-      water: 2.0,
-      exercise: 30,
-      stress: 5,
-      acne: 3,
-      hairFall: 'none',
-      bloating: 'none',
-      fatigue: 'none',
-      cramps: 'none',
-      notes: '',
-    },
+  const [loading, setLoading] = useState(true);
+  const [completedSlots, setCompletedSlots] = useState<Record<SlotType, { completed: boolean; completedAt: string | null; data: any }>>({
+    morning:   { completed: false, completedAt: null, data: null },
+    afternoon: { completed: false, completedAt: null, data: null },
+    evening:   { completed: false, completedAt: null, data: null },
   });
 
-  useEffect(() => {
-    async function fetchTodayData() {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          router.push('/login');
-          return;
-        }
-        setUserId(user.id);
+  // Conversation State
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [currentQIdx, setCurrentQIdx] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, any>>({});
+  const [chatHistory, setChatHistory] = useState<{ role: 'ai' | 'user'; text: string; emoji?: string }[]>([]);
+  const [saving, setSaving] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  
+  // Temporary input state
+  const [textInput, setTextInput] = useState('');
+  const [numInput, setNumInput] = useState<number | ''>('');
+  const [sliderInput, setSliderInput] = useState<number>(5);
 
-        const [
-          { data: sleepData },
-          { data: waterData },
-          { data: exerciseData },
-          { data: moodData },
-          { data: checkinData },
-          { data: skinData }
-        ] = await Promise.all([
-          supabase.from('sleep_logs').select('*').eq('user_id', user.id).eq('date', today).single(),
-          supabase.from('water_logs').select('*').eq('user_id', user.id).eq('date', today).single(),
-          supabase.from('exercise_logs').select('*').eq('user_id', user.id).eq('date', today).single(),
-          supabase.from('mood_logs').select('*').eq('user_id', user.id).eq('date', today).single(),
-          supabase.from('daily_checkins').select('*').eq('user_id', user.id).eq('date', today).single(),
-          supabase.from('skin_logs').select('*').eq('user_id', user.id).eq('date', today).single()
-        ]);
-
-        const formValues: any = {
-          sleep: sleepData ? sleepData.duration_hours : 7.0,
-          water: waterData ? waterData.amount_ml / 1000 : 2.0,
-          exercise: exerciseData ? exerciseData.duration_minutes : 30,
-          mood: moodData ? moodData.mood : 'calm',
-          stress: moodData ? moodData.intensity : 5,
-          notes: checkinData ? checkinData.summary : '',
-          acne: skinData && skinData.condition ? Number(skinData.condition) : 3,
-          hairFall: 'none',
-          bloating: 'none',
-          fatigue: 'none',
-          cramps: 'none'
-        };
-
-        reset(formValues);
-      } catch (err) {
-        console.error("No existing data for today or error fetching");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchTodayData();
-  }, [supabase, today, router, reset]);
-
-  const watchedMood = watch('mood');
-  const watchedSleep = watch('sleep');
-  const watchedWater = watch('water');
-  const watchedExercise = watch('exercise');
-  const watchedStress = watch('stress');
-  const watchedAcne = watch('acne');
-  const watchedHairFall = watch('hairFall');
-  const watchedBloating = watch('bloating');
-  const watchedFatigue = watch('fatigue');
-  const watchedCramps = watch('cramps');
-
-  const onSubmit = async (data: CheckInFormValues) => {
-    if (!userId) return;
-    setSaving(true);
-    
+  const fetchStatus = useCallback(async () => {
     try {
-      await Promise.all([
-        supabase.from('daily_checkins').upsert({ user_id: userId, date: today, summary: data.notes }, { onConflict: 'user_id,date' }),
-        supabase.from('mood_logs').upsert({ user_id: userId, date: today, mood: data.mood, intensity: data.stress }, { onConflict: 'id' }),
-        supabase.from('sleep_logs').upsert({ user_id: userId, date: today, duration_hours: data.sleep }, { onConflict: 'id' }),
-        supabase.from('water_logs').upsert({ user_id: userId, date: today, amount_ml: Math.round(data.water * 1000) }, { onConflict: 'id' }),
-        supabase.from('exercise_logs').upsert({ user_id: userId, date: today, duration_minutes: data.exercise, type: 'General' }, { onConflict: 'id' }),
-        supabase.from('skin_logs').upsert({ user_id: userId, date: today, condition: String(data.acne) }, { onConflict: 'id' })
-      ]);
+      const res = await apiFetch('/api/v1/health/checkin-status');
+      if (res.ok) {
+        const { data } = await res.json();
+        setCompletedSlots(data.slots);
+      }
+    } catch (err) {
+      console.error('Error fetching checkin status', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-      toast.success('Habits logged successfully!', {
-        description: 'Your wellness data is now synced across all modules.'
-      });
-      // Broadcast to all connected modules: Dashboard, Reports, Wellness Plan, AI Companion
+  useEffect(() => { fetchStatus(); }, [fetchStatus]);
+
+  useEffect(() => {
+    if (loading) return;
+    
+    // Pick question list based on current active slot
+    let qList = activeSlot === 'morning' ? MORNING_QUESTIONS : activeSlot === 'afternoon' ? AFTERNOON_QUESTIONS : EVENING_QUESTIONS;
+    
+    // Filter by conditions
+    qList = qList.filter(q => !q.condition || q.condition(answers, wellnessMode));
+    
+    setQuestions(qList);
+    
+    if (qList.length > 0 && chatHistory.length === 0) {
+      setChatHistory([{ role: 'ai', text: qList[0].text }]);
+      if (qList[0].type === 'slider') setSliderInput(Math.floor((qList[0].min! + qList[0].max!) / 2));
+    }
+  }, [loading, activeSlot, wellnessMode, answers, chatHistory.length]);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    }
+  }, [chatHistory, currentQIdx]);
+
+  const handleAnswer = (val: any, displayLabel: string, emoji?: string) => {
+    if (currentQIdx >= questions.length) return;
+    const currentQ = questions[currentQIdx];
+
+    const newAnswers = { ...answers, [currentQ.id]: val };
+    setAnswers(newAnswers);
+
+    const newUserMsg = { role: 'user' as const, text: displayLabel, emoji };
+    
+    // Determine next question
+    let nextIdx = currentQIdx + 1;
+    let nextQList = (activeSlot === 'morning' ? MORNING_QUESTIONS : activeSlot === 'afternoon' ? AFTERNOON_QUESTIONS : EVENING_QUESTIONS)
+      .filter(q => !q.condition || q.condition(newAnswers, wellnessMode));
+    
+    if (nextIdx < nextQList.length) {
+      const nextQ = nextQList[nextIdx];
+      setChatHistory(prev => [...prev, newUserMsg, { role: 'ai', text: nextQ.text }]);
+      setCurrentQIdx(nextIdx);
+      setTextInput('');
+      setNumInput('');
+      if (nextQ.type === 'slider') setSliderInput(Math.floor((nextQ.min! + nextQ.max!) / 2));
+    } else {
+      // Done
+      setChatHistory(prev => [...prev, newUserMsg, { role: 'ai', text: "Thank you! Saving your check-in..." }]);
+      submitCheckin(newAnswers);
+    }
+  };
+
+  const submitCheckin = async (finalAnswers: any) => {
+    setSaving(true);
+    try {
+      const res = await apiFetch('/api/v1/health/checkin', { method: 'POST', body: JSON.stringify({ slot: activeSlot, data: finalAnswers }) });
+      const result = await res.json();
+      if (!res.ok) {
+        toast.error('Failed to save check-in', { description: result.message });
+        setSaving(false);
+        return;
+      }
+      
+      const now = new Date().toISOString();
+      setCompletedSlots(prev => ({ ...prev, [activeSlot]: { completed: true, completedAt: now, data: finalAnswers } }));
+      toast.success(`${activeSlot} check-in completed!`);
       await refreshAll();
+      
+      setChatHistory(prev => [...prev, { role: 'ai', text: `All done! I've generated your ${activeSlot} wellness plan. Head back to the dashboard to see it!` }]);
     } catch (err: any) {
-      toast.error('Failed to save log', { description: err.message });
+      toast.error('Network Error', { description: err.message });
     } finally {
       setSaving(false);
     }
-  };
-
-  const adjustSleep = (amount: number) => {
-    const nextVal = Math.max(0, Math.min(24, Math.round((watchedSleep + amount) * 2) / 2));
-    setValue('sleep', nextVal);
-  };
-
-  const adjustWater = (amount: number) => {
-    const nextVal = Math.max(0, Math.min(10, Math.round((watchedWater + amount) * 4) / 4));
-    setValue('water', nextVal);
-  };
-
-  const adjustExercise = (amount: number) => {
-    const nextVal = Math.max(0, Math.min(360, watchedExercise + amount));
-    setValue('exercise', nextVal);
   };
 
   if (loading) {
@@ -179,326 +243,165 @@ export default function CheckInPage() {
     );
   }
 
+  const isCurrentSlotCompleted = completedSlots[activeSlot].completed;
+  const avatarSrc = allSlotsComplete ? '/ai-companion-happy.jpg' : '/ai-companion-neutral.jpg';
+
   return (
-    <div className="max-w-md mx-auto space-y-6 pb-24 animate-in fade-in duration-500">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight mb-1">Daily Log</h1>
-        <p className="text-xs text-muted-foreground">Log your status for: <span className="font-semibold" style={{ color: 'var(--hs-pink)' }}>{new Date().toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span></p>
+    <div className="max-w-2xl mx-auto w-full h-[calc(100vh-8rem)] flex flex-col pt-4 md:pt-8">
+      {/* Header */}
+      <div className="mb-4">
+        <h1 className="text-2xl font-bold tracking-tight mb-1 capitalize">{activeSlot} Check-in</h1>
+        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+          Guided by {aiName}
+        </p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        
-        {/* 1. Mood Selection */}
-        <Card className="border-border/40 bg-card/60 backdrop-blur-xs shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
-              <Smile className="w-4.5 h-4.5" style={{ color: 'var(--hs-pink)' }} /> {"How's your mood today?"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-3 gap-2">
-              {MOODS.map((m) => {
-                const isActive = watchedMood === m.value;
+      {isCurrentSlotCompleted ? (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-card border border-border/40 rounded-2xl shadow-sm"
+        >
+          <div className="w-24 h-24 rounded-full overflow-hidden mb-6 border-4 border-emerald-500/20 shadow-lg relative">
+            <Image src="/ai-companion-happy.jpg" alt={aiName} fill className="object-cover" />
+          </div>
+          <CheckCircle2 className="w-12 h-12 text-emerald-400 mb-4" />
+          <h2 className="text-xl font-bold text-emerald-500 mb-2">{activeSlot} Check-in Complete!</h2>
+          <p className="text-sm text-muted-foreground mb-6">
+            Completed at {format(new Date(completedSlots[activeSlot].completedAt!), 'h:mm a')}.<br/>
+            Your wellness plan has been updated.
+          </p>
+          <div className="flex gap-4">
+             <button onClick={() => router.push('/dashboard')} className="px-6 py-2.5 rounded-full bg-violet-600 hover:bg-violet-700 text-white font-semibold text-sm transition-colors">
+               Go to Dashboard
+             </button>
+          </div>
+        </motion.div>
+      ) : (
+        <div className="flex-1 flex flex-col bg-card/60 backdrop-blur-sm border border-border/40 rounded-2xl shadow-sm overflow-hidden">
+          {/* Chat Window */}
+          <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6" ref={scrollRef}>
+            <AnimatePresence initial={false}>
+              {chatHistory.map((msg, i) => {
+                const isUser = msg.role === 'user';
                 return (
-                  <button
-                    key={m.value}
-                    type="button"
-                    onClick={() => setValue('mood', m.value)}
-                    className={`h-16 flex flex-col items-center justify-center rounded-xl border text-center transition-all ${
-                      isActive 
-                        ? 'font-semibold scale-[1.03] shadow-xs' 
-                        : 'border-border/40 hover:bg-secondary/40 text-muted-foreground'
-                    }`}
-                    style={isActive ? { background: 'var(--hs-glow-pink)', borderColor: 'var(--hs-pink)', color: 'var(--hs-pink)' } : {}}
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`flex gap-3 max-w-[85%] ${isUser ? 'ml-auto flex-row-reverse' : ''}`}
                   >
-                    <span className="text-xl mb-0.5">{m.emoji}</span>
-                    <span className="text-[10px]">{m.label}</span>
-                  </button>
+                    {!isUser && (
+                      <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 shadow-sm border border-violet-500/30">
+                        <Image src={avatarSrc} alt={aiName} width={32} height={32} className="object-cover" />
+                      </div>
+                    )}
+                    <div className={`p-3.5 rounded-2xl text-sm ${isUser ? 'bg-gradient-to-br from-violet-500 to-pink-500 text-white rounded-tr-sm' : 'bg-secondary/40 text-foreground rounded-tl-sm border border-border/30'}`}>
+                      {msg.emoji && <span className="mr-2 text-lg">{msg.emoji}</span>}
+                      {msg.text}
+                    </div>
+                  </motion.div>
                 );
               })}
-            </div>
-          </CardContent>
-        </Card>
+              {saving && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-3 max-w-[85%]">
+                  <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 shadow-sm border border-violet-500/30">
+                    <Image src={avatarSrc} alt={aiName} width={32} height={32} className="object-cover" />
+                  </div>
+                  <div className="p-3.5 rounded-2xl text-sm bg-secondary/40 rounded-tl-sm border border-border/30 flex items-center gap-2 text-violet-400">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Saving...
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
-        {/* 2. Stepper Trackers (Sleep, Water, Exercise) */}
-        <Card className="border-border/40 bg-card/60 backdrop-blur-xs shadow-sm">
-          <CardContent className="pt-6 space-y-6">
-            
-            {/* Sleep Counter */}
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <span className="text-xs font-semibold flex items-center gap-1.5">
-                  <Moon className="w-4 h-4 text-blue-400" /> Sleep Duration
-                </span>
-                <p className="text-[10px] text-muted-foreground">Hours of rest</p>
-              </div>
-              <div className="flex items-center gap-3 bg-secondary/20 p-1.5 rounded-full border border-border/30">
-                <button
-                  type="button"
-                  onClick={() => adjustSleep(-0.5)}
-                  className="w-10 h-10 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-sm"
-                >
-                  -
-                </button>
-                <span className="w-12 text-center text-sm font-bold">{watchedSleep.toFixed(1)}h</span>
-                <button
-                  type="button"
-                  onClick={() => adjustSleep(0.5)}
-                  className="w-10 h-10 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-sm"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-
-            {/* Water Counter */}
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <span className="text-xs font-semibold flex items-center gap-1.5">
-                  <Droplet className="w-4 h-4 text-cyan-400" /> Hydration
-                </span>
-                <p className="text-[10px] text-muted-foreground">Liters of water</p>
-              </div>
-              <div className="flex items-center gap-3 bg-secondary/20 p-1.5 rounded-full border border-border/30">
-                <button
-                  type="button"
-                  onClick={() => adjustWater(-0.25)}
-                  className="w-10 h-10 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-sm"
-                >
-                  -
-                </button>
-                <span className="w-12 text-center text-sm font-bold">{watchedWater.toFixed(2)}L</span>
-                <button
-                  type="button"
-                  onClick={() => adjustWater(0.25)}
-                  className="w-10 h-10 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-sm"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-
-            {/* Exercise Counter */}
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <span className="text-xs font-semibold flex items-center gap-1.5">
-                  <Dumbbell className="w-4 h-4 text-emerald-400" /> Movement
-                </span>
-                <p className="text-[10px] text-muted-foreground">Active minutes</p>
-              </div>
-              <div className="flex items-center gap-3 bg-secondary/20 p-1.5 rounded-full border border-border/30">
-                <button
-                  type="button"
-                  onClick={() => adjustExercise(-5)}
-                  className="w-10 h-10 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-sm"
-                >
-                  -
-                </button>
-                <span className="w-12 text-center text-sm font-bold">{watchedExercise}m</span>
-                <button
-                  type="button"
-                  onClick={() => adjustExercise(5)}
-                  className="w-10 h-10 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-sm"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-
-          </CardContent>
-        </Card>
-
-        {/* 3. Sliders for Stress & Acne */}
-        <Card className="border-border/40 bg-card/60 backdrop-blur-xs shadow-sm">
-          <CardContent className="pt-6 space-y-6">
-            {/* Stress Counter */}
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <span className="text-xs font-semibold flex items-center gap-1.5">
-                  <Activity className="w-4 h-4 text-violet-400" /> Stress Intensity
-                </span>
-                <p className="text-[10px] text-muted-foreground">Scale of 1-10</p>
-              </div>
-              <div className="flex items-center gap-3 bg-secondary/20 p-1.5 rounded-full border border-border/30">
-                <button
-                  type="button"
-                  onClick={() => setValue('stress', Math.max(1, (watchedStress || 5) - 1))}
-                  className="w-10 h-10 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-sm"
-                >
-                  -
-                </button>
-                <span className="w-8 text-center text-sm font-bold">{watchedStress || 5}</span>
-                <button
-                  type="button"
-                  onClick={() => setValue('stress', Math.min(10, (watchedStress || 5) + 1))}
-                  className="w-10 h-10 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-sm"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-
-            {/* Acne Counter */}
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <span className="text-xs font-semibold flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-amber-400" /> Acne Severity
-                </span>
-                <p className="text-[10px] text-muted-foreground">Scale of 1-10</p>
-              </div>
-              <div className="flex items-center gap-3 bg-secondary/20 p-1.5 rounded-full border border-border/30">
-                <button
-                  type="button"
-                  onClick={() => setValue('acne', Math.max(1, (watchedAcne || 3) - 1))}
-                  className="w-10 h-10 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-sm"
-                >
-                  -
-                </button>
-                <span className="w-8 text-center text-sm font-bold">{watchedAcne || 3}</span>
-                <button
-                  type="button"
-                  onClick={() => setValue('acne', Math.min(10, (watchedAcne || 3) + 1))}
-                  className="w-10 h-10 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-sm"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 4. Symptoms Segmented Pills */}
-        <Card className="border-border/40 bg-card/60 backdrop-blur-xs shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
-              <ShieldAlert className="w-4.5 h-4.5" style={{ color: 'var(--hs-pink)' }} /> Physical Symptoms
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            
-            {/* Cramps */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Cramps</Label>
-              <div className="grid grid-cols-4 gap-1 bg-secondary/25 p-1 rounded-lg">
-                {SYMPTOM_SEVERITIES.map((sev) => {
-                  const isActive = watchedCramps === sev;
+          {/* Input Area */}
+          {!saving && questions[currentQIdx] && (
+            <div className="p-4 bg-background/50 border-t border-border/40">
+              {(() => {
+                const q = questions[currentQIdx];
+                if (q.type === 'choice') {
                   return (
-                    <button
-                      key={sev}
-                      type="button"
-                      onClick={() => setValue('cramps', sev)}
-                      className={`py-1.5 text-[10px] font-semibold rounded-md uppercase transition-all ${
-                        isActive 
-                          ? 'bg-pink-600 text-white shadow-xs' 
-                          : 'text-muted-foreground hover:bg-secondary/40'
-                      }`}
-                    >
-                      {sev}
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      {q.options?.map(opt => (
+                        <button
+                          key={opt.value}
+                          onClick={() => handleAnswer(opt.value, opt.label, opt.emoji)}
+                          className="px-4 py-2.5 rounded-full bg-secondary/50 hover:bg-violet-500/20 border border-border/50 hover:border-violet-500/50 text-sm font-medium transition-all flex items-center gap-2"
+                        >
+                          {opt.emoji && <span className="text-base">{opt.emoji}</span>}
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
                   );
-                })}
-              </div>
-            </div>
-
-            {/* Bloating */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Bloating</Label>
-              <div className="grid grid-cols-4 gap-1 bg-secondary/25 p-1 rounded-lg">
-                {SYMPTOM_SEVERITIES.map((sev) => {
-                  const isActive = watchedBloating === sev;
+                }
+                
+                if (q.type === 'slider') {
                   return (
-                    <button
-                      key={sev}
-                      type="button"
-                      onClick={() => setValue('bloating', sev)}
-                      className={`py-1.5 text-[10px] font-semibold rounded-md uppercase transition-all ${
-                        isActive 
-                          ? 'text-white shadow-xs' 
-                          : 'text-muted-foreground hover:bg-secondary/40'
-                      }`}
-                      style={isActive ? { background: 'var(--hs-pink)' } : {}}
-                    >
-                      {sev}
-                    </button>
+                    <div className="space-y-4 px-2 pb-2">
+                      <div className="flex justify-between text-xs text-muted-foreground font-semibold">
+                        <span>Low ({q.min})</span>
+                        <span className="text-lg text-violet-400 font-bold">{sliderInput}</span>
+                        <span>High ({q.max})</span>
+                      </div>
+                      <input 
+                        type="range" min={q.min} max={q.max} value={sliderInput} 
+                        onChange={e => setSliderInput(parseInt(e.target.value))}
+                        className="w-full accent-violet-500"
+                      />
+                      <button onClick={() => handleAnswer(sliderInput, sliderInput.toString())} className="w-full py-2.5 rounded-full bg-violet-600 hover:bg-violet-700 text-white font-semibold text-sm transition-colors flex items-center justify-center gap-2">
+                        Continue <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
                   );
-                })}
-              </div>
-            </div>
+                }
 
-            {/* Fatigue */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Fatigue</Label>
-              <div className="grid grid-cols-4 gap-1 bg-secondary/25 p-1 rounded-lg">
-                {SYMPTOM_SEVERITIES.map((sev) => {
-                  const isActive = watchedFatigue === sev;
+                if (q.type === 'number') {
                   return (
-                    <button
-                      key={sev}
-                      type="button"
-                      onClick={() => setValue('fatigue', sev)}
-                      className={`py-1.5 text-[10px] font-semibold rounded-md uppercase transition-all ${
-                        isActive 
-                          ? 'text-white shadow-xs' 
-                          : 'text-muted-foreground hover:bg-secondary/40'
-                      }`}
-                      style={isActive ? { background: 'var(--hs-pink)' } : {}}
-                    >
-                      {sev}
-                    </button>
+                    <div className="flex gap-2">
+                      <input 
+                        type="number" min={q.min} max={q.max} step="0.5"
+                        placeholder={q.placeholder}
+                        value={numInput} onChange={e => setNumInput(parseFloat(e.target.value) || '')}
+                        className="flex-1 bg-secondary/40 border border-border/50 rounded-full px-4 py-2.5 text-sm outline-none focus:border-violet-500"
+                        onKeyDown={e => { if(e.key === 'Enter' && numInput !== '') handleAnswer(numInput, numInput.toString()) }}
+                      />
+                      <button 
+                        onClick={() => handleAnswer(numInput, numInput.toString())} disabled={numInput === ''}
+                        className="w-11 h-11 rounded-full bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white flex items-center justify-center flex-shrink-0 transition-colors"
+                      >
+                        <Send className="w-4 h-4" />
+                      </button>
+                    </div>
                   );
-                })}
-              </div>
-            </div>
+                }
 
-            {/* Hair Fall */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Hair Fall</Label>
-              <div className="grid grid-cols-4 gap-1 bg-secondary/25 p-1 rounded-lg">
-                {SYMPTOM_SEVERITIES.map((sev) => {
-                  const isActive = watchedHairFall === sev;
+                if (q.type === 'text') {
                   return (
-                    <button
-                      key={sev}
-                      type="button"
-                      onClick={() => setValue('hairFall', sev)}
-                      className={`py-1.5 text-[10px] font-semibold rounded-md uppercase transition-all ${
-                        isActive 
-                          ? 'text-white shadow-xs' 
-                          : 'text-muted-foreground hover:bg-secondary/40'
-                      }`}
-                      style={isActive ? { background: 'var(--hs-pink)' } : {}}
-                    >
-                      {sev}
-                    </button>
+                    <div className="flex gap-2">
+                      <input 
+                        type="text"
+                        placeholder={q.placeholder}
+                        value={textInput} onChange={e => setTextInput(e.target.value)}
+                        className="flex-1 bg-secondary/40 border border-border/50 rounded-full px-4 py-2.5 text-sm outline-none focus:border-violet-500"
+                        onKeyDown={e => { if(e.key === 'Enter' && textInput.trim()) handleAnswer(textInput.trim(), textInput.trim()) }}
+                      />
+                      <button 
+                        onClick={() => handleAnswer(textInput.trim(), textInput.trim())} disabled={!textInput.trim()}
+                        className="w-11 h-11 rounded-full bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white flex items-center justify-center flex-shrink-0 transition-colors"
+                      >
+                        <Send className="w-4 h-4" />
+                      </button>
+                    </div>
                   );
-                })}
-              </div>
+                }
+              })()}
             </div>
-
-          </CardContent>
-        </Card>
-
-        {/* Notes */}
-        <div className="space-y-1.5">
-          <Label htmlFor="notes" className="text-xs font-semibold">Additional Notes</Label>
-          <Textarea 
-            id="notes" 
-            placeholder="Any custom comments or observations..." 
-            className="text-xs rounded-xl bg-card border-border/40 focus-visible:ring-pink-500 min-h-[70px]"
-            {...register('notes')} 
-          />
+          )}
         </div>
-
-        {/* Submit */}
-        <Button 
-          type="submit" 
-          disabled={saving}
-          className="w-full h-12 rounded-xl text-white font-medium text-sm flex items-center justify-center gap-1 transition-transform active:scale-98 shadow-md"
-          style={{ background: 'linear-gradient(135deg, var(--hs-violet), var(--hs-pink))' }}
-        >
-          {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Save Log'}
-        </Button>
-      </form>
+      )}
     </div>
   );
 }

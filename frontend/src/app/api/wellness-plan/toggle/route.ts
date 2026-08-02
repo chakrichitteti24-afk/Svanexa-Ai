@@ -1,0 +1,42 @@
+import { NextResponse } from 'next/server';
+import { createClient } from '@/utils/supabase/server';
+import { WellnessPlanService } from '@/lib/services/wellness-plan-service';
+import { format } from 'date-fns';
+
+export async function POST(req: Request) {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Fallback if not passed via URL segments, read from body
+    let planId = '';
+    let taskId = '';
+
+    try {
+      const body = await req.json();
+      planId = body.planId;
+      taskId = body.taskId;
+    } catch {
+      // If params aren't in body, perhaps they are in the URL, but toggle is just /toggle 
+      // Next.js App router doesn't parse body if we just do params unless the folder structure is [planId] etc.
+    }
+
+    if (!planId || !taskId) {
+      return NextResponse.json({ success: false, error: 'planId and taskId are required in body' }, { status: 400 });
+    }
+
+    const userId = user.id;
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+
+    const service = new WellnessPlanService(supabase as any);
+    const result = await service.toggleTask(userId, planId, taskId, todayStr);
+
+    return NextResponse.json({ success: true, ...result });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}

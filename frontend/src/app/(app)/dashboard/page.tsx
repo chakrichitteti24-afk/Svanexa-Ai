@@ -10,6 +10,8 @@ import {
 import { useHerSync } from '@/context/HerSyncContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
+import { apiFetch } from '@/utils/api-client';
+import { toast } from 'sonner';
 import styles from './dashboard.module.css';
 
 export default function DashboardPage() {
@@ -17,7 +19,8 @@ export default function DashboardPage() {
     profile,
     preferences,
     todayLog: l,
-    hasCheckedInToday,
+    checkinSlots,
+    allSlotsComplete,
     totalCheckIns,
     currentStreak,
     cycleStatus,
@@ -27,22 +30,25 @@ export default function DashboardPage() {
     userName,
     aiName,
     isLoading,
+    refreshAll,
   } = useHerSync();
-
-  const [showWelcome, setShowWelcome] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return !sessionStorage.getItem('hersync_welcome_shown');
-    }
-    return true;
-  });
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [togglingTask, setTogglingTask] = useState<string | null>(null);
 
   useEffect(() => {
-    if (showWelcome && !isLoading) {
-      sessionStorage.setItem('hersync_welcome_shown', 'true');
+    if (isLoading) return;
+    const todayKey = `hersync_greeted_${new Date().toISOString().slice(0, 10)}`;
+    if (!localStorage.getItem(todayKey)) {
+      // First visit today — show the welcome animation once
+      setShowWelcome(true);
+      localStorage.setItem(todayKey, '1');
+      // Clean up yesterday's key to avoid localStorage bloat
+      const yesterdayKey = `hersync_greeted_${new Date(Date.now() - 86400000).toISOString().slice(0, 10)}`;
+      localStorage.removeItem(yesterdayKey);
       const timer = setTimeout(() => setShowWelcome(false), 2800);
       return () => clearTimeout(timer);
     }
-  }, [isLoading, showWelcome]);
+  }, [isLoading]);
 
   const getGreetingTime = () => {
     const hour = new Date().getHours();
@@ -55,11 +61,11 @@ export default function DashboardPage() {
   const isMorning = getGreetingTime() === 'Morning';
   const isEvening = getGreetingTime() === 'Evening';
 
-  const hasDataToday = hasCheckedInToday && !!l && (l.sleep || l.water || l.mood || l.stress || l.exercise);
+  const hasDataToday = !!l && (l.sleep !== null || l.water !== null || l.mood !== null || l.stress !== null || l.exercise !== null);
 
   const generateObservation = () => {
     if (!hasDataToday) {
-      return "Complete your daily check-in so I can provide personalized wellness insights just for you today.";
+      return "Complete your daily check-ins so I can provide personalized wellness insights just for you today.";
     }
     let obs = '';
     if (l.sleep) {
@@ -104,6 +110,37 @@ export default function DashboardPage() {
 
   const completedTasks = wellnessTasks.filter(t => t.completed).length;
   const totalTasks = wellnessTasks.length;
+
+  const getActiveTimeSlot = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'morning';
+    if (hour < 18) return 'afternoon';
+    return 'evening';
+  };
+  const activeSlot = getActiveTimeSlot();
+  const activeSlotTitle = activeSlot === 'morning' ? 'Morning 🌅' : activeSlot === 'afternoon' ? 'Afternoon ☀️' : 'Evening 🌙';
+  const isCheckinCompleted = checkinSlots?.[activeSlot]?.completed;
+  
+  const slotTasks = wellnessTasks.filter(t => t.timeSlot === activeSlot);
+  const areTasksCompleted = slotTasks.length > 0 && slotTasks.every(t => t.completed);
+
+  const handleToggleTask = async (taskId: string, planId: string) => {
+    if (togglingTask) return;
+    setTogglingTask(taskId);
+    try {
+      const res = await apiFetch('/api/v1/wellness-plan/toggle', {
+        method: 'POST',
+        body: JSON.stringify({ taskId, planId }),
+      });
+      if (res.ok) {
+        await refreshAll();
+      }
+    } catch (error) {
+      toast.error('Failed to update task');
+    } finally {
+      setTogglingTask(null);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -162,7 +199,7 @@ export default function DashboardPage() {
           <h1 className={styles.pageTitle}>{greeting}, {userName}</h1>
           <p className={styles.pageSubtitle}>Here is your wellness overview for today.</p>
         </div>
-        {!hasCheckedInToday && (
+        {!allSlotsComplete && (
           <Link
             href="/check-in"
             className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full transition-all"
@@ -172,12 +209,14 @@ export default function DashboardPage() {
               border: '1px solid var(--hs-glass-border)'
             }}
           >
-            Log Today <ArrowRight className="w-3 h-3" />
+            Complete Check-in <ArrowRight className="w-3 h-3" />
           </Link>
         )}
       </motion.header>
-
-      {/* AI WELLNESS SNAPSHOT */}
+      
+      <div className={styles.dashboardGrid}>
+        <div className="flex flex-col gap-8">
+          {/* AI WELLNESS SNAPSHOT */}
       <motion.section
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
@@ -189,7 +228,7 @@ export default function DashboardPage() {
             <div className={styles.emptyStateContainer}>
               <Sparkles className="w-8 h-8 mb-3 opacity-50" style={{ color: 'var(--hs-pink)' }} />
               <p className={styles.emptyStateText}>
-                Complete today's check-in to see your personalized wellness snapshot.
+                Complete today&apos;s check-ins to see your personalized wellness snapshot.
               </p>
               <Link href="/check-in" className="mt-3 text-xs font-semibold transition-colors hover:opacity-80" style={{ color: 'var(--hs-pink)' }}>
                 Log Now →
@@ -264,7 +303,7 @@ export default function DashboardPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3, duration: 0.5 }}
       >
-        <h2 className={styles.sectionTitle}>{aiName}'s Insight</h2>
+        <h2 className={styles.sectionTitle}>{aiName}&apos;s Insight</h2>
         <div className={`${styles.premiumCard} ${styles.observationCard}`}>
           <div className={styles.observationHeader}>
             <div className={styles.observationAvatar}>
@@ -272,69 +311,74 @@ export default function DashboardPage() {
             </div>
           </div>
           <p className={styles.observationText}>{generateObservation()}</p>
-          <Link
-            href="/companion"
-            className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold transition-colors hover:opacity-80"
-            style={{ color: 'var(--hs-pink)' }}
-          >
-            Chat with {aiName} <ArrowRight className="w-3 h-3" />
-          </Link>
+
         </div>
       </motion.section>
 
-      {/* DAILY TIMELINE */}
+      {/* ACTIVE WELLNESS PLAN */}
       <motion.section
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4, duration: 0.5 }}
       >
-        <h2 className={styles.sectionTitle}>Daily Timeline</h2>
-        <div className={styles.timelineContainer}>
-          {!hasDataToday ? (
-            <div className={styles.emptyStateContainer} style={{ background: 'rgba(255,255,255,0.02)' }}>
-              <p className={styles.emptyStateText}>No wellness data recorded today.</p>
+        <h2 className={styles.sectionTitle}>Today's Active Wellness Plan</h2>
+        <div className={styles.premiumCard} style={{ padding: '1.25rem' }}>
+          
+          {!isCheckinCompleted ? (
+            <div className="flex flex-col items-center text-center py-6">
+               <Sun className="w-10 h-10 text-violet-400 mb-3 opacity-60" />
+               <h3 className="font-semibold text-foreground mb-1 text-lg">Your {activeSlotTitle} plan is waiting!</h3>
+               <p className="text-sm text-muted-foreground mb-4 max-w-[280px]">
+                 Complete your {activeSlot} check-in to generate your personalized tasks based on how you feel right now.
+               </p>
+               <Link href="/check-in" className="px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white font-medium text-sm rounded-full transition-colors">
+                 Start Check-in
+               </Link>
+            </div>
+          ) : areTasksCompleted ? (
+            <div className="flex flex-col items-center text-center py-6">
+              <Check className="w-12 h-12 text-emerald-500 mb-3 p-2 bg-emerald-500/10 rounded-full" />
+              <h3 className="font-semibold text-emerald-500 mb-2 text-lg">
+                {activeSlot === 'evening' ? "🎉 Today's Wellness Journey Completed!" : `✓ ${activeSlotTitle} Tasks Completed`}
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {activeSlot === 'evening' 
+                  ? "Great job today! See you tomorrow." 
+                  : `Incredible work. Check back in the ${activeSlot === 'morning' ? 'afternoon' : 'evening'} for your next plan.`}
+              </p>
             </div>
           ) : (
-            <div className={styles.timeline}>
-              {(l.sleep || l.mood) && (
-                <div className={styles.timelineItem}>
-                  <div className={styles.timelineIconWrapper}><Sun className="w-4 h-4" /></div>
-                  <div className={styles.timelineContent}>
-                    <div className={styles.timelineTime}>Morning 🌅</div>
-                    <div className={styles.timelineDataRow}>
-                      {l.sleep && <span>Sleep: {l.sleep}h</span>}
-                      {l.mood && <span>Mood: <span style={{ textTransform: 'capitalize' }}>{l.mood}</span></span>}
-                    </div>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-2 mb-2">
+                 <Sparkles className="w-4 h-4 text-pink-500" />
+                 <span className="font-semibold text-foreground">{activeSlotTitle} Tasks</span>
+              </div>
+              
+              {slotTasks.map(task => (
+                <div 
+                  key={task.id} 
+                  onClick={() => handleToggleTask(task.id, wellnessTasks[0]?.id || '')} // planId is same for all tasks today
+                  className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all cursor-pointer ${task.completed ? 'bg-secondary/40 border-border/30 opacity-60' : 'bg-card border-violet-500/20 hover:border-violet-500/50 shadow-sm'}`}
+                >
+                  <button className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors ${task.completed ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-violet-400 text-transparent'}`}>
+                    {togglingTask === task.id ? <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-500" /> : <Check className="w-3.5 h-3.5" />}
+                  </button>
+                  <div className="flex-1">
+                    <p className={`text-sm font-medium ${task.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                      {task.text}
+                    </p>
+                    <span className="text-[10px] font-semibold text-violet-400 mt-1 uppercase tracking-wider bg-violet-500/10 px-2 py-0.5 rounded-full inline-block">
+                      {task.category}
+                    </span>
                   </div>
                 </div>
-              )}
-              {(l.water || l.stress) && (
-                <div className={styles.timelineItem}>
-                  <div className={styles.timelineIconWrapper}><Activity className="w-4 h-4" /></div>
-                  <div className={styles.timelineContent}>
-                    <div className={styles.timelineTime}>Afternoon ☀️</div>
-                    <div className={styles.timelineDataRow}>
-                      {l.water && <span>Water: {l.water}L</span>}
-                      {l.stress && <span>Stress: {l.stress}/10</span>}
-                    </div>
-                  </div>
-                </div>
-              )}
-              {l.exercise && (
-                <div className={styles.timelineItem}>
-                  <div className={styles.timelineIconWrapper}><Sunset className="w-4 h-4" /></div>
-                  <div className={styles.timelineContent}>
-                    <div className={styles.timelineTime}>Evening 🌙</div>
-                    <div className={styles.timelineDataRow}>
-                      <span>Activity: {l.exercise}m</span>
-                    </div>
-                  </div>
-                </div>
-              )}
+              ))}
             </div>
           )}
         </div>
       </motion.section>
+      </div>
+      <div className="flex flex-col gap-8">
 
       {/* TODAY'S WELLNESS GOALS */}
       <motion.section
@@ -455,6 +499,8 @@ export default function DashboardPage() {
           </motion.div>
         </div>
       </motion.section>
+      </div>
+    </div>
     </div>
   );
 }

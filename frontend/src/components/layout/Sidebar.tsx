@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
@@ -20,7 +21,6 @@ const navItems = [
   { name: 'Daily Check-In', href: '/check-in', icon: CheckSquare },
   { name: 'Cycle Tracker', href: '/cycle', icon: CalendarHeart },
   { name: 'Skin Tracker', href: '/skin', icon: Droplets },
-  { name: 'AI Companion', href: '/companion', icon: BrainCircuit },
   { name: 'Wellness Plan', href: '/wellness-plan', icon: Award, premium: true },
   { name: 'Reports', href: '/reports', icon: LineChart },
   { name: 'Profile', href: '/profile', icon: User },
@@ -41,8 +41,8 @@ export function Sidebar({ className }: { className?: string }) {
       {/* Logo */}
       <div className="h-16 flex items-center px-6 border-b border-[rgba(168,85,247,0.1)] shrink-0">
         <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-pink-500 to-violet-600 flex items-center justify-center shadow-lg shadow-violet-500/30">
-            <Sparkles className="h-4 w-4 text-white" />
+          <div className="w-8 h-8 rounded-xl overflow-hidden shadow-lg shadow-violet-500/30 relative">
+            <Image src="/logo.jpg" alt="HerSync" fill className="object-cover" />
           </div>
           <span className="text-xl font-bold gradient-text tracking-tight">HerSync</span>
         </Link>

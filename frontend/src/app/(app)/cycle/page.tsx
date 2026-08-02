@@ -265,7 +265,7 @@ export default function NativeCycleTracker() {
   const isPeriod = selectedDate ? isPeriodDay(selectedDate) : false;
 
   return (
-    <div className="min-h-screen bg-background pb-20 select-none">
+    <div className="min-h-screen bg-background pb-20 select-none max-w-6xl mx-auto w-full">
       
       {/* ─── NATIVE HEADER ─── */}
       <div className="pt-12 pb-6 px-6 flex items-center justify-between bg-background z-10 sticky top-0">

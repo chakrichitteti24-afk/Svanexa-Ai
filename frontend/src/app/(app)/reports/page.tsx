@@ -126,14 +126,14 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="max-w-md mx-auto space-y-6 pb-24 animate-in fade-in duration-500">
+    <div className="max-w-6xl mx-auto w-full space-y-6 pb-24 animate-in fade-in duration-500 md:py-8">
       <div>
         <h1 className="text-2xl font-bold tracking-tight mb-1">Health Reports</h1>
         <p className="text-xs text-muted-foreground">Comprehensive logs analysis and historical patterns.</p>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="bg-gradient-to-br from-pink-500/10 to-transparent border-pink-500/20 shadow-sm">
           <CardContent className="p-6 flex flex-col items-center text-center">
             <FileText className="w-8 h-8 text-pink-500 mb-3" />
@@ -165,7 +165,7 @@ export default function ReportsPage() {
       </div>
 
       {chartData.length >= 3 ? (
-        <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Stress & Mood Chart */}
           <Card className="shadow-sm">
             <CardHeader>
@@ -224,7 +224,7 @@ export default function ReportsPage() {
       )}
 
       {/* Skin & Cycle text summary */}
-      <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="shadow-sm">
           <CardHeader>
             <CardTitle>Skin Health Summary</CardTitle>

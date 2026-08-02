@@ -121,7 +121,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="max-w-md mx-auto space-y-6 pb-24 animate-in fade-in duration-500">
+    <div className="max-w-4xl mx-auto w-full space-y-6 pb-24 animate-in fade-in duration-500 md:py-8">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight mb-1">My Profile</h1>
@@ -141,7 +141,7 @@ export default function ProfilePage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-xs">First Name</Label>
                 <Input 
@@ -205,7 +205,7 @@ export default function ProfilePage() {
               <Select value={userMode} onValueChange={(val: string | null) => val && setUserMode(val as 'general' | 'pcos' | 'pregnancy')}>
                 <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="general">General Women's Wellness</SelectItem>
+                  <SelectItem value="general">General Women&apos;s Wellness</SelectItem>
                   <SelectItem value="pcos">PCOS / PCOD Mode</SelectItem>
                   <SelectItem value="pregnancy">Pregnancy Mode</SelectItem>
                 </SelectContent>

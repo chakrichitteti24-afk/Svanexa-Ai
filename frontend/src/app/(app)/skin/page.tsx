@@ -96,14 +96,14 @@ export default function SkinTrackerPage() {
   }
 
   return (
-    <div className="max-w-md mx-auto space-y-6 pb-24 animate-in fade-in duration-500">
+    <div className="max-w-6xl mx-auto w-full space-y-6 pb-24 animate-in fade-in duration-500 md:py-8">
       <div>
         <h1 className="text-2xl font-bold tracking-tight mb-1">Skin Log</h1>
         <p className="text-xs text-muted-foreground">Monitor skin indicators and track visual progress.</p>
       </div>
 
-      <div className="space-y-6">
-        <Card className="border-border/40 bg-card/60 backdrop-blur-xs shadow-sm">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card className="border-border/40 bg-card/60 backdrop-blur-xs shadow-sm h-fit">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold">{"Log Today's Skin"}</CardTitle>
             <CardDescription className="text-[10px]">Record daily skin severity</CardDescription>

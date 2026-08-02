@@ -3,6 +3,7 @@
 import { Menu, Sparkles } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { Sidebar } from './Sidebar';
+import Image from 'next/image';
 import Link from 'next/link';
 
 export function Navbar() {
@@ -10,8 +11,8 @@ export function Navbar() {
     <header className="h-14 flex items-center justify-between px-4 sticky top-0 z-40 md:hidden bg-[rgba(10,8,18,0.88)] backdrop-blur-2xl border-b border-[rgba(168,85,247,0.1)] shrink-0">
       {/* Brand */}
       <Link href="/" className="flex items-center gap-2 group">
-        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-pink-500 to-violet-600 flex items-center justify-center shadow-md shadow-violet-500/30">
-          <Sparkles className="h-3.5 w-3.5 text-white" />
+        <div className="w-7 h-7 rounded-lg overflow-hidden shadow-md shadow-violet-500/30 relative">
+          <Image src="/logo.jpg" alt="HerSync" fill className="object-cover" />
         </div>
         <span className="text-base font-bold gradient-text tracking-tight">HerSync</span>
       </Link>

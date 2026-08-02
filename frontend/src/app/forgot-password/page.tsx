@@ -43,7 +43,7 @@ export default function ForgotPasswordPage() {
             <Heart className="w-6 h-6 fill-white" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Reset Password</h1>
-          <p className="text-sm text-muted-foreground">We'll send you a secure link to reset it.</p>
+          <p className="text-sm text-muted-foreground">We&apos;ll send you a secure link to reset it.</p>
         </div>
 
         <Card className="border-pink-500/10 shadow-xl shadow-pink-500/5 bg-card/60 backdrop-blur-xl">
