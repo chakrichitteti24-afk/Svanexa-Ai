@@ -138,15 +138,15 @@ export function DashboardMascot() {
         <motion.div
           animate={{ scaleX: direction === 'left' ? -1 : 1 }}
           transition={{ duration: 0.2 }}
-          className="w-full h-full relative"
-          style={{ mixBlendMode: 'screen' }}
+          className="w-full h-full relative rounded-full overflow-hidden border-2 border-pink-500/40"
+          style={{ filter: 'drop-shadow(0 4px 12px rgba(236, 72, 153, 0.4))' }}
         >
           <Image
             src={getImageSrc()}
             alt="Dashboard Mascot"
             fill
             sizes="80px"
-            style={{ objectFit: 'contain' }}
+            style={{ objectFit: 'cover' }}
             priority
           />
         </motion.div>

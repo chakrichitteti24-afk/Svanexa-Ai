@@ -1,32 +1,33 @@
 /* FAB Button */
 .fab {
-  position: fixed;
-  bottom: 5.5rem;
-  right: 1rem;
-  z-index: 50;
-  width: 3.75rem;
-  height: 3.75rem;
+  position: fixed !important;
+  bottom: 90px;
+  right: 16px;
+  z-index: 9999 !important;
+  width: 64px;
+  height: 64px;
   border-radius: 9999px;
   background: linear-gradient(135deg, var(--hs-violet), var(--hs-pink));
-  box-shadow: 0 8px 24px var(--hs-glow-pink);
+  box-shadow: 0 8px 25px rgba(236, 72, 153, 0.45), 0 0 20px rgba(139, 92, 246, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 2px solid rgba(255, 255, 255, 0.15);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s ease;
+  border: 2.5px solid rgba(255, 255, 255, 0.9);
   outline: none;
-  padding: 0;
+  padding: 2px;
   overflow: hidden;
+  will-change: transform;
 }
 
 @media (min-width: 768px) {
   .fab {
-    bottom: 2rem;
-    right: 2rem;
-    width: 4.25rem;
-    height: 4.25rem;
+    bottom: 24px;
+    right: 24px;
+    width: 72px;
+    height: 72px;
   }
 }
 
@@ -34,12 +35,11 @@
 .fabAvatar {
   width: 100% !important;
   height: 100% !important;
-  object-fit: contain;
+  object-fit: cover;
   border-radius: 9999px;
   position: relative;
   z-index: 1;
-  mix-blend-mode: screen;
-  background-color: black;
+  transition: transform 0.3s ease;
 }
 
 .fab:hover {

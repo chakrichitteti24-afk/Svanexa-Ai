@@ -70,14 +70,14 @@ export function FloatingCompanion() {
   const pathname = usePathname();
 
   const getDynamicAvatar = () => {
-    if (allSlotsComplete) return '/mascot-cute.jpg';
-    if (!todayLog || !todayLog.mood) return '/mascot-sitting.jpg';
+    if (allSlotsComplete) return '/ai-companion-happy.jpg';
+    if (!todayLog || !todayLog.mood) return '/ai-companion-sitting.jpg';
     const mood = todayLog.mood.toLowerCase();
-    if (['sad'].includes(mood)) return '/mascot-thinking.jpg'; // Thinking/empathetic
-    if (['anxious', 'stress', 'overwhelmed', 'mood_swings'].includes(mood)) return '/mascot-thinking.jpg';
-    if (['angry', 'frustrated'].includes(mood)) return '/mascot-angry.jpg';
-    if (['happy', 'joyful', 'excited'].includes(mood)) return '/mascot-cute.jpg';
-    return '/mascot-sitting.jpg';
+    if (['sad', 'depressed', 'gloomy'].includes(mood)) return '/ai-companion-sad.jpg';
+    if (['anxious', 'stress', 'overwhelmed', 'mood_swings', 'nervous'].includes(mood)) return '/ai-companion-anxious.jpg';
+    if (['angry', 'frustrated', 'irritated'].includes(mood)) return '/ai-companion-angry.jpg';
+    if (['happy', 'joyful', 'excited', 'calm', 'energetic'].includes(mood)) return '/ai-companion-happy.jpg';
+    return '/ai-companion-neutral.jpg';
   };
   
   const avatarSrc = getDynamicAvatar();
@@ -276,21 +276,25 @@ export function FloatingCompanion() {
   return (
     <>
       {/* Anime Girl FAB */}
-      <button
+      <motion.button
         className={styles.fab}
         onClick={() => setIsOpen(v => !v)}
         aria-label="Open AI Companion"
+        animate={{ y: [0, -5, 0] }}
+        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+        whileHover={{ scale: 1.08 }}
+        whileTap={{ scale: 0.94 }}
       >
         <span className={styles.fabPulse} />
         <Image
           src={avatarSrc}
           alt="AI Companion"
-          width={56}
-          height={56}
+          width={72}
+          height={72}
           className={styles.fabAvatar}
           priority
         />
-      </button>
+      </motion.button>
 
       <AnimatePresence>
         {isOpen && (
