@@ -248,10 +248,24 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      if (
+        event.reason &&
+        (event.reason.message === 'Failed to fetch' || event.reason.name === 'TypeError')
+      ) {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
     if (!hasFetchedRef.current) {
       hasFetchedRef.current = true;
       fetchAll();
     }
+
+    return () => {
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
   }, [fetchAll]);
 
   // Subscribe to realtime checkin changes
