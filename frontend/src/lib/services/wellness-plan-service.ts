@@ -26,9 +26,9 @@ export class WellnessPlanService {
     const streak = await this.getOrCreateStreak(userId);
     const metrics = await this.loadMetrics(userId, todayStr);
     
+    // Always ensure at least the morning slot is available so tasks are generated immediately
     if (metrics.completedSlots.length === 0) {
-      return { hasData: false, plan: null, streak, logsCount: 0,
-        message: 'Complete your Morning Check-in to unlock your first wellness plan of the day!' };
+      metrics.completedSlots = ['morning'];
     }
 
     // Load existing plan
@@ -266,17 +266,23 @@ export class WellnessPlanService {
 
     try {
       if (this.groq) {
-        const resp = await this.groq.chat.completions.create({
+        const groqCall = this.groq.chat.completions.create({
           model: 'llama-3.1-8b-instant',
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.55,
           max_tokens: 800,
           response_format: { type: 'json_object' },
         });
+
+        const timeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Groq timeout')), 1200)
+        );
+
+        const resp: any = await Promise.race([groqCall, timeout]);
         const parsed = JSON.parse(resp.choices[0]?.message?.content || '{}');
         raw = parsed.tasks || [];
       }
-    } catch { /* fallback below */ }
+    } catch { /* Instant fallback to rule tasks */ }
 
     if (raw.length < 3) {
       raw = this.ruleTasksForSlot(m, mode, slot);
