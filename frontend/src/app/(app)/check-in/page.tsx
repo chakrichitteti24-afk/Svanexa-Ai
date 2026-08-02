@@ -247,7 +247,7 @@ export default function ConversationalCheckInPage() {
   const avatarSrc = allSlotsComplete ? '/ai-companion-happy.jpg' : '/ai-companion-neutral.jpg';
 
   return (
-    <div className="max-w-2xl mx-auto w-full h-[calc(100vh-8rem)] flex flex-col pt-4 md:pt-8">
+    <div className="max-w-2xl mx-auto w-full h-[calc(100dvh-8rem)] flex flex-col pt-4 md:pt-8">
       {/* Header */}
       <div className="mb-4">
         <h1 className="text-2xl font-bold tracking-tight mb-1 capitalize">{activeSlot} Check-in</h1>

@@ -28,7 +28,7 @@ export function Navbar() {
         >
           <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
           <div className="h-full flex flex-col">
-            <Sidebar className="flex" />
+            <Sidebar className="w-full flex" />
           </div>
         </SheetContent>
       </Sheet>
