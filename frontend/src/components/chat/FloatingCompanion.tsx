@@ -65,11 +65,22 @@ const MarkdownRenderer = memo(({ content }: { content: string }) => {
 MarkdownRenderer.displayName = 'MarkdownRenderer';
 
 export function FloatingCompanion() {
-  const { userName, aiName, isLoading: profileLoading, allSlotsComplete } = useHerSync();
+  const { userName, aiName, isLoading: profileLoading, allSlotsComplete, todayLog } = useHerSync();
   const viewportHeight = useVisualViewport();
   const pathname = usePathname();
 
-  const avatarSrc = allSlotsComplete ? '/ai-companion-happy.jpg' : '/ai-companion-neutral.jpg';
+  const getDynamicAvatar = () => {
+    if (allSlotsComplete) return '/ai-companion-happy.jpg';
+    if (!todayLog || !todayLog.mood) return '/ai-companion-neutral.jpg';
+    const mood = todayLog.mood.toLowerCase();
+    if (['sad'].includes(mood)) return '/ai-companion-sad.jpg';
+    if (['anxious', 'stress', 'overwhelmed', 'mood_swings'].includes(mood)) return '/ai-companion-anxious.jpg';
+    if (['angry', 'frustrated'].includes(mood)) return '/ai-companion-angry.jpg';
+    if (['happy', 'joyful', 'excited'].includes(mood)) return '/ai-companion-happy.jpg';
+    return '/ai-companion-neutral.jpg';
+  };
+  
+  const avatarSrc = getDynamicAvatar();
 
   // Derive a human-readable page label to pass to the AI
   const pageLabel = (
