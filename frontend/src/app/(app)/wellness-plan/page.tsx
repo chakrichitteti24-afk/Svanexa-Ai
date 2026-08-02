@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { Component, ReactNode, useEffect, useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BrainCircuit, CheckCircle2, Circle, Loader2, Sparkles, ArrowRight, Lock, Trophy, PartyPopper } from 'lucide-react';
 import Link from 'next/link';
@@ -9,6 +9,54 @@ import { apiFetch } from '@/utils/api-client';
 import { useHerSync } from '@/context/HerSyncContext';
 import { format } from 'date-fns';
 import styles from './wellness.module.css';
+
+class WellnessErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error('WellnessPlan Boundary caught error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center p-6 bg-background">
+          <div className="max-w-md w-full text-center bg-card/80 backdrop-blur-xl border border-border/50 p-8 rounded-3xl shadow-2xl">
+            <div className="w-16 h-16 rounded-full bg-violet-500/10 text-violet-400 flex items-center justify-center mx-auto mb-4">
+              <Sparkles className="w-8 h-8 text-violet-400" />
+            </div>
+            <h2 className="text-xl font-extrabold text-foreground mb-2">No wellness plan available yet</h2>
+            <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
+              Complete your Morning Check-in to generate today&apos;s personalized wellness plan.
+            </p>
+            <div className="flex flex-col gap-3">
+              <Link
+                href="/check-in"
+                className="w-full py-3.5 bg-gradient-to-r from-pink-500 to-violet-500 text-white font-bold rounded-full shadow-lg shadow-pink-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all text-center flex items-center justify-center gap-2 text-sm"
+              >
+                Go to Daily Check-in <ArrowRight className="w-4 h-4" />
+              </Link>
+              <button
+                onClick={() => this.setState({ hasError: false })}
+                className="w-full py-3 bg-secondary/60 hover:bg-secondary text-muted-foreground font-semibold rounded-full border border-border/50 text-xs transition-all"
+              >
+                Reload Page
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -85,67 +133,52 @@ const scoreLabel = (s: number) => {
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
-export default function WellnessPlanPage() {
+function WellnessPlanContent() {
   const { aiName, setWellnessTasks, refreshAll, totalCheckIns, checkinSlots } = useHerSync();
 
-  const [loading, setLoading]     = useState(true);
+  const [loading, setLoading]       = useState(true);
+  const [isError, setIsError]       = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [hasData, setHasData]     = useState(false);
-  const [logsCount, setLogsCount] = useState(0);
-  const [plan, setPlan]           = useState<WellnessPlan | null>(null);
-  const [streak, setStreak]       = useState<Streak | null>(null);
-  const [toggling, setToggling]   = useState<string | null>(null);
-  const [animScore, setAnimScore] = useState(0);
+  const [hasData, setHasData]       = useState(false);
+  const [logsCount, setLogsCount]   = useState(0);
+  const [plan, setPlan]             = useState<WellnessPlan | null>(null);
+  const [streak, setStreak]         = useState<Streak | null>(null);
+  const [toggling, setToggling]     = useState<string | null>(null);
+  const [animScore, setAnimScore]   = useState(0);
   const [activeFilter, setActiveFilter] = useState<TaskCategory | 'all'>('all');
 
   // ── Load Plan ──
   const loadPlan = useCallback(async () => {
+    setLoading(true);
+    setIsError(false);
     try {
       const res = await apiFetch('/api/wellness-plan');
       if (!res.ok) {
-        // Fallback to empty/initial state
-        setHasData(true);
-        setPlan({
-          id: 'temp-plan',
-          planDate: format(new Date(), 'yyyy-MM-dd'),
-          wellnessScore: 75,
-          aiInsight: 'Welcome to your daily wellness plan! Log your check-ins to receive AI coaching insights.',
-          wellnessMode: 'general',
-          tasks: [
-            { id: 'm-1', text: 'Drink a full glass of water (500ml) to start your morning.', category: 'hydration', timeSlot: 'morning', priority: 'high', status: 'pending', estimatedTime: '2 mins', rationale: 'Rehydrating after sleep restores your cognitive focus.', completed: false, completedAt: null },
-            { id: 'm-2', text: 'Take 5 deep breaths to center your mind.', category: 'mindfulness', timeSlot: 'morning', priority: 'recommended', status: 'pending', estimatedTime: '3 mins', rationale: 'Deep breathing lowers morning cortisol levels.', completed: false, completedAt: null },
-            { id: 'a-1', text: 'Take a 10-minute walk to boost your energy.', category: 'exercise', timeSlot: 'afternoon', priority: 'recommended', status: 'pending', estimatedTime: '10 mins', rationale: 'Light physical movement boosts peripheral circulation.', completed: false, completedAt: null },
-            { id: 'e-1', text: 'Dim screens 30 minutes before sleep.', category: 'sleep', timeSlot: 'evening', priority: 'high', status: 'pending', estimatedTime: '30 mins', rationale: 'Avoiding blue light helps melatonin synthesis for deep sleep.', completed: false, completedAt: null }
-          ]
-        });
+        setIsError(true);
         setLoading(false);
         return;
       }
 
       const body = await res.json();
 
-      if (!body.hasData || !body.plan) {
-        setHasData(true);
-        setPlan(body.plan || {
-          id: 'temp-plan',
-          planDate: format(new Date(), 'yyyy-MM-dd'),
-          wellnessScore: 75,
-          aiInsight: 'Welcome! Complete your daily check-in to unlock personalized insights.',
-          wellnessMode: 'general',
-          tasks: []
-        });
+      if (!body || (!body.hasData && !body.plan)) {
+        setHasData(false);
+        setPlan(null);
         setLoading(false);
         return;
       }
 
       setHasData(true);
-      setPlan(body.plan);
-      setStreak(body.streak);
-      setWellnessTasks(body.plan.tasks);
+      setPlan(body.plan || null);
+      setStreak(body.streak || null);
+      setWellnessTasks(body.plan?.tasks || []);
 
-      // Animate score
-      setTimeout(() => setAnimScore(body.plan.wellnessScore), 300);
-    } catch {
+      if (body.plan?.wellnessScore !== undefined) {
+        setTimeout(() => setAnimScore(body.plan.wellnessScore), 300);
+      }
+    } catch (err) {
+      console.error('Error loading wellness plan:', err);
+      setIsError(true);
       toast.error('Could not load your wellness plan.');
     } finally {
       setLoading(false);
@@ -156,7 +189,7 @@ export default function WellnessPlanPage() {
 
   // ── Status Change (Pending / Completed / Skipped) ──
   const handleStatusChange = async (taskId: string, targetStatus: 'pending' | 'completed' | 'skipped') => {
-    if (!plan || toggling) return;
+    if (!plan || !plan.tasks || toggling) return;
     setToggling(taskId);
 
     const isDone = targetStatus === 'completed';
@@ -180,15 +213,15 @@ export default function WellnessPlanPage() {
       });
       if (res.ok) {
         const body = await res.json();
-        setPlan(p => p ? { ...p, tasks: body.tasks, wellnessScore: body.score, aiInsight: body.insight } : p);
-        setStreak(body.streak);
-        setWellnessTasks(body.tasks);
-        setAnimScore(body.score);
+        setPlan(p => p ? { ...p, tasks: body.tasks || [], wellnessScore: body.score || p.wellnessScore, aiInsight: body.insight || p.aiInsight } : p);
+        setStreak(body.streak || null);
+        setWellnessTasks(body.tasks || []);
+        if (body.score !== undefined) setAnimScore(body.score);
 
         if (targetStatus === 'completed') toast.success('Task complete! Keep going 🌸');
         else if (targetStatus === 'skipped') toast.info('Task skipped.');
 
-        if (body.tasks.every((t: any) => t.completed || t.status === 'completed')) {
+        if (body.tasks && body.tasks.every((t: any) => t.completed || t.status === 'completed')) {
           toast.success('🎉 Perfect day! All tasks complete!', { description: 'Your streak has been updated.' });
           refreshAll();
         }
@@ -207,7 +240,7 @@ export default function WellnessPlanPage() {
   };
 
   const handleToggle = (taskId: string) => {
-    const current = plan?.tasks.find(t => t.id === taskId);
+    const current = plan?.tasks?.find(t => t.id === taskId);
     const nextStatus = current?.completed || current?.status === 'completed' ? 'pending' : 'completed';
     handleStatusChange(taskId, nextStatus);
   };
@@ -239,7 +272,6 @@ export default function WellnessPlanPage() {
   }, [plan, activeFilter]);
 
   // ── Sequential slot unlocking ──
-  // A slot is unlocked if its corresponding check-in is completed.
   const isSlotUnlocked = useCallback((slot: TimeSlot): boolean => {
     if (slot === 'morning') return !!checkinSlots?.morning?.completed;
     if (slot === 'afternoon') return !!checkinSlots?.afternoon?.completed;
@@ -253,56 +285,79 @@ export default function WellnessPlanPage() {
     return tasks.length > 0 && tasks.every(t => t.completed || t.status === 'completed');
   }, [plan]);
 
+  // ── Loading Skeleton ──
   if (loading) {
     return (
-      <div className={styles.loader}>
-        <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}>
-          <BrainCircuit className="w-10 h-10" style={{ color: 'var(--hs-violet)' }} />
-        </motion.div>
-        <p className={styles.loaderText}>Building your personalized wellness journey...</p>
+      <div className={styles.page}>
+        <div className="max-w-4xl mx-auto w-full space-y-6 animate-pulse p-4">
+          <div className="h-8 w-64 bg-card/60 rounded-xl" />
+          <div className="h-4 w-48 bg-card/40 rounded-lg" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+            <div className="h-48 bg-card/60 rounded-3xl" />
+            <div className="md:col-span-2 space-y-4">
+              <div className="h-24 bg-card/60 rounded-3xl" />
+              <div className="h-24 bg-card/60 rounded-3xl" />
+              <div className="h-24 bg-card/60 rounded-3xl" />
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
-  // ─── Empty State ──────────────────────────────────────────────────────────
+  // ── Error Retry Screen ──
+  if (isError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 bg-background">
+        <div className="max-w-md w-full text-center bg-card/80 backdrop-blur-xl border border-border/50 p-8 rounded-3xl shadow-2xl">
+          <div className="w-16 h-16 rounded-full bg-violet-500/10 text-violet-400 flex items-center justify-center mx-auto mb-4 font-mono">
+            <BrainCircuit className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-extrabold text-foreground mb-2">Unable to connect to AI Coach</h2>
+          <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
+            We couldn&apos;t load your wellness plan right now. Please check your connection and try again.
+          </p>
+          <button
+            onClick={loadPlan}
+            className="w-full py-3.5 bg-gradient-to-r from-pink-500 to-violet-500 text-white font-bold rounded-full shadow-lg shadow-pink-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all text-center flex items-center justify-center gap-2 text-sm"
+          >
+            Retry Loading
+          </button>
+        </div>
+      </div>
+    );
+  }
 
-  if (!hasData) {
-    const pct = Math.min(100, Math.round((logsCount / 3) * 100));
+  // ── Empty State Screen ──
+  if (!hasData || !plan || !plan.tasks || plan.tasks.length === 0) {
     return (
       <div className={styles.page}>
-        <div className={styles.header}>
-          <div className={styles.headerRow}>
-            <span className={styles.badge}>AI Wellness Coach</span>
-          </div>
-          <h1 className={styles.title}>Daily Wellness Journey</h1>
-        </div>
-
-        <motion.div className={styles.empty} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <Lock className="w-10 h-10 opacity-60" style={{ color: 'var(--hs-violet)' }} />
-          <p className={styles.emptyTitle}>Not enough data yet</p>
-          <p className={styles.emptyText}>
-            Complete your Morning, Afternoon, and Evening check-ins. {aiName} will then generate a personalized wellness plan for you.
-          </p>
-          <div style={{ width: '100%', maxWidth: 240 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', fontWeight: 700, marginBottom: '0.4rem', color: 'var(--muted-foreground)' }}>
-              <span>{logsCount}/3 Check-ins</span><span>{pct}%</span>
+        <div className="max-w-2xl mx-auto w-full pt-8 px-4 pb-24 text-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex flex-col items-center justify-center text-center p-8 bg-card/80 backdrop-blur-md border border-border/40 rounded-3xl shadow-xl"
+          >
+            <div className="w-20 h-20 rounded-full bg-violet-500/10 flex items-center justify-center mb-6">
+              <Sparkles className="w-10 h-10 text-violet-400" />
             </div>
-            <div className={styles.emptyBar}><div className={styles.emptyBarFill} style={{ width: `${pct}%` }} /></div>
-          </div>
-          <Link href="/check-in">
-            <motion.button
-              whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
-              style={{ marginTop: '0.5rem', padding: '0.6rem 1.4rem', borderRadius: 99, background: 'linear-gradient(135deg, var(--hs-violet), var(--hs-pink))', color: '#fff', fontWeight: 700, fontSize: '0.8rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+            <h2 className="text-2xl font-bold text-foreground mb-2">
+              No wellness plan available yet
+            </h2>
+            <p className="text-muted-foreground mb-8 text-sm max-w-md leading-relaxed">
+              Complete your Morning Check-in to generate today&apos;s personalized wellness plan.
+            </p>
+            <Link
+              href="/check-in"
+              className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 text-white font-bold shadow-lg shadow-pink-500/25 transition-all hover:scale-105 flex items-center justify-center gap-2"
             >
-              Log Today <ArrowRight size={14} />
-            </motion.button>
-          </Link>
-        </motion.div>
+              Go to Daily Check-in <ArrowRight className="w-4 h-4" />
+            </Link>
+          </motion.div>
+        </div>
       </div>
     );
   }
-
-  if (!plan) return null;
 
   const slots: TimeSlot[] = ['morning', 'afternoon', 'evening'];
   const tasks = plan.tasks || [];
@@ -721,5 +776,13 @@ export default function WellnessPlanPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function WellnessPlanPage() {
+  return (
+    <WellnessErrorBoundary>
+      <WellnessPlanContent />
+    </WellnessErrorBoundary>
   );
 }
