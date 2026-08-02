@@ -275,25 +275,35 @@ export function FloatingCompanion() {
 
   return (
     <>
-      {/* Anime Girl FAB */}
+      {/* Premium Minimal Vector AI Companion FAB */}
       <motion.button
         className={styles.fab}
         onClick={() => setIsOpen(v => !v)}
         aria-label="Open AI Companion"
-        animate={{ y: [0, -5, 0] }}
-        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+        animate={
+          isLoading
+            ? { scale: [1, 1.08, 1] }
+            : { y: [0, -6, 0] }
+        }
+        transition={
+          isLoading
+            ? { duration: 1.2, repeat: Infinity, ease: 'easeInOut' }
+            : { duration: 4, repeat: Infinity, ease: 'easeInOut' }
+        }
         whileHover={{ scale: 1.08 }}
         whileTap={{ scale: 0.94 }}
       >
+        {isLoading && (
+          <motion.div
+            className={styles.fabGlowRing}
+            animate={{ rotate: 360 }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+          />
+        )}
         <span className={styles.fabPulse} />
-        <Image
-          src={avatarSrc}
-          alt="AI Companion"
-          width={72}
-          height={72}
-          className={styles.fabAvatar}
-          priority
-        />
+        <div className={styles.fabIconWrap}>
+          <Sparkles className="w-6 h-6 md:w-7 md:h-7 text-white fill-white/20 drop-shadow-md" />
+        </div>
       </motion.button>
 
       <AnimatePresence>
@@ -322,14 +332,8 @@ export function FloatingCompanion() {
               {/* Header */}
               <div className={styles.header}>
                 <div className={styles.headerTitle}>
-                  <div className={styles.headerAvatarWrap}>
-                    <Image
-                      src={avatarSrc}
-                      alt={aiName}
-                      width={34}
-                      height={34}
-                      className={styles.headerAvatar}
-                    />
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-violet-500 to-pink-500 flex items-center justify-center text-white shadow-md relative shrink-0">
+                    <Sparkles className="w-4 h-4 fill-white/20" />
                     <span className={styles.onlineIndicator} />
                   </div>
                   <div>
@@ -371,8 +375,8 @@ export function FloatingCompanion() {
                   return (
                     <motion.div key={idx} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`${styles.messageWrapper} ${isUser ? styles.user : styles.ai}`}>
                       {!isUser && (
-                        <div className={`${styles.messageAvatar} ${styles.aiAvatar}`}>
-                          <Image src={avatarSrc} alt={aiName} width={28} height={28} className={styles.msgAvatar} />
+                        <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-violet-500 to-pink-500 flex items-center justify-center text-white shadow-sm shrink-0 mt-0.5">
+                          <Sparkles className="w-3.5 h-3.5 fill-white/20" />
                         </div>
                       )}
                       <div className="flex flex-col gap-1 max-w-full overflow-hidden">
@@ -407,8 +411,8 @@ export function FloatingCompanion() {
 
                 {isLoading && messages.length > 0 && (
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`${styles.messageWrapper} ${styles.ai}`}>
-                    <div className={`${styles.messageAvatar} ${styles.aiAvatar}`}>
-                      <Image src={avatarSrc} alt={aiName} width={28} height={28} className={styles.msgAvatar} />
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-violet-500 to-pink-500 flex items-center justify-center text-white shadow-sm shrink-0 mt-0.5">
+                      <Sparkles className="w-3.5 h-3.5 fill-white/20 animate-spin" />
                     </div>
                     <div className={`${styles.bubble} ${styles.aiBubble} flex items-center gap-2 px-4 py-3`}>
                       <span className="text-sm font-medium text-[#e879f9]">Thinking</span>

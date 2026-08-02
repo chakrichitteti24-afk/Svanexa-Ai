@@ -4,20 +4,19 @@
   bottom: 90px;
   right: 16px;
   z-index: 9999 !important;
-  width: 64px;
-  height: 64px;
+  width: 60px;
+  height: 60px;
   border-radius: 9999px;
-  background: linear-gradient(135deg, var(--hs-violet), var(--hs-pink));
-  box-shadow: 0 8px 25px rgba(236, 72, 153, 0.45), 0 0 20px rgba(139, 92, 246, 0.35);
+  background: linear-gradient(135deg, #8B5CF6, #EC4899);
+  box-shadow: 0 10px 30px rgba(236, 72, 153, 0.5), 0 0 20px rgba(139, 92, 246, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
   cursor: pointer;
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s ease;
-  border: 2.5px solid rgba(255, 255, 255, 0.9);
+  border: 2px solid rgba(255, 255, 255, 0.85);
   outline: none;
-  padding: 2px;
+  padding: 0;
   overflow: hidden;
   will-change: transform;
 }
@@ -26,29 +25,37 @@
   .fab {
     bottom: 24px;
     right: 24px;
-    width: 72px;
-    height: 72px;
+    width: 68px;
+    height: 68px;
   }
 }
 
-/* Anime avatar inside FAB */
-.fabAvatar {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover;
-  border-radius: 9999px;
+/* Vector AI Symbol inside FAB */
+.fabIconWrap {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   position: relative;
-  z-index: 1;
-  transition: transform 0.3s ease;
+  z-index: 2;
+}
+
+.fabGlowRing {
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  background: conic-gradient(from 0deg, #EC4899, #8B5CF6, #3B82F6, #EC4899);
+  opacity: 0.85;
+  z-index: 0;
 }
 
 .fab:hover {
-  transform: scale(1.05);
-  box-shadow: 0 12px 32px var(--hs-glow-pink);
+  box-shadow: 0 14px 36px rgba(236, 72, 153, 0.65), 0 0 25px rgba(139, 92, 246, 0.5);
 }
 
 .fab:active {
-  transform: scale(0.95);
+  transform: scale(0.94);
 }
 
 /* Pulse ring on FAB */
