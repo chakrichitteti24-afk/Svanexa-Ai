@@ -70,14 +70,14 @@ export function FloatingCompanion() {
   const pathname = usePathname();
 
   const getDynamicAvatar = () => {
-    if (allSlotsComplete) return '/ai-companion-happy.jpg';
-    if (!todayLog || !todayLog.mood) return '/ai-companion-neutral.jpg';
+    if (allSlotsComplete) return '/mascot-cute.jpg';
+    if (!todayLog || !todayLog.mood) return '/mascot-sitting.jpg';
     const mood = todayLog.mood.toLowerCase();
-    if (['sad'].includes(mood)) return '/ai-companion-sad.jpg';
-    if (['anxious', 'stress', 'overwhelmed', 'mood_swings'].includes(mood)) return '/ai-companion-anxious.jpg';
-    if (['angry', 'frustrated'].includes(mood)) return '/ai-companion-angry.jpg';
-    if (['happy', 'joyful', 'excited'].includes(mood)) return '/ai-companion-happy.jpg';
-    return '/ai-companion-neutral.jpg';
+    if (['sad'].includes(mood)) return '/mascot-thinking.jpg'; // Thinking/empathetic
+    if (['anxious', 'stress', 'overwhelmed', 'mood_swings'].includes(mood)) return '/mascot-thinking.jpg';
+    if (['angry', 'frustrated'].includes(mood)) return '/mascot-angry.jpg';
+    if (['happy', 'joyful', 'excited'].includes(mood)) return '/mascot-cute.jpg';
+    return '/mascot-sitting.jpg';
   };
   
   const avatarSrc = getDynamicAvatar();

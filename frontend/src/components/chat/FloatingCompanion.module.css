@@ -34,10 +34,12 @@
 .fabAvatar {
   width: 100% !important;
   height: 100% !important;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 9999px;
   position: relative;
   z-index: 1;
+  mix-blend-mode: screen;
+  background-color: black;
 }
 
 .fab:hover {
@@ -145,8 +147,10 @@
   width: 38px !important;
   height: 38px !important;
   border-radius: 9999px;
-  object-fit: cover;
+  object-fit: contain;
   border: 2px solid rgba(139, 92, 246, 0.4);
+  mix-blend-mode: screen;
+  background-color: black;
 }
 
 /* Message avatar image */
@@ -154,7 +158,9 @@
   width: 28px !important;
   height: 28px !important;
   border-radius: 9999px;
-  object-fit: cover;
+  object-fit: contain;
+  mix-blend-mode: screen;
+  background-color: black;
 }
 
 /* Header */

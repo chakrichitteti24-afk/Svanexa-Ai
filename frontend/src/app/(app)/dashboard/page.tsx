@@ -14,6 +14,7 @@ import Image from 'next/image';
 import { apiFetch } from '@/utils/api-client';
 import { toast } from 'sonner';
 import styles from './dashboard.module.css';
+import { DashboardMascot } from '@/components/chat/DashboardMascot';
 
 export default function DashboardPage() {
   const {
@@ -305,28 +306,13 @@ export default function DashboardPage() {
         transition={{ delay: 0.3, duration: 0.5 }}
       >
         <h2 className={styles.sectionTitle}>{aiName}&apos;s Insight</h2>
-        <div className={`${styles.premiumCard} ${styles.observationCard}`} style={{ position: 'relative', overflow: 'hidden' }}>
-          
-          {/* Sitting Avatar - absolute positioned softly in background/side */}
-          <div className="absolute right-0 bottom-0 opacity-40 pointer-events-none" style={{ width: '140px', height: '140px', maskImage: 'linear-gradient(to top, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%)', WebkitMaskImage: 'linear-gradient(to top, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%)' }}>
-            <Image 
-              src="/ai-companion-sitting.jpg" 
-              alt="Sitting Companion" 
-              fill
-              style={{ objectFit: 'cover' }}
-              className="mix-blend-lighten"
-            />
-          </div>
-
-          <div className={styles.observationHeader} style={{ position: 'relative', zIndex: 10 }}>
+        <div className={`${styles.premiumCard} ${styles.observationCard}`}>
+          <div className={styles.observationHeader}>
             <div className={styles.observationAvatar}>
-              <Sparkles className="w-5 h-5 text-white" />
+              <BrainCircuit className="w-5 h-5 text-white" />
             </div>
           </div>
-          <p className={styles.observationText} style={{ position: 'relative', zIndex: 10, paddingRight: '40px' }}>
-            {generateObservation()}
-          </p>
-
+          <p className={styles.observationText}>{generateObservation()}</p>
         </div>
       </motion.section>
 
@@ -335,9 +321,16 @@ export default function DashboardPage() {
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4, duration: 0.5 }}
+        className="relative"
       >
-        <h2 className={styles.sectionTitle}>Today's Active Wellness Plan</h2>
-        <div className={styles.premiumCard} style={{ padding: '1.25rem' }}>
+        <div className="flex items-center justify-between">
+          <h2 className={styles.sectionTitle}>Today&apos;s Active Wellness Plan</h2>
+        </div>
+        
+        {/* The Roaming AI Mascot */}
+        <DashboardMascot />
+        
+        <div className={styles.premiumCard} style={{ padding: '1.25rem', position: 'relative', zIndex: 10 }}>
           
           {!isCheckinCompleted ? (
             <div className="flex flex-col items-center text-center py-6">
