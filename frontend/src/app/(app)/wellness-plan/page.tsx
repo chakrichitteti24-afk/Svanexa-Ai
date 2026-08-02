@@ -512,10 +512,10 @@ export default function WellnessPlanPage() {
 
                 {/* Locked overlay */}
                 {!unlocked ? (
-                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: '0.75rem', padding: '1.25rem', textAlign: 'center', opacity: 0.5 }}>
-                    <Lock size={20} style={{ color: 'rgba(255,255,255,0.3)', margin: '0 auto 0.5rem' }} />
-                    <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>
-                      Complete your {cfg.label} check-in to generate these tasks.
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: '0.75rem', padding: '1.25rem', textAlign: 'center', opacity: 0.7 }}>
+                    <Lock size={20} style={{ color: 'rgba(255,255,255,0.4)', margin: '0 auto 0.5rem' }} />
+                    <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>
+                      Complete the corresponding Daily Check-in to unlock this plan.
                     </p>
                     <Link href="/check-in" style={{ display: 'inline-block', marginTop: '0.75rem', fontSize: '0.75rem', color: 'var(--hs-violet)', fontWeight: 600 }}>
                       Go to Check-in →

@@ -347,12 +347,18 @@ export default function DashboardPage() {
             <div className="flex flex-col items-center text-center py-6">
               <Check className="w-12 h-12 text-emerald-500 mb-3 p-2 bg-emerald-500/10 rounded-full" />
               <h3 className="font-semibold text-emerald-500 mb-2 text-lg">
-                {activeSlot === 'evening' ? "🎉 Today's Wellness Journey Completed!" : `✓ ${activeSlotTitle} Tasks Completed`}
-              </h3>
-              <p className="text-sm text-muted-foreground">
                 {activeSlot === 'evening' 
-                  ? "Great job today! See you tomorrow." 
-                  : `Incredible work. Check back in the ${activeSlot === 'morning' ? 'afternoon' : 'evening'} for your next plan.`}
+                  ? "🎉 Today's Wellness Journey Completed" 
+                  : activeSlot === 'morning' 
+                    ? "✓ Morning Completed" 
+                    : "✓ Afternoon Completed"}
+              </h3>
+              <p className="text-sm text-muted-foreground font-medium">
+                {activeSlot === 'evening' 
+                  ? "Incredible job completing your wellness goals today!" 
+                  : activeSlot === 'morning' 
+                    ? "Then wait for Afternoon." 
+                    : "Then wait for Evening."}
               </p>
             </div>
           ) : (

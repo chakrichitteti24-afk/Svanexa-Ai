@@ -187,6 +187,7 @@ export default function CheckInPage() {
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [saving, setSaving] = useState(false);
 
+  const [isEditing, setIsEditing] = useState(false);
   const isCurrentSlotCompleted = completedSlots[activeSlot].completed;
   const { countdown, nextSlotName } = useNextSlotCountdown(activeSlot, isCurrentSlotCompleted);
 
@@ -196,13 +197,16 @@ export default function CheckInPage() {
       if (res.ok) {
         const { data } = await res.json();
         setCompletedSlots(data.slots);
+        if (data.slots[activeSlot]?.data) {
+          setAnswers(data.slots[activeSlot].data);
+        }
       }
     } catch (err) {
       console.error('Error fetching checkin status', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeSlot]);
 
   useEffect(() => { fetchStatus(); }, [fetchStatus]);
 
@@ -257,7 +261,8 @@ export default function CheckInPage() {
       
       const now = new Date().toISOString();
       setCompletedSlots(prev => ({ ...prev, [activeSlot]: { completed: true, completedAt: now, data: answers } }));
-      toast.success(`${activeSlot} check-in completed!`);
+      setIsEditing(false);
+      toast.success(`${activeSlot.charAt(0).toUpperCase() + activeSlot.slice(1)} check-in saved!`);
       
       // Auto-generate wellness plan in the background
       apiFetch('/api/wellness-plan', { method: 'POST' }).catch(console.error);
@@ -278,7 +283,12 @@ export default function CheckInPage() {
     );
   }
 
-  if (isCurrentSlotCompleted) {
+  if (isCurrentSlotCompleted && !isEditing) {
+    const slotTitle = activeSlot.charAt(0).toUpperCase() + activeSlot.slice(1);
+    const timeStr = completedSlots[activeSlot].completedAt 
+      ? format(new Date(completedSlots[activeSlot].completedAt!), 'hh:mm a')
+      : '';
+
     return (
       <div className="max-w-2xl mx-auto w-full pt-8 px-4 pb-24">
         <motion.div
@@ -289,25 +299,39 @@ export default function CheckInPage() {
              <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 animate-pulse" />
             <CheckCircle2 className="w-12 h-12 text-emerald-500 relative z-10" />
           </div>
-          <h2 className="text-2xl font-bold text-emerald-500 mb-2 capitalize">{activeSlot} Check-in Complete!</h2>
-          <p className="text-muted-foreground mb-8 text-sm max-w-md">
-            You successfully logged your data at {format(new Date(completedSlots[activeSlot].completedAt!), 'h:mm a')}.<br/>
-            Your daily wellness plan has been updated!
+          <h2 className="text-2xl font-bold text-emerald-500 mb-1">
+            ✓ {slotTitle} Check-in Completed
+          </h2>
+          {timeStr && (
+            <p className="text-sm font-semibold text-foreground/80 mb-2">
+              Completed at: {timeStr}
+            </p>
+          )}
+          <p className="text-muted-foreground mb-6 text-sm max-w-md">
+            Your entries have been saved safely. Your AI Wellness Plan has been updated for this slot.
           </p>
-          
-          <div className="w-full bg-secondary/50 rounded-2xl p-6 border border-border/50 mb-8 flex flex-col items-center justify-center gap-2">
+
+          <div className="w-full bg-secondary/50 rounded-2xl p-5 border border-border/50 mb-6 flex flex-col items-center justify-center gap-1.5">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{nextSlotName} Check-in unlocks in</span>
             <div className="text-3xl font-black tabular-nums tracking-tight text-foreground/90 font-mono">
               {countdown || "..."}
             </div>
           </div>
 
-          <button 
-            onClick={() => router.push('/dashboard')} 
-            className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-foreground hover:bg-foreground/90 text-background font-semibold shadow-lg transition-all hover:scale-105"
-          >
-            Return to Dashboard
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <button 
+              onClick={() => setIsEditing(true)} 
+              className="px-6 py-3 rounded-full border border-violet-500/30 hover:bg-violet-500/10 text-violet-400 font-semibold transition-all text-sm"
+            >
+              Edit Check-in
+            </button>
+            <button 
+              onClick={() => router.push('/dashboard')} 
+              className="px-8 py-3 rounded-full bg-foreground hover:bg-foreground/90 text-background font-semibold shadow-lg transition-all text-sm"
+            >
+              Return to Dashboard
+            </button>
+          </div>
         </motion.div>
       </div>
     );
