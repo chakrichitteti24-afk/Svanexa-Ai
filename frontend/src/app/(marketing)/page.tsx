@@ -18,7 +18,7 @@ export default function LandingPage() {
           <a href="#testimonials" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Testimonials</a>
           <a href="#faq" className="text-sm text-muted-foreground hover:text-foreground transition-colors">FAQ</a>
         </nav>
-        <Link href="/dashboard">
+        <Link href="/login">
           <Button className="bg-gradient-to-r from-pink-600 to-violet-600 hover:from-pink-500 hover:to-violet-500 text-white border-0">
             Go to App
           </Button>
@@ -40,7 +40,7 @@ export default function LandingPage() {
             Track your cycle, monitor skin health, manage stress, and get personalized insights from your dedicated AI wellness companion.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/dashboard">
+            <Link href="/signup">
               <Button size="lg" className="rounded-full bg-foreground text-background hover:bg-foreground/90 h-14 px-8 text-lg font-medium group">
                 Start Tracking Free
                 <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
@@ -101,7 +101,7 @@ export default function LandingPage() {
                   </li>
                 ))}
               </ul>
-              <Link href="/dashboard">
+              <Link href="/signup">
                 <Button variant="outline" className="rounded-full">Meet Your AI Companion</Button>
               </Link>
             </div>

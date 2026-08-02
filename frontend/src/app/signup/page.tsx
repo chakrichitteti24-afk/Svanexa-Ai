@@ -81,13 +81,34 @@ export default function SignUpPage() {
         },
       });
 
-      if (signUpError) throw signUpError;
+      if (signUpError) {
+        if (signUpError.message.toLowerCase().includes('already registered')) {
+          router.push('/login');
+          return;
+        }
+        throw signUpError;
+      }
+      
       if (!authData.user) throw new Error('Failed to create account');
+
+      // If session is null, it means either:
+      // 1. Email confirmation is required
+      // 2. The user already exists (Supabase obfuscates this for security)
+      if (!authData.session) {
+        setError('If this email is new, please check your inbox to verify your account. If you already have an account, please log in.');
+        setStep(1);
+        setLoading(false);
+        return;
+      }
 
       router.push('/dashboard');
       router.refresh();
 
     } catch (err: any) {
+      if (err.message?.toLowerCase().includes('already registered')) {
+        router.push('/login');
+        return;
+      }
       setError(err.message || 'An error occurred during sign up.');
       setStep(1); 
     } finally {
