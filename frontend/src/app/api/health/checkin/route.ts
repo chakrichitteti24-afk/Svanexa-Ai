@@ -55,44 +55,48 @@ export async function POST(req: Request) {
     const completedAt = new Date().toISOString();
 
     // ── Save to dedicated log tables ──────────────────────────────────────────
-    if (slot === 'morning') {
-      // Map new conversational fields
-      await safeUpsert(supabase, 'mood_logs',
-        { user_id: userId, date: today },
-        { mood: data.mood || 'calm', intensity: data.energy === 'Very Low' ? 2 : data.energy === 'Excellent' ? 9 : 5 }
-      );
-      if (data.sleep) {
-        await safeUpsert(supabase, 'sleep_logs',
+    try {
+      if (slot === 'morning') {
+        // Map new conversational fields
+        await safeUpsert(supabase, 'mood_logs',
           { user_id: userId, date: today },
-          { duration_hours: data.sleep }
+          { mood: data.mood || 'calm', intensity: data.energy === 'Very Low' ? 2 : data.energy === 'Excellent' ? 9 : 5 }
         );
+        if (data.sleep) {
+          await safeUpsert(supabase, 'sleep_logs',
+            { user_id: userId, date: today },
+            { duration_hours: data.sleep }
+          );
+        }
+      } else if (slot === 'afternoon') {
+        if (data.water_so_far) {
+          await safeUpsert(supabase, 'water_logs',
+            { user_id: userId, date: today },
+            { amount_ml: Math.round(parseFloat(data.water_so_far) * 1000) }
+          );
+        }
+        if (data.exercise === 'yes') {
+          await safeUpsert(supabase, 'exercise_logs',
+            { user_id: userId, date: today },
+            { duration_minutes: 30, type: 'General' }
+          );
+        }
+      } else if (slot === 'evening') {
+        if (data.total_water) {
+          await safeUpsert(supabase, 'water_logs',
+            { user_id: userId, date: today },
+            { amount_ml: Math.round(parseFloat(data.total_water) * 1000) }
+          );
+        }
+        if (data.health_rating) {
+          await safeUpsert(supabase, 'skin_logs',
+            { user_id: userId, date: today },
+            { condition: String(data.health_rating * 2), notes: data.reflection ?? '' }
+          );
+        }
       }
-    } else if (slot === 'afternoon') {
-      if (data.water_so_far) {
-        await safeUpsert(supabase, 'water_logs',
-          { user_id: userId, date: today },
-          { amount_ml: Math.round(parseFloat(data.water_so_far) * 1000) }
-        );
-      }
-      if (data.exercise === 'yes') {
-        await safeUpsert(supabase, 'exercise_logs',
-          { user_id: userId, date: today },
-          { duration_minutes: 30, type: 'General' }
-        );
-      }
-    } else if (slot === 'evening') {
-      if (data.total_water) {
-        await safeUpsert(supabase, 'water_logs',
-          { user_id: userId, date: today },
-          { amount_ml: Math.round(parseFloat(data.total_water) * 1000) }
-        );
-      }
-      if (data.health_rating) {
-        await safeUpsert(supabase, 'skin_logs',
-          { user_id: userId, date: today },
-          { condition: String(data.health_rating * 2), notes: data.reflection ?? '' }
-        );
-      }
+    } catch (granularErr) {
+      console.warn("Skipping granular logs (tables may be missing):", granularErr);
     }
 
     // ── Upsert daily_checkins with slot meta stored as JSONB in summary ───────

@@ -250,7 +250,7 @@ export default function CheckInPage() {
       });
       const result = await res.json();
       if (!res.ok) {
-        toast.error('Failed to save check-in', { description: result.message });
+        toast.error('Failed to save check-in', { description: result.error || result.message || 'Unknown error' });
         setSaving(false);
         return;
       }
