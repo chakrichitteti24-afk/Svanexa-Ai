@@ -216,7 +216,7 @@ export default function WellnessPlanPage() {
   const handleRegenerate = async () => {
     setGenerating(true);
     try {
-      const res = await apiFetch('/api/v1/wellness-plan', { method: 'POST' });
+      const res = await apiFetch('/api/wellness-plan', { method: 'POST' });
       if (res.ok) { await loadPlan(); toast.success('Plan regenerated!'); }
     } catch { toast.error('Could not regenerate plan.'); }
     finally { setGenerating(false); }
@@ -224,13 +224,13 @@ export default function WellnessPlanPage() {
 
   // ── Derived data ──
   const activeCategories = useMemo(() => {
-    if (!plan) return [];
+    if (!plan || !plan.tasks) return [];
     const cats = new Set(plan.tasks.map(t => t.category));
     return Array.from(cats) as TaskCategory[];
   }, [plan]);
 
   const filteredTasksBySlot = useCallback((slot: TimeSlot) => {
-    if (!plan) return [];
+    if (!plan || !plan.tasks) return [];
     let tasks = plan.tasks.filter(t => t.timeSlot === slot);
     if (activeFilter !== 'all') {
       tasks = tasks.filter(t => t.category === activeFilter);
@@ -248,9 +248,9 @@ export default function WellnessPlanPage() {
   }, [checkinSlots]);
 
   const isSlotAllDone = useCallback((slot: TimeSlot): boolean => {
-    if (!plan) return false;
+    if (!plan || !plan.tasks) return false;
     const tasks = plan.tasks.filter(t => t.timeSlot === slot);
-    return tasks.length > 0 && tasks.every(t => t.completed);
+    return tasks.length > 0 && tasks.every(t => t.completed || t.status === 'completed');
   }, [plan]);
 
   if (loading) {
@@ -304,12 +304,12 @@ export default function WellnessPlanPage() {
 
   if (!plan) return null;
 
-  // ─── Derived ──────────────────────────────────────────────────────────────
-
   const slots: TimeSlot[] = ['morning', 'afternoon', 'evening'];
-  const total = plan.tasks.length;
-  const done  = plan.tasks.filter(t => t.completed).length;
+  const tasks = plan.tasks || [];
+  const total = tasks.length;
+  const done  = tasks.filter(t => t.completed || t.status === 'completed').length;
   const allComplete = done === total && total > 0;
+  const modeName = (plan.wellnessMode || 'general').toUpperCase();
   const { text: scoreText, color: scoreColor } = scoreLabel(animScore);
   const circumference = 2 * Math.PI * 40;
   const strokeDashoffset = circumference - (animScore / 100) * circumference;
@@ -326,7 +326,7 @@ export default function WellnessPlanPage() {
           </span>
         </div>
         <h1 className={styles.title}>Daily Wellness Journey</h1>
-        <p className={styles.subtitle}>Personalized plan for {plan.wellnessMode.toUpperCase()} mode · {done}/{total} complete</p>
+        <p className={styles.subtitle}>Personalized plan for {modeName} mode · {done}/{total} complete</p>
       </motion.div>
 
       {/* ── 2-COLUMN GRID ── */}
