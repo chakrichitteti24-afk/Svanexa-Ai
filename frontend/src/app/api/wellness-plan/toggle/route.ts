@@ -15,14 +15,15 @@ export async function POST(req: Request) {
     // Fallback if not passed via URL segments, read from body
     let planId = '';
     let taskId = '';
+    let status: 'pending' | 'completed' | 'skipped' | undefined = undefined;
 
     try {
       const body = await req.json();
       planId = body.planId;
       taskId = body.taskId;
+      status = body.status;
     } catch {
-      // If params aren't in body, perhaps they are in the URL, but toggle is just /toggle 
-      // Next.js App router doesn't parse body if we just do params unless the folder structure is [planId] etc.
+      // Fallback
     }
 
     if (!planId || !taskId) {
@@ -33,7 +34,7 @@ export async function POST(req: Request) {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
 
     const service = new WellnessPlanService(supabase as any);
-    const result = await service.toggleTask(userId, planId, taskId, todayStr);
+    const result = await service.toggleTask(userId, planId, taskId, todayStr, status);
 
     return NextResponse.json({ success: true, ...result });
   } catch (error: any) {

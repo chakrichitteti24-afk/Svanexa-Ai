@@ -86,15 +86,24 @@ export class WellnessPlanService {
     };
   }
 
-  async toggleTask(userId: string, planId: string, taskId: string, todayStr: string) {
+  async toggleTask(userId: string, planId: string, taskId: string, todayStr: string, targetStatus?: 'pending' | 'completed' | 'skipped') {
     const { data: planData } = await this.supabase
       .from('wellness_plans').select('*').eq('id', planId).single();
     if (!planData) throw new Error('Plan not found');
 
     const tasks: WellnessTask[] = JSON.parse(planData.content).map((t: any) => {
       if (t.id === taskId) {
-        const completed = !t.completed;
-        return { ...t, completed, completedAt: completed ? new Date().toISOString() : null };
+        let newStatus = targetStatus;
+        if (!newStatus) {
+          newStatus = t.completed || t.status === 'completed' ? 'pending' : 'completed';
+        }
+        const completed = newStatus === 'completed';
+        return { 
+          ...t, 
+          status: newStatus, 
+          completed, 
+          completedAt: completed ? (t.completedAt || new Date().toISOString()) : null 
+        };
       }
       return t;
     });
@@ -102,7 +111,7 @@ export class WellnessPlanService {
     await this.supabase.from('wellness_plans')
       .update({ content: JSON.stringify(tasks) }).eq('id', planId);
 
-    if (tasks.every(t => t.completed)) {
+    if (tasks.every(t => t.completed || t.status === 'completed')) {
       await this.updateStreak(userId, todayStr);
     }
 
@@ -279,13 +288,16 @@ export class WellnessPlanService {
       category: t.category || 'mindfulness',
       timeSlot: slot as any,
       priority: (t.priority || 'recommended') as any,
-      completed: false,
-      completedAt: null,
+      status: (t.status || 'pending') as any,
+      estimatedTime: t.estimatedTime || '5 mins',
+      rationale: t.rationale || 'Tailored to your daily health check-in data and wellness goals.',
+      completed: t.status === 'completed',
+      completedAt: t.status === 'completed' ? new Date().toISOString() : null,
     }));
   }
 
   private buildPromptForSlot(m: any, mode: string, slot: string): string {
-    return `You are a premium AI wellness coach. Generate 3-5 personalized daily tasks ONLY for the ${slot.toUpperCase()} time slot.
+    return `You are Luna AI, a premium personal wellness coach. Generate 3-5 personalized daily tasks ONLY for the ${slot.toUpperCase()} time slot.
 
 USER DATA (USE ONLY THIS — NO FAKE VALUES):
 - Mode: ${mode} (general | pcos | pregnancy)
@@ -299,16 +311,22 @@ USER DATA (USE ONLY THIS — NO FAKE VALUES):
 
 SMART RULES:
 - Only generate tasks for the '${slot}' slot.
-- If today's water >= 2L, do NOT generate a hydration task
-- If today's exercise >= 30min, do NOT generate another exercise task  
-- PCOS: prioritize stress, cycle, gentle exercise
-- PREGNANCY: gentle tasks only, NO strenuous exercise
-- NEVER recommend medicines or clinical treatments
+- Provide a brief 1-sentence 'rationale' explaining WHY Luna assigned each task based on their specific vitals (e.g. "You slept 6 hours today, so...").
+- NEVER recommend medicines, medical drugs, or diagnose diseases.
+- PCOS: prioritize stress, cycle, gentle exercise, low GI nutrition.
+- PREGNANCY: gentle tasks only, hydration, rest, baby & mother wellness.
+- Include 'estimatedTime' for each task (e.g. "5 mins", "10 mins", "15 mins").
 
 Return ONLY raw JSON (no markdown):
 {
   "tasks": [
-    { "text": "...", "category": "hydration|sleep|stress|mood|cycle|skin|exercise|nutrition|mindfulness|pregnancy", "priority": "high|recommended|optional" }
+    { 
+      "text": "...", 
+      "category": "hydration|sleep|stress|mood|cycle|skin|exercise|nutrition|mindfulness|pregnancy", 
+      "priority": "high|recommended|optional",
+      "estimatedTime": "5 mins",
+      "rationale": "Luna AI Explanation based on user vitals..."
+    }
   ]
 }`;
   }
@@ -319,41 +337,125 @@ Return ONLY raw JSON (no markdown):
     const skipExercise = m.todayExercise !== null && Number(m.todayExercise) >= 30;
 
     if (slot === 'morning') {
-      tasks.push({ text: 'Drink a full glass of water to start your morning well.', category: 'hydration', priority: 'high' });
+      tasks.push({ 
+        text: 'Drink a full glass of water (500ml) to hydrate.', 
+        category: 'hydration', 
+        priority: 'high',
+        estimatedTime: '2 mins',
+        rationale: 'Rehydrating after sleep restores your cognitive function and metabolic momentum.'
+      });
       if (m.sleepAvg < 6.5) {
-        tasks.push({ text: `Your recent sleep average is ${m.sleepAvg.toFixed(1)}h. Plan a consistent bedtime to gradually improve your rest.`, category: 'sleep', priority: 'high' });
+        tasks.push({ 
+          text: `Plan an earlier bedtime tonight to recover from your recent ${m.sleepAvg.toFixed(1)}h sleep average.`, 
+          category: 'sleep', 
+          priority: 'high',
+          estimatedTime: '5 mins',
+          rationale: `Your recent sleep average is ${m.sleepAvg.toFixed(1)}h. Consistent sleep cycles stabilize cortisol levels.`
+        });
       } else {
-        tasks.push({ text: 'Start with 5 deep breaths to oxygenate your body and set a calm tone.', category: 'mindfulness', priority: 'recommended' });
+        tasks.push({ 
+          text: 'Start with 5 deep breath cycles to center your mind.', 
+          category: 'mindfulness', 
+          priority: 'recommended',
+          estimatedTime: '3 mins',
+          rationale: 'Deep diaphragmatic breathing activates parasympathetic rest-and-digest pathways.'
+        });
       }
       if (mode === 'pregnancy') {
-        tasks.push({ text: 'Have a nourishing, pregnancy-safe breakfast.', category: 'pregnancy', priority: 'high' });
+        tasks.push({ 
+          text: 'Enjoy a gentle, nutrient-dense breakfast for maternal wellness.', 
+          category: 'pregnancy', 
+          priority: 'high',
+          estimatedTime: '15 mins',
+          rationale: 'Balanced breakfast blood sugar helps reduce early pregnancy nausea and stabilizes energy.'
+        });
       } else {
-        tasks.push({ text: 'Do a gentle 5-minute morning stretch to wake up your muscles.', category: 'exercise', priority: 'recommended' });
+        tasks.push({ 
+          text: 'Do a gentle 5-minute morning stretch routine.', 
+          category: 'exercise', 
+          priority: 'recommended',
+          estimatedTime: '5 mins',
+          rationale: 'Morning mobility lubricates joints and improves spinal posture for the workday.'
+        });
       }
     } else if (slot === 'afternoon') {
       if (!skipWater) {
-        tasks.push({ text: 'Drink 2 glasses of water with your lunch to stay hydrated.', category: 'hydration', priority: 'high' });
+        tasks.push({ 
+          text: 'Drink 2 full glasses of water with your lunch.', 
+          category: 'hydration', 
+          priority: 'high',
+          estimatedTime: '2 mins',
+          rationale: `You logged ${m.todayWater ?? '0'}L of water so far. Hitting 2L maintains afternoon focus.`
+        });
       } else {
-        tasks.push({ text: 'Take a 5-minute screen break to rest your eyes and reset focus.', category: 'stress', priority: 'recommended' });
+        tasks.push({ 
+          text: 'Take a 5-minute screen break to rest your eyes.', 
+          category: 'stress', 
+          priority: 'recommended',
+          estimatedTime: '5 mins',
+          rationale: 'Visual distance breaks relieve ocular strain and mitigate mental fatigue.'
+        });
       }
       if (m.stressAvg > 6) {
-        tasks.push({ text: 'Practice a 3-minute deep breathing exercise to reduce your stress levels.', category: 'stress', priority: 'high' });
+        tasks.push({ 
+          text: 'Practice 3 minutes of box breathing to lower stress.', 
+          category: 'stress', 
+          priority: 'high',
+          estimatedTime: '3 mins',
+          rationale: `Your recorded stress is elevated (${m.todayStress ?? 7}/10). Box breathing rapidly lowers heart rate.`
+        });
       } else {
-        tasks.push({ text: 'Eat a piece of fruit or a healthy snack to maintain your energy.', category: 'nutrition', priority: 'recommended' });
+        tasks.push({ 
+          text: 'Eat a fresh piece of fruit or healthy snack.', 
+          category: 'nutrition', 
+          priority: 'recommended',
+          estimatedTime: '5 mins',
+          rationale: 'Complex carbohydrates prevent the mid-afternoon energy slump.'
+        });
       }
       if (!skipExercise) {
-        tasks.push({ text: mode === 'pregnancy' ? 'Take a gentle 10-minute walk to support circulation.' : 'Take a 15-minute brisk walk to boost your mood and energy.', category: 'exercise', priority: 'recommended' });
+        tasks.push({ 
+          text: mode === 'pregnancy' ? 'Take a gentle 10-minute walk for circulation.' : 'Take a 15-minute brisk walk to recharge.', 
+          category: 'exercise', 
+          priority: 'recommended',
+          estimatedTime: mode === 'pregnancy' ? '10 mins' : '15 mins',
+          rationale: 'Light physical movement boosts peripheral circulation and endorphin release.'
+        });
       }
     } else if (slot === 'evening') {
       if (m.acneAvg > 4) {
-        tasks.push({ text: 'Complete your gentle skin cleansing routine to support skin recovery.', category: 'skin', priority: 'high' });
+        tasks.push({ 
+          text: 'Complete a gentle double-cleansing skin routine.', 
+          category: 'skin', 
+          priority: 'high',
+          estimatedTime: '10 mins',
+          rationale: 'Cleansing removes environmental pollutants and excess sebum accumulated during the day.'
+        });
       }
       if (mode === 'pcos' && m.cycleStatus === 'menstrual') {
-        tasks.push({ text: 'Sip warm herbal tea and apply a heating pad if experiencing cramps.', category: 'cycle', priority: 'high' });
+        tasks.push({ 
+          text: 'Sip warm chamomile or peppermint tea for pelvic relaxation.', 
+          category: 'cycle', 
+          priority: 'high',
+          estimatedTime: '10 mins',
+          rationale: 'Warm herbal tea relaxes smooth abdominal muscle tissues during your cycle.'
+        });
       } else {
-        tasks.push({ text: 'Spend 5 minutes journaling one positive moment from today.', category: 'mindfulness', priority: 'recommended' });
+        tasks.push({ 
+          text: 'Reflect on 1 positive highlight from your day.', 
+          category: 'mindfulness', 
+          priority: 'recommended',
+          estimatedTime: '5 mins',
+          rationale: 'Gratitude exercises promote dopamine release prior to sleep.'
+        });
       }
-      tasks.push({ text: 'Wind down 30 minutes before bed — dim lights, put away screens, and relax.', category: 'sleep', priority: 'high' });
+      tasks.push({ 
+        text: 'Dim screens and wind down 30 minutes before sleep.', 
+        category: 'sleep', 
+        priority: 'high',
+        estimatedTime: '30 mins',
+        rationale: 'Avoiding blue light exposure enables natural melatonin synthesis for deep sleep.'
+      });
     }
 
     return tasks;

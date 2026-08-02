@@ -16,12 +16,17 @@ type TaskPriority = 'high' | 'recommended' | 'optional';
 type TimeSlot = 'morning' | 'afternoon' | 'evening';
 type TaskCategory = 'sleep' | 'stress' | 'mood' | 'cycle' | 'symptoms' | 'skin' | 'hydration' | 'exercise' | 'nutrition' | 'mindfulness' | 'pregnancy';
 
+export type TaskStatus = 'pending' | 'completed' | 'skipped';
+
 interface WellnessTask {
   id: string;
   text: string;
   category: TaskCategory;
   timeSlot: TimeSlot;
   priority: TaskPriority;
+  status?: TaskStatus;
+  estimatedTime?: string;
+  rationale?: string;
   completed: boolean;
   completedAt: string | null;
 }
@@ -123,15 +128,20 @@ export default function WellnessPlanPage() {
 
   useEffect(() => { loadPlan(); }, [loadPlan]);
 
-  // ── Toggle Task ──
-  const handleToggle = async (taskId: string) => {
+  // ── Status Change (Pending / Completed / Skipped) ──
+  const handleStatusChange = async (taskId: string, targetStatus: 'pending' | 'completed' | 'skipped') => {
     if (!plan || toggling) return;
     setToggling(taskId);
 
-    // Optimistic update
+    const isDone = targetStatus === 'completed';
     const optimistic = plan.tasks.map(t =>
       t.id === taskId
-        ? { ...t, completed: !t.completed, completedAt: !t.completed ? new Date().toISOString() : null }
+        ? { 
+            ...t, 
+            status: targetStatus, 
+            completed: isDone, 
+            completedAt: isDone ? (t.completedAt || new Date().toISOString()) : null 
+          }
         : t
     );
     setPlan(p => p ? { ...p, tasks: optimistic } : p);
@@ -140,7 +150,7 @@ export default function WellnessPlanPage() {
     try {
       const res = await apiFetch(`/api/wellness-plan/toggle`, {
         method: 'POST',
-        body: JSON.stringify({ planId: plan.id, taskId })
+        body: JSON.stringify({ planId: plan.id, taskId, status: targetStatus })
       });
       if (res.ok) {
         const body = await res.json();
@@ -149,16 +159,14 @@ export default function WellnessPlanPage() {
         setWellnessTasks(body.tasks);
         setAnimScore(body.score);
 
-        const task = plan.tasks.find(t => t.id === taskId);
-        const nowDone = !task?.completed;
-        if (nowDone) toast.success('Task complete! Keep going 🌸');
+        if (targetStatus === 'completed') toast.success('Task complete! Keep going 🌸');
+        else if (targetStatus === 'skipped') toast.info('Task skipped.');
 
-        if (body.tasks.every((t: WellnessTask) => t.completed)) {
+        if (body.tasks.every((t: any) => t.completed || t.status === 'completed')) {
           toast.success('🎉 Perfect day! All tasks complete!', { description: 'Your streak has been updated.' });
           refreshAll();
         }
       } else {
-        // Revert
         setPlan(p => p ? { ...p, tasks: plan.tasks } : p);
         setWellnessTasks(plan.tasks);
         toast.error('Failed to update task.');
@@ -170,6 +178,12 @@ export default function WellnessPlanPage() {
     } finally {
       setToggling(null);
     }
+  };
+
+  const handleToggle = (taskId: string) => {
+    const current = plan?.tasks.find(t => t.id === taskId);
+    const nextStatus = current?.completed || current?.status === 'completed' ? 'pending' : 'completed';
+    handleStatusChange(taskId, nextStatus);
   };
 
   // ── Regenerate ──
@@ -358,8 +372,54 @@ export default function WellnessPlanPage() {
             </div>
           </motion.div>
 
-          {/* Streak Row */}
+          {/* Progress & Consistency Breakdown */}
           <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '1rem', padding: '1rem', marginBottom: '1rem' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--hs-pink)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>
+                📊 Progress Tracking
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '0.5rem', textAlign: 'center' }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)' }}>🌅 Morning</span>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#FBBF24' }}>
+                    {plan.tasks.filter(t => t.timeSlot === 'morning').length > 0
+                      ? Math.round((plan.tasks.filter(t => t.timeSlot === 'morning' && (t.completed || t.status === 'completed')).length / plan.tasks.filter(t => t.timeSlot === 'morning').length) * 100)
+                      : 0}%
+                  </div>
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '0.5rem', textAlign: 'center' }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)' }}>☀️ Afternoon</span>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#38BDF8' }}>
+                    {plan.tasks.filter(t => t.timeSlot === 'afternoon').length > 0
+                      ? Math.round((plan.tasks.filter(t => t.timeSlot === 'afternoon' && (t.completed || t.status === 'completed')).length / plan.tasks.filter(t => t.timeSlot === 'afternoon').length) * 100)
+                      : 0}%
+                  </div>
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '0.5rem', textAlign: 'center' }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)' }}>🌙 Evening</span>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#A78BFA' }}>
+                    {plan.tasks.filter(t => t.timeSlot === 'evening').length > 0
+                      ? Math.round((plan.tasks.filter(t => t.timeSlot === 'evening' && (t.completed || t.status === 'completed')).length / plan.tasks.filter(t => t.timeSlot === 'evening').length) * 100)
+                      : 0}%
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
+                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '0.5rem', textAlign: 'center' }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)' }}>Daily Progress</span>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#10B981' }}>{total > 0 ? Math.round((done / total) * 100) : 0}%</div>
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '0.5rem', textAlign: 'center' }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)' }}>Weekly</span>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--hs-violet)' }}>{streak?.weeklyConsistency ?? 0}%</div>
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '0.5rem', textAlign: 'center' }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)' }}>Monthly</span>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--hs-pink)' }}>{Math.min(100, Math.round(((streak?.currentStreak ?? 1) / 30) * 100))}%</div>
+                </div>
+              </div>
+            </div>
+
             <div className={styles.streakRow}>
               {[
                 { icon: '🔥', val: streak?.currentStreak ?? 0, lbl: 'Streak', unit: 'd' },
@@ -532,31 +592,37 @@ export default function WellnessPlanPage() {
                   slotTasks.map((task, taskIdx) => {
                     const catCfg = CATEGORY_CONFIG[task.category] || CATEGORY_CONFIG.mindfulness;
                     const isLoading = toggling === task.id;
-                    const priorityCls = task.completed ? styles.priorityOpt
+                    const isDone = task.completed || task.status === 'completed';
+                    const isSkipped = task.status === 'skipped';
+
+                    const priorityCls = isDone ? styles.priorityOpt
                       : task.priority === 'high' ? styles.priorityHigh
                       : task.priority === 'recommended' ? styles.priorityRec : styles.priorityOpt;
-                    const priorityLabel = task.completed ? '✓ Done'
+                    const priorityLabel = isDone ? '✓ Done'
+                      : isSkipped ? '⏭️ Skipped'
                       : task.priority === 'high' ? '🔥 High'
                       : task.priority === 'recommended' ? '⭐ Rec' : 'Optional';
 
                     return (
                       <motion.div
                         key={task.id}
-                        className={`${styles.taskCard} ${task.completed ? styles.completed : ''} ${styles[task.priority as keyof typeof styles] || ''}`}
-                        onClick={() => handleToggle(task.id)}
+                        className={`${styles.taskCard} ${isDone ? styles.completed : ''} ${isSkipped ? 'opacity-50' : ''} ${styles[task.priority as keyof typeof styles] || ''}`}
                         initial={{ opacity: 0, x: -8 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.25 + slotIdx * 0.08 + taskIdx * 0.04 }}
-                        whileTap={{ scale: 0.985 }}
                       >
                         {/* Check circle */}
-                        <div className={`${styles.taskCheck} ${task.completed ? styles.done : ''} ${isLoading ? styles.loading : ''}`}>
+                        <div 
+                          className={`${styles.taskCheck} ${isDone ? styles.done : ''} ${isLoading ? styles.loading : ''}`}
+                          onClick={() => handleToggle(task.id)}
+                          style={{ cursor: 'pointer' }}
+                        >
                           <AnimatePresence mode="wait">
                             {isLoading ? (
                               <motion.div key="spin" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                                 <Loader2 size={12} style={{ color: 'var(--hs-violet)' }} className="animate-spin" />
                               </motion.div>
-                            ) : task.completed ? (
+                            ) : isDone ? (
                               <motion.div key="done" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', bounce: 0.5 }}>
                                 <CheckCircle2 size={13} color="#fff" fill="#fff" />
                               </motion.div>
@@ -575,13 +641,49 @@ export default function WellnessPlanPage() {
                             <span className={`${styles.taskBadge}`} style={{ background: catCfg.color, color: 'var(--foreground)', border: 'none' }}>
                               {catCfg.emoji} {catCfg.label}
                             </span>
+                            {task.estimatedTime && (
+                              <span className={styles.taskBadge} style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--muted-foreground)', border: 'none' }}>
+                                ⏱️ {task.estimatedTime}
+                              </span>
+                            )}
                           </div>
-                          <p className={`${styles.taskText} ${task.completed ? styles.done : ''}`}>{task.text}</p>
-                          {task.completedAt && (
-                            <span className={styles.completedAt}>
-                              ✓ Done at {format(new Date(task.completedAt), 'h:mm a')}
-                            </span>
+                          
+                          <p className={`${styles.taskText} ${isDone ? styles.done : ''}`}>{task.text}</p>
+                          
+                          {/* Luna AI Rationale */}
+                          {task.rationale && (
+                            <div style={{ marginTop: '0.4rem', padding: '0.4rem 0.6rem', borderRadius: '0.5rem', background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.15)', fontSize: '0.72rem', color: 'var(--muted-foreground)' }}>
+                              <span style={{ fontWeight: 700, color: 'var(--hs-violet)' }}>Luna AI: </span>
+                              {task.rationale}
+                            </div>
                           )}
+
+                          {/* Status Actions */}
+                          <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'completed'); }}
+                              style={{ padding: '0.2rem 0.6rem', borderRadius: '99px', fontSize: '0.65rem', fontWeight: 600, border: 'none', cursor: 'pointer', background: isDone ? '#10B981' : 'rgba(16,185,129,0.15)', color: isDone ? '#fff' : '#34D399' }}
+                            >
+                              ✓ Done
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'pending'); }}
+                              style={{ padding: '0.2rem 0.6rem', borderRadius: '99px', fontSize: '0.65rem', fontWeight: 600, border: 'none', cursor: 'pointer', background: (!isDone && !isSkipped) ? 'var(--hs-violet)' : 'rgba(255,255,255,0.1)', color: (!isDone && !isSkipped) ? '#fff' : 'var(--muted-foreground)' }}
+                            >
+                              ⏳ Pending
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'skipped'); }}
+                              style={{ padding: '0.2rem 0.6rem', borderRadius: '99px', fontSize: '0.65rem', fontWeight: 600, border: 'none', cursor: 'pointer', background: isSkipped ? '#EF4444' : 'rgba(239,68,68,0.15)', color: isSkipped ? '#fff' : '#F87171' }}
+                            >
+                              ⏭️ Skip
+                            </button>
+                            {task.completedAt && (
+                              <span className={styles.completedAt} style={{ marginLeft: 'auto' }}>
+                                Done at {format(new Date(task.completedAt), 'h:mm a')}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </motion.div>
                     );
