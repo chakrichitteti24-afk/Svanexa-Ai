@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { Image as ImageIcon, Trash2, Loader2 } from 'lucide-react';
+import { Image as ImageIcon, Trash2, Loader2, Camera, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { createClient } from '@/utils/supabase/client';
 import { useHerSync } from '@/context/HerSyncContext';
@@ -28,6 +28,8 @@ export default function SkinTrackerPage() {
   const [oiliness, setOiliness] = useState(5);
   const [dryness, setDryness] = useState(2);
   const [notes, setNotes] = useState('');
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
   const supabase = createClient();
 
@@ -38,7 +40,7 @@ export default function SkinTrackerPage() {
   }, [supabase]);
 
   const entries = skinLogs.map(d => {
-    let parsedNotes = { oiliness: 5, dryness: 2, text: d.notes || '' };
+    let parsedNotes = { oiliness: 5, dryness: 2, text: d.notes || '', photoUrl: '' };
     try {
       if (d.notes && d.notes.startsWith('{')) {
         parsedNotes = JSON.parse(d.notes);
@@ -47,13 +49,41 @@ export default function SkinTrackerPage() {
     return { ...d, parsedNotes };
   });
 
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setPhotoFile(file);
+      setPhotoPreview(URL.createObjectURL(file));
+    }
+  };
+
   const handleSave = async () => {
     if (!userId) return;
     setSaving(true);
     const today = format(new Date(), 'yyyy-MM-dd');
-    const complexNotes = JSON.stringify({ oiliness, dryness, text: notes });
-
+    
     try {
+      let photoUrl = '';
+      
+      // Upload photo if selected
+      if (photoFile) {
+        const fileExt = photoFile.name.split('.').pop();
+        const fileName = `${userId}-${Date.now()}.${fileExt}`;
+        const { error: uploadError, data } = await supabase.storage
+          .from('skin_photos')
+          .upload(fileName, photoFile);
+          
+        if (uploadError) throw new Error(`Photo upload failed: ${uploadError.message}`);
+        
+        const { data: publicUrlData } = supabase.storage
+          .from('skin_photos')
+          .getPublicUrl(fileName);
+          
+        photoUrl = publicUrlData.publicUrl;
+      }
+
+      const complexNotes = JSON.stringify({ oiliness, dryness, text: notes, photoUrl });
+
       const { error } = await supabase.from('skin_logs').insert({
         user_id: userId,
         date: today,
@@ -66,6 +96,8 @@ export default function SkinTrackerPage() {
       setOiliness(5);
       setDryness(2);
       setNotes('');
+      setPhotoFile(null);
+      setPhotoPreview(null);
       toast.success('Skin progress saved!');
       // Broadcast to Dashboard, Reports, AI Companion
       await refreshSkinLogs();
@@ -193,6 +225,30 @@ export default function SkinTrackerPage() {
                 onChange={(e) => setNotes(e.target.value)}
               />
             </div>
+            
+            {/* Photo Upload */}
+            <div className="space-y-2">
+              <Label>Upload Photo (Optional)</Label>
+              {!photoPreview ? (
+                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-border/50 rounded-2xl cursor-pointer bg-secondary/20 hover:bg-secondary/40 transition-colors">
+                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                    <Camera className="w-8 h-8 mb-2 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground font-medium">Tap to upload a selfie</p>
+                  </div>
+                  <input type="file" className="hidden" accept="image/*" onChange={handlePhotoSelect} />
+                </label>
+              ) : (
+                <div className="relative w-full h-48 rounded-2xl overflow-hidden border border-border">
+                  <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
+                  <button 
+                    onClick={() => { setPhotoPreview(null); setPhotoFile(null); }}
+                    className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full text-white hover:bg-black/70 backdrop-blur-md"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
 
             <Button 
               className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:opacity-90 text-white shadow-md shadow-blue-500/20" 
@@ -239,6 +295,11 @@ export default function SkinTrackerPage() {
                         )}
                       </div>
                       {entry.parsedNotes?.text && <p className="text-sm mt-3 line-clamp-2 italic text-muted-foreground border-l-2 border-primary/20 pl-2">{`"${entry.parsedNotes.text}"`}</p>}
+                      {entry.parsedNotes?.photoUrl && (
+                        <div className="mt-3">
+                          <img src={entry.parsedNotes.photoUrl} alt="Skin progress" className="w-full max-w-[200px] h-32 object-cover rounded-xl border border-border/50 shadow-sm" />
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

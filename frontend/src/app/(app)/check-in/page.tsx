@@ -115,6 +115,62 @@ function getCurrentSlot(): SlotType {
   return 'evening';
 }
 
+function useNextSlotCountdown(activeSlot: SlotType, isCompleted: boolean) {
+  const [countdown, setCountdown] = useState('');
+  const [nextSlotName, setNextSlotName] = useState('');
+
+  useEffect(() => {
+    if (!isCompleted) return;
+
+    const updateTimer = () => {
+      const now = new Date();
+      const currentHour = now.getHours();
+      
+      let nextSlotHour = 0;
+      let slotName = '';
+      
+      if (activeSlot === 'morning') {
+        nextSlotHour = 12; // 12 PM Afternoon
+        slotName = 'Afternoon';
+      } else if (activeSlot === 'afternoon') {
+        nextSlotHour = 18; // 6 PM Evening
+        slotName = 'Evening';
+      } else {
+        nextSlotHour = 5; // 5 AM Next Day Morning
+        slotName = 'Morning';
+      }
+
+      const nextTarget = new Date(now);
+      nextTarget.setHours(nextSlotHour, 0, 0, 0);
+      
+      // If we are currently in evening (e.g. 8 PM), next target is 5 AM next day
+      if (activeSlot === 'evening' && currentHour >= 18) {
+        nextTarget.setDate(nextTarget.getDate() + 1);
+      }
+
+      const diffMs = nextTarget.getTime() - now.getTime();
+      if (diffMs <= 0) {
+        setCountdown('Unlocking now...');
+        window.location.reload();
+        return;
+      }
+
+      const h = Math.floor(diffMs / (1000 * 60 * 60));
+      const m = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+      const s = Math.floor((diffMs % (1000 * 60)) / 1000);
+      
+      setNextSlotName(slotName);
+      setCountdown(`${h}h ${m}m ${s}s`);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [activeSlot, isCompleted]);
+
+  return { countdown, nextSlotName };
+}
+
 export default function CheckInPage() {
   const router = useRouter();
   const { wellnessMode, refreshAll } = useHerSync();
@@ -130,6 +186,9 @@ export default function CheckInPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [saving, setSaving] = useState(false);
+
+  const isCurrentSlotCompleted = completedSlots[activeSlot].completed;
+  const { countdown, nextSlotName } = useNextSlotCountdown(activeSlot, isCurrentSlotCompleted);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -199,6 +258,10 @@ export default function CheckInPage() {
       const now = new Date().toISOString();
       setCompletedSlots(prev => ({ ...prev, [activeSlot]: { completed: true, completedAt: now, data: answers } }));
       toast.success(`${activeSlot} check-in completed!`);
+      
+      // Auto-generate wellness plan in the background
+      apiFetch('/api/wellness-plan', { method: 'POST' }).catch(console.error);
+      
       await refreshAll();
     } catch (err: any) {
       toast.error('Network Error', { description: err.message });
@@ -215,8 +278,6 @@ export default function CheckInPage() {
     );
   }
 
-  const isCurrentSlotCompleted = completedSlots[activeSlot].completed;
-
   if (isCurrentSlotCompleted) {
     return (
       <div className="max-w-2xl mx-auto w-full pt-8 px-4 pb-24">
@@ -224,17 +285,26 @@ export default function CheckInPage() {
           initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
           className="flex flex-col items-center justify-center text-center p-10 bg-card/80 backdrop-blur-md border border-border/40 rounded-3xl shadow-xl shadow-emerald-500/5"
         >
-          <div className="w-24 h-24 rounded-full bg-emerald-500/10 flex items-center justify-center mb-6">
-            <CheckCircle2 className="w-12 h-12 text-emerald-500" />
+          <div className="w-24 h-24 rounded-full bg-emerald-500/10 flex items-center justify-center mb-6 relative overflow-hidden">
+             <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 animate-pulse" />
+            <CheckCircle2 className="w-12 h-12 text-emerald-500 relative z-10" />
           </div>
           <h2 className="text-2xl font-bold text-emerald-500 mb-2 capitalize">{activeSlot} Check-in Complete!</h2>
-          <p className="text-muted-foreground mb-8 text-lg">
-            Completed at {format(new Date(completedSlots[activeSlot].completedAt!), 'h:mm a')}.<br/>
-            Your wellness plan has been updated.
+          <p className="text-muted-foreground mb-8 text-sm max-w-md">
+            You successfully logged your data at {format(new Date(completedSlots[activeSlot].completedAt!), 'h:mm a')}.<br/>
+            Your daily wellness plan has been updated!
           </p>
+          
+          <div className="w-full bg-secondary/50 rounded-2xl p-6 border border-border/50 mb-8 flex flex-col items-center justify-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{nextSlotName} Check-in unlocks in</span>
+            <div className="text-3xl font-black tabular-nums tracking-tight text-foreground/90 font-mono">
+              {countdown || "..."}
+            </div>
+          </div>
+
           <button 
             onClick={() => router.push('/dashboard')} 
-            className="px-8 py-3.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold shadow-lg shadow-emerald-500/20 transition-all hover:scale-105"
+            className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-foreground hover:bg-foreground/90 text-background font-semibold shadow-lg transition-all hover:scale-105"
           >
             Return to Dashboard
           </button>
