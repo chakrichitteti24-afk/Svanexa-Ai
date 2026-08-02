@@ -600,7 +600,7 @@ function WellnessPlanContent() {
               All
             </button>
             {activeCategories.map(cat => {
-              const cfg = CATEGORY_CONFIG[cat];
+              const cfg = CATEGORY_CONFIG[cat] || { label: cat, emoji: '✨', color: 'rgba(168,85,247,0.12)' };
               return (
                 <button
                   key={cat}
@@ -617,7 +617,7 @@ function WellnessPlanContent() {
           {slots.map((slot, slotIdx) => {
             const slotTasks = filteredTasksBySlot(slot);
             const slotDone = slotTasks.filter(t => t.completed).length;
-            const cfg = SLOT_CONFIG[slot];
+            const cfg = SLOT_CONFIG[slot] || { label: slot, emoji: '✨', cssClass: 'morning' };
             const unlocked = isSlotUnlocked(slot);
             const allDoneForSlot = isSlotAllDone(slot);
 
@@ -630,7 +630,7 @@ function WellnessPlanContent() {
                 transition={{ delay: 0.2 + slotIdx * 0.08 }}
               >
                 {/* Slot Header */}
-                <div className={`${styles.sectionHeader} ${styles[cfg.cssClass as keyof typeof styles]}`}>
+                <div className={`${styles.sectionHeader} ${styles[cfg.cssClass as keyof typeof styles] || ''}`}>
                   <span>{cfg.emoji}</span>
                   <span>{cfg.label}</span>
                   {unlocked && slotTasks.length > 0 && (
@@ -647,7 +647,7 @@ function WellnessPlanContent() {
                     style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '0.75rem', padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 700, color: '#34D399', marginBottom: '0.5rem' }}
                   >
                     <CheckCircle2 size={16} className="text-emerald-400" />
-                    {cfg.label} Tasks Completed! {slotIdx < 2 ? `${SLOT_CONFIG[slots[slotIdx + 1] as TimeSlot]?.label} check-in is next.` : '🎉'}
+                    {cfg.label} Tasks Completed! {slotIdx < 2 ? `${SLOT_CONFIG[slots[slotIdx + 1] as TimeSlot]?.label || 'Next'} check-in is next.` : '🎉'}
                   </motion.div>
                 )}
 
@@ -671,7 +671,7 @@ function WellnessPlanContent() {
                 ) : (
                   /* Tasks */
                   slotTasks.map((task, taskIdx) => {
-                    const catCfg = CATEGORY_CONFIG[task.category] || CATEGORY_CONFIG.mindfulness;
+                    const catCfg = CATEGORY_CONFIG[task.category] || CATEGORY_CONFIG.mindfulness || { label: task.category, emoji: '✨', color: 'rgba(168,85,247,0.12)' };
                     const isLoading = toggling === task.id;
                     const isDone = task.completed || task.status === 'completed';
                     const isSkipped = task.status === 'skipped';
