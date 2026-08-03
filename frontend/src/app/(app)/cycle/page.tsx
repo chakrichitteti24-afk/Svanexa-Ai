@@ -150,6 +150,7 @@ export default function CycleTrackerPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   
   const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = React.useRef(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [sheetView, setSheetView] = useState<'menu' | 'note' | 'event' | 'symptoms' | 'locked' | 'view_cycle'>('menu');
   const [monthData, setMonthData] = useState<Record<string, any>>({});
@@ -274,12 +275,20 @@ const parseLocalDate = (dateStr: string | null) => {
         }
       } else {
         // Completed cycle (both Period Start and Period End exist)
-        if (currentTs >= startTs && currentTs <= endTs) {
+        let sTs = startTs;
+        let eTs = endTs;
+        // Self-heal corrupted DB records where end < start
+        if (sTs > eTs) {
+          sTs = endTs;
+          eTs = startTs;
+        }
+
+        if (currentTs >= sTs && currentTs <= eTs) {
           return {
             type: 'period',
             inRange: true,
-            isStart: currentTs === startTs,
-            isEnd: currentTs === endTs,
+            isStart: currentTs === sTs,
+            isEnd: currentTs === eTs,
             isLocked,
             cycle: c
           };
@@ -346,7 +355,8 @@ const parseLocalDate = (dateStr: string | null) => {
 
   // Log Period Started
   const logPeriodStart = async () => {
-    if (!selectedDate || isSaving) return;
+    if (!selectedDate || isSaving || isSavingRef.current) return;
+    isSavingRef.current = true;
     setIsSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -362,6 +372,7 @@ const parseLocalDate = (dateStr: string | null) => {
           const selTs = getNormalizedTimestamp(selectedDate)!;
           if (selTs > endTs) {
             toast.error('Period start date cannot be after period end date.');
+            isSavingRef.current = false;
             setIsSaving(false);
             return;
           }
@@ -389,6 +400,7 @@ const parseLocalDate = (dateStr: string | null) => {
 
         if (existingActive) {
           toast.error('A period is already active. Please log Period Ended before starting a new cycle.');
+          isSavingRef.current = false;
           setIsSaving(false);
           return;
         }
@@ -400,7 +412,11 @@ const parseLocalDate = (dateStr: string | null) => {
 
         // Create new active cycle and return it
         const { data: insertedData, error } = await supabase.from('cycle_logs').insert({ user_id: user.id, start_date: dateStr, end_date: null }).select().single();
-        if (error || !insertedData) throw error;
+        if (error || !insertedData) {
+          // Revert optimistic update
+          setCycleHistory(cycleHistory);
+          throw error;
+        }
         
         // Update state with TRUE DB data, replacing the temp optimistic cycle
         setCycleHistory([insertedData, ...cycleHistory.filter(c => c.id !== tempId)]);
@@ -412,15 +428,19 @@ const parseLocalDate = (dateStr: string | null) => {
       // Fire refreshAll for dashboard, but skip cycle history to prevent stale reads
       refreshAll({ skipCycleHistory: true });
     } catch (e) {
+      // Hard refresh context to clear any ghost optimistic states
+      refreshCycleHistory();
       toast.error('Failed to log period start.');
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   };
 
   // Log Period Ended
   const logPeriodEnd = async () => {
-    if (!selectedDate || isSaving) return;
+    if (!selectedDate || isSaving || isSavingRef.current) return;
+    isSavingRef.current = true;
     setIsSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -433,6 +453,7 @@ const parseLocalDate = (dateStr: string | null) => {
 
       if (!targetCycle) {
         toast.error('No active period found to end.');
+        isSavingRef.current = false;
         setIsSaving(false);
         return;
       }
@@ -442,6 +463,7 @@ const parseLocalDate = (dateStr: string | null) => {
 
       if (selTs < startTs) {
         toast.error('Period end date cannot be before period start date.');
+        isSavingRef.current = false;
         setIsSaving(false);
         return;
       }
@@ -453,7 +475,11 @@ const parseLocalDate = (dateStr: string | null) => {
       setCycleHistory(optimisticHistory);
 
       // Update active cycle with end date and get it back
-      const { data: updatedData } = await supabase.from('cycle_logs').update({ end_date: dateStr }).eq('id', targetCycle.id).select().single();
+      const { data: updatedData, error } = await supabase.from('cycle_logs').update({ end_date: dateStr }).eq('id', targetCycle.id).select().single();
+      if (error) {
+        setCycleHistory(cycleHistory); // revert
+        throw error;
+      }
       if (updatedData) {
          setCycleHistory(optimisticHistory.map(c => c.id === targetCycle.id ? updatedData : c));
       }
@@ -461,7 +487,9 @@ const parseLocalDate = (dateStr: string | null) => {
       // Clean up any stale/duplicate active cycles in database if they exist
       const staleActives = cycleHistory.filter(c => !c.end_date && c.id !== targetCycle.id);
       for (const stale of staleActives) {
-        await supabase.from('cycle_logs').delete().eq('id', stale.id);
+        if (!stale.id.startsWith('temp-')) {
+          await supabase.from('cycle_logs').delete().eq('id', stale.id);
+        }
       }
 
       toast.success('Period ended. Cycle completed & saved!');
@@ -471,8 +499,10 @@ const parseLocalDate = (dateStr: string | null) => {
       // Fire refreshAll for dashboard, but skip cycle history to prevent stale reads
       refreshAll({ skipCycleHistory: true });
     } catch (e) {
+      refreshCycleHistory();
       toast.error('Failed to log period end.');
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   };
