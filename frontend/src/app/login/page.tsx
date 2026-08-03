@@ -33,8 +33,9 @@ export default function LoginPage() {
       setError(error.message);
       setLoading(false);
     } else {
-      router.push('/dashboard');
-      router.refresh();
+      // Force a hard reload to ensure Next.js middleware and Server Components 
+      // see the fresh Supabase session cookie natively.
+      window.location.href = '/dashboard';
     }
   };
 

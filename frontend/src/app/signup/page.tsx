@@ -101,8 +101,35 @@ export default function SignUpPage() {
         return;
       }
 
-      router.push('/dashboard');
-      router.refresh();
+      // Automatically create the user profile in Supabase exactly once
+      await supabase.from('profiles').upsert(
+        {
+          id: authData.user.id,
+          first_name: firstName,
+          last_name: lastName,
+          email: email,
+          ai_name: aiName || 'Luna',
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' }
+      );
+
+      // Create all required default records
+      await Promise.all([
+        supabase.from('user_preferences').upsert(
+          { user_id: authData.user.id, theme: 'general', push_notifications: true },
+          { onConflict: 'user_id' }
+        ),
+        supabase.from('wellness_streaks').upsert(
+          { user_id: authData.user.id, current_streak: 0, longest_streak: 0 },
+          { onConflict: 'user_id' }
+        )
+      ]);
+
+      // Force a hard reload to the dashboard so that the newly set Supabase cookies
+      // are natively sent to the Next.js middleware, preventing the router cache from
+      // bouncing the user back to the login page.
+      window.location.href = '/dashboard';
 
     } catch (err: any) {
       if (err.message?.toLowerCase().includes('already registered')) {
