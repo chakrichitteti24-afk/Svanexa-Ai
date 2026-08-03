@@ -70,43 +70,45 @@ const CalendarDay = memo(({
 
   if (range.inRange) {
     if (range.type === 'period') {
-      textStyle = 'text-pink-600 dark:text-pink-300 font-bold';
+      textStyle = 'text-white font-bold';
       if (range.isStart && range.isEnd) {
-        rangeStyle = 'w-10 rounded-full bg-pink-500/30 mx-auto';
+        rangeStyle = 'w-9 h-9 rounded-full bg-pink-500 text-white font-bold shadow-md shadow-pink-500/30 mx-auto flex items-center justify-center';
       } else if (range.isStart) {
-        rangeStyle = 'w-full rounded-l-full rounded-r-none bg-pink-500/25';
+        rangeStyle = 'w-full h-9 rounded-l-full rounded-r-none bg-pink-500 text-white font-bold flex items-center justify-center';
       } else if (range.isEnd) {
-        rangeStyle = 'w-full rounded-r-full rounded-l-none bg-pink-500/25';
+        rangeStyle = 'w-full h-9 rounded-r-full rounded-l-none bg-pink-500 text-white font-bold flex items-center justify-center';
       } else {
-        rangeStyle = 'w-full rounded-none bg-pink-500/25 font-semibold';
+        rangeStyle = 'w-full h-9 rounded-none bg-pink-500/70 dark:bg-pink-500/60 text-white font-bold flex items-center justify-center';
       }
     } else if (range.type === 'pregnancy') {
-      textStyle = 'text-amber-700 dark:text-amber-300 font-bold';
+      textStyle = 'text-white font-bold';
       if (range.isStart && range.isEnd) {
-        rangeStyle = 'w-10 rounded-full bg-amber-500/35 mx-auto';
+        rangeStyle = 'w-9 h-9 rounded-full bg-amber-500 text-white font-bold shadow-md mx-auto flex items-center justify-center';
       } else if (range.isStart) {
-        rangeStyle = 'w-full rounded-l-full rounded-r-none bg-amber-500/25';
+        rangeStyle = 'w-full h-9 rounded-l-full rounded-r-none bg-amber-500 text-white font-bold flex items-center justify-center';
       } else if (range.isEnd) {
-        rangeStyle = 'w-full rounded-r-full rounded-l-none bg-amber-500/25';
+        rangeStyle = 'w-full h-9 rounded-r-full rounded-l-none bg-amber-500 text-white font-bold flex items-center justify-center';
       } else {
-        rangeStyle = 'w-full rounded-none bg-amber-500/25 font-semibold';
+        rangeStyle = 'w-full h-9 rounded-none bg-amber-500/70 text-white font-bold flex items-center justify-center';
       }
     } else if (range.type === 'predicted_period') {
-      textStyle = 'text-pink-400 font-bold';
+      textStyle = 'text-pink-600 dark:text-pink-300 font-bold';
       if (range.isStart && range.isEnd) {
-        rangeStyle = 'w-10 rounded-full border-2 border-dashed border-pink-300 dark:border-pink-500/50 mx-auto';
+        rangeStyle = 'w-9 h-9 rounded-full border-2 border-dashed border-pink-400 bg-pink-500/10 mx-auto flex items-center justify-center';
       } else if (range.isStart) {
-        rangeStyle = 'w-full rounded-l-full rounded-r-none border-y-2 border-l-2 border-dashed border-pink-300 dark:border-pink-500/50 bg-transparent';
+        rangeStyle = 'w-full h-9 rounded-l-full rounded-r-none border-y-2 border-l-2 border-dashed border-pink-400 bg-pink-500/10 flex items-center justify-center';
       } else if (range.isEnd) {
-        rangeStyle = 'w-full rounded-r-full rounded-l-none border-y-2 border-r-2 border-dashed border-pink-300 dark:border-pink-500/50 bg-transparent';
+        rangeStyle = 'w-full h-9 rounded-r-full rounded-l-none border-y-2 border-r-2 border-dashed border-pink-400 bg-pink-500/10 flex items-center justify-center';
       } else {
-        rangeStyle = 'w-full rounded-none border-y-2 border-dashed border-pink-300 dark:border-pink-500/50 bg-transparent';
+        rangeStyle = 'w-full h-9 rounded-none border-y-2 border-dashed border-pink-400 bg-pink-500/10 flex items-center justify-center';
       }
     }
   } else if (today && !isSel) {
-    // Today's Date: Purple outline only
-    rangeStyle = 'w-10 h-10 border-2 border-purple-500 rounded-full text-purple-600 dark:text-purple-400 font-bold mx-auto';
+    // Today's Date: Purple outline
+    rangeStyle = 'w-9 h-9 border-2 border-purple-500 rounded-full text-purple-600 dark:text-purple-400 font-bold mx-auto flex items-center justify-center';
   }
+
+  const isPeriod = range.inRange && range.type === 'period';
 
   return (
     <div className="flex flex-col items-center justify-center h-11 relative w-full">
@@ -119,7 +121,7 @@ const CalendarDay = memo(({
         `}
       >
         {isSel ? (
-          <span className="w-9 h-9 rounded-full bg-purple-600 text-white font-bold flex items-center justify-center shadow-lg transform scale-105 transition-transform">
+          <span className={`w-9 h-9 rounded-full ${isPeriod ? 'bg-pink-600 ring-2 ring-white text-white' : 'bg-purple-600 text-white'} font-bold flex items-center justify-center shadow-lg transform scale-105 transition-transform`}>
             {format(day, 'd')}
           </span>
         ) : (
@@ -270,8 +272,17 @@ const parseLocalDate = (dateStr: string | null) => {
 
       if (endTs === null) {
         // Active cycle (Period Start logged, Period End pending)
-        if (currentTs === startTs) {
-          return { type: 'period', isStart: true, isEnd: true, inRange: true, isLocked: false, cycle: c };
+        const todayTs = getNormalizedTimestamp(new Date())!;
+        const maxTs = Math.max(startTs, todayTs);
+        if (currentTs >= startTs && currentTs <= maxTs) {
+          return {
+            type: 'period',
+            inRange: true,
+            isStart: currentTs === startTs,
+            isEnd: currentTs === maxTs,
+            isLocked: false,
+            cycle: c
+          };
         }
       } else {
         // Completed cycle (both Period Start and Period End exist)
@@ -859,21 +870,38 @@ const parseLocalDate = (dateStr: string | null) => {
                         </button>
                       </>
                     ) : activeCycle ? (
-                      // ACTIVE CYCLE OPEN (Only Period Ended shown)
-                      <button 
-                        onClick={logPeriodEnd} 
-                        className="w-full flex items-center gap-4 p-4 rounded-2xl bg-pink-500/10 hover:bg-pink-500/20 transition-colors text-left border border-pink-500/30 active:scale-98"
-                      >
-                        <div className="w-10 h-10 rounded-full bg-pink-500/20 flex items-center justify-center shrink-0">
-                          <CalendarCheck className="w-5 h-5 text-pink-500" />
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-base font-bold text-foreground">Period Ended</span>
-                          <span className="text-xs text-muted-foreground">Complete active period range</span>
-                        </div>
-                      </button>
+                      // ACTIVE CYCLE OPEN (Show Period Ended & Update Period Start)
+                      <>
+                        <button 
+                          onClick={logPeriodEnd} 
+                          className="w-full flex items-center gap-4 p-4 rounded-2xl bg-pink-500/10 hover:bg-pink-500/20 transition-colors text-left border border-pink-500/30 active:scale-98"
+                        >
+                          <div className="w-10 h-10 rounded-full bg-pink-500/20 flex items-center justify-center shrink-0">
+                            <CalendarCheck className="w-5 h-5 text-pink-500" />
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-base font-bold text-foreground">
+                              {selectedDate ? `Period Ended on ${format(selectedDate, 'MMM d')}` : 'Period Ended'}
+                            </span>
+                            <span className="text-xs text-muted-foreground">Complete active period range</span>
+                          </div>
+                        </button>
+
+                        <button 
+                          onClick={logPeriodStart} 
+                          className="w-full flex items-center gap-4 p-4 rounded-2xl bg-pink-500/10 hover:bg-pink-500/20 transition-colors text-left border border-pink-500/30 active:scale-98"
+                        >
+                          <div className="w-10 h-10 rounded-full bg-pink-500/20 flex items-center justify-center shrink-0">
+                            <Droplets className="w-5 h-5 text-pink-500" />
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-base font-bold text-foreground">Update Period Start</span>
+                            <span className="text-xs text-muted-foreground">Change start date of active cycle</span>
+                          </div>
+                        </button>
+                      </>
                     ) : (
-                      // NO ACTIVE CYCLE (Period Started & Pregnancy Started shown)
+                      // NO ACTIVE CYCLE (Show Period Started & Period Ended & Pregnancy Started)
                       <>
                         <button 
                           onClick={logPeriodStart} 
@@ -883,8 +911,25 @@ const parseLocalDate = (dateStr: string | null) => {
                             <Droplets className="w-5 h-5 text-pink-500" />
                           </div>
                           <div className="flex flex-col">
-                            <span className="text-base font-bold text-foreground">Period Started</span>
+                            <span className="text-base font-bold text-foreground">
+                              {selectedDate ? `Period Started on ${format(selectedDate, 'MMM d')}` : 'Period Started'}
+                            </span>
                             <span className="text-xs text-muted-foreground">Log start of new cycle</span>
+                          </div>
+                        </button>
+
+                        <button 
+                          onClick={logPeriodEnd} 
+                          className="w-full flex items-center gap-4 p-4 rounded-2xl bg-pink-500/10 hover:bg-pink-500/20 transition-colors text-left border border-pink-500/30 active:scale-98"
+                        >
+                          <div className="w-10 h-10 rounded-full bg-pink-500/20 flex items-center justify-center shrink-0">
+                            <CalendarCheck className="w-5 h-5 text-pink-500" />
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-base font-bold text-foreground">
+                              {selectedDate ? `Period Ended on ${format(selectedDate, 'MMM d')}` : 'Period Ended'}
+                            </span>
+                            <span className="text-xs text-muted-foreground">Log end date for active period</span>
                           </div>
                         </button>
 
