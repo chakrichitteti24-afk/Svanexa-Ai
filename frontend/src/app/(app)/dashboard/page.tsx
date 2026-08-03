@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   BrainCircuit, Loader2, Droplets, Dumbbell,
   Check, Moon, Smile, Activity, Flame, Heart,
@@ -33,6 +33,7 @@ export default function DashboardPage() {
     aiName,
     isLoading,
     refreshAll,
+    toggleTask,
   } = useHerSync();
   const [showWelcome, setShowWelcome] = useState(false);
   const [togglingTask, setTogglingTask] = useState<string | null>(null);
@@ -77,7 +78,7 @@ export default function DashboardPage() {
 
   const hasDataToday = !!l && (l.sleep !== null || l.water !== null || l.mood !== null || l.stress !== null || l.exercise !== null);
 
-  const generateObservation = () => {
+  const observation = useMemo(() => {
     if (!hasDataToday) {
       return "Complete your daily check-ins so I can provide personalized wellness insights just for you today.";
     }
@@ -100,19 +101,20 @@ export default function DashboardPage() {
       obs += "Keeping stress in check can really help with cycle regularity — a short walk or breathing exercise could help.";
     }
     return obs.trim() || "Your vitals are logged for today. Keep up the healthy habits!";
-  };
+  }, [hasDataToday, l, wellnessMode]);
 
-  const getPregnancyWeek = () => {
+  const pregDetails = useMemo(() => {
     if (!pregnancyDueDate) return null;
     const due = new Date(pregnancyDueDate);
     const start = new Date(due);
     start.setDate(due.getDate() - 280);
     const today = new Date();
-    const week = Math.floor((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 7));
-    return week > 0 && week <= 42 ? week : null;
-  };
-
-  const pregWeek = getPregnancyWeek();
+    const diffDays = Math.floor((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    const week = Math.floor(diffDays / 7) + 1;
+    if (week < 1 || week > 42) return null;
+    const trimester = week <= 12 ? '1st Trimester' : week <= 27 ? '2nd Trimester' : '3rd Trimester';
+    return { week, trimester, dueDateStr: due.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) };
+  }, [pregnancyDueDate]);
 
   const waterTarget = wellnessMode === 'pcos' ? 2.5 : wellnessMode === 'pregnancy' ? 3.0 : 2.0;
   const waterLogged = l?.water ? Number(l.water) : 0;
@@ -154,14 +156,21 @@ export default function DashboardPage() {
     }
 
     try {
+      // Optimistic update in global context (no lag!)
+      toggleTask(taskId);
+
       const res = await apiFetch('/api/wellness-plan/toggle', {
         method: 'POST',
         body: JSON.stringify({ taskId, planId, status: isCompleting ? 'completed' : 'pending' }),
       });
-      if (res.ok) {
-        await refreshAll();
+      if (!res.ok) {
+        // Revert on error
+        toggleTask(taskId);
+        toast.error('Failed to update task');
       }
     } catch (error) {
+      // Revert on error
+      toggleTask(taskId);
       toast.error('Failed to update task');
     } finally {
       setTogglingTask(null);
@@ -309,12 +318,12 @@ export default function DashboardPage() {
                   </div>
                 </div>
               )}
-              {wellnessMode === 'pregnancy' && pregWeek && (
+              {wellnessMode === 'pregnancy' && pregDetails && (
                 <div className={styles.snapshotItem}>
-                  <div className={styles.snapshotIcon}><Heart className="w-4 h-4 text-blue-400" /></div>
+                  <div className={styles.snapshotIcon}><Heart className="w-4 h-4 text-pink-400" /></div>
                   <div className={styles.snapshotData}>
                     <span className={styles.snapshotLabel}>Pregnancy</span>
-                    <span className={styles.snapshotValue}>Week {pregWeek}</span>
+                    <span className={styles.snapshotValue}>Wk {pregDetails.week} ({pregDetails.trimester})</span>
                   </div>
                 </div>
               )}

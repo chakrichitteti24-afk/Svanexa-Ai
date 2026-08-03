@@ -20,7 +20,8 @@ export async function GET() {
       { data: profile },
       { data: prefs },
       { data: todayCheckin },
-      { data: checkins },
+      { count: checkinsCount },
+      { data: streakData },
       { data: cycles },
       { data: preg },
       { data: sleep },
@@ -29,16 +30,17 @@ export async function GET() {
       { data: exercise },
       { data: todayPlan }
     ] = await Promise.all([
-      supabase.from('profiles').select('*').eq('id', userId).single(),
-      supabase.from('user_preferences').select('*').eq('user_id', userId).maybeSingle(),
+      supabase.from('profiles').select('first_name, ai_name').eq('id', userId).single(),
+      supabase.from('user_preferences').select('theme').eq('user_id', userId).maybeSingle(),
       supabase.from('daily_checkins').select('summary').eq('user_id', userId).eq('date', today).maybeSingle(),
-      supabase.from('daily_checkins').select('date').eq('user_id', userId).order('date', { ascending: false }).limit(365),
-      supabase.from('cycle_logs').select('*').eq('user_id', userId).order('start_date', { ascending: false }).limit(1),
-      supabase.from('pregnancy_logs').select('*').eq('user_id', userId).maybeSingle(),
-      supabase.from('sleep_logs').select('*').eq('user_id', userId).eq('date', today).maybeSingle(),
-      supabase.from('water_logs').select('*').eq('user_id', userId).eq('date', today).maybeSingle(),
-      supabase.from('mood_logs').select('*').eq('user_id', userId).eq('date', today).maybeSingle(),
-      supabase.from('exercise_logs').select('*').eq('user_id', userId).eq('date', today).maybeSingle(),
+      supabase.from('daily_checkins').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+      supabase.from('wellness_streaks').select('current_streak').eq('user_id', userId).maybeSingle(),
+      supabase.from('cycle_logs').select('start_date').eq('user_id', userId).order('start_date', { ascending: false }).limit(1),
+      supabase.from('pregnancy_logs').select('due_date, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('sleep_logs').select('duration_hours').eq('user_id', userId).eq('date', today).maybeSingle(),
+      supabase.from('water_logs').select('amount_ml').eq('user_id', userId).eq('date', today).maybeSingle(),
+      supabase.from('mood_logs').select('mood, intensity').eq('user_id', userId).eq('date', today).maybeSingle(),
+      supabase.from('exercise_logs').select('duration_minutes').eq('user_id', userId).eq('date', today).maybeSingle(),
       supabase.from('wellness_plans').select('content').eq('user_id', userId).eq('title', today).maybeSingle(),
     ]);
 
@@ -62,24 +64,7 @@ export async function GET() {
 
     const allSlotsComplete = slotsMap.morning.completed && slotsMap.afternoon.completed && slotsMap.evening.completed;
 
-    // Calculate streak
-    let currentStreak = 0;
-    if (checkins && checkins.length > 0) {
-      const sortedDates = checkins.map(c => c.date);
-      const d = new Date(); d.setHours(0, 0, 0, 0);
-      const last = new Date(sortedDates[0]); last.setHours(0, 0, 0, 0);
-      const diff = Math.floor((d.getTime() - last.getTime()) / 86400000);
-      if (diff <= 1) {
-        currentStreak = 1;
-        for (let i = 0; i < sortedDates.length - 1; i++) {
-          const d1 = new Date(sortedDates[i]); d1.setHours(0, 0, 0, 0);
-          const d2 = new Date(sortedDates[i + 1]); d2.setHours(0, 0, 0, 0);
-          const diffDays = Math.floor((d1.getTime() - d2.getTime()) / 86400000);
-          if (diffDays === 1) currentStreak++;
-          else break;
-        }
-      }
-    }
+    const currentStreak = streakData?.current_streak || 0;
 
     // Determine cycle phase
     let cycle_status = 'insufficient_data';
@@ -104,7 +89,7 @@ export async function GET() {
       data: {
         profile,
         preferences: prefs,
-        total_logs_count: checkins ? checkins.length : 0,
+        total_logs_count: checkinsCount || 0,
         has_checked_in_today: allSlotsComplete || Object.values(slotsMap).some(s => s.completed),
         current_streak: currentStreak,
         cycle_status,

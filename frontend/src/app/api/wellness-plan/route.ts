@@ -3,6 +3,8 @@ import { createClient } from '@/utils/supabase/server';
 import { WellnessPlanService } from '@/lib/services/wellness-plan-service';
 import { format } from 'date-fns';
 
+export const maxDuration = 60;
+
 export async function GET(req: Request) {
   try {
     const supabase = await createClient();

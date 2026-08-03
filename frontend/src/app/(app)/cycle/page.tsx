@@ -1,47 +1,167 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   format, addMonths, subMonths, startOfMonth, endOfMonth, 
   startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, 
-  isSameDay, isToday, differenceInDays, addDays, isWithinInterval,
-  subDays, isBefore
+  isSameDay, isToday, addDays, isWithinInterval, differenceInDays,
+  startOfDay, isBefore, subDays
 } from 'date-fns';
 import { 
-  ChevronLeft, ChevronRight, Droplets, X, Activity,
-  Moon, Smile, Dumbbell, Sparkles, FileText, CalendarCheck, Baby,
-  ArrowLeft, CalendarHeart
+  ChevronLeft, ChevronRight, Droplets, X, 
+  Sparkles, FileText, CalendarCheck, Baby,
+  ArrowLeft, CalendarHeart, Edit3, Eye, Trash2, CheckCircle2
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { useHerSync } from '@/context/HerSyncContext';
 import { toast } from 'sonner';
 
-// JSON Parse Helper for Checkins
+// Helper to parse daily checkin json
 const parseSummary = (str: string | null) => {
   if (!str) return {};
   try {
     const obj = JSON.parse(str);
     if (typeof obj === 'object' && obj !== null) return obj;
   } catch {}
-  return { note: str }; // Fallback to raw string
+  return { note: str };
 };
 
-export default function NativeCycleTracker() {
+// Helper to normalize any Date or string into a 00:00:00 local timestamp
+const getNormalizedTimestamp = (dateInput: Date | string | null): number | null => {
+  if (!dateInput) return null;
+  let y: number, m: number, d: number;
+  if (typeof dateInput === 'string') {
+    const clean = dateInput.slice(0, 10);
+    const parts = clean.split('-');
+    if (parts.length === 3) {
+      y = Number(parts[0]);
+      m = Number(parts[1]) - 1;
+      d = Number(parts[2]);
+    } else {
+      const dateObj = new Date(dateInput);
+      y = dateObj.getFullYear();
+      m = dateObj.getMonth();
+      d = dateObj.getDate();
+    }
+  } else {
+    y = dateInput.getFullYear();
+    m = dateInput.getMonth();
+    d = dateInput.getDate();
+  }
+  return new Date(y, m, d, 0, 0, 0, 0).getTime();
+};
+
+// Calendar Day Component supporting continuous connected background ranges
+const CalendarDay = memo(({ 
+  day, 
+  currentDate, 
+  isSel, 
+  range, 
+  hasNote, 
+  hasEvent, 
+  handleDateTap 
+}: any) => {
+  const isCurrentMonth = isSameMonth(day, currentDate);
+  const today = isToday(day);
+
+  let rangeStyle = 'w-10 rounded-full mx-auto';
+  let textStyle = !isCurrentMonth ? 'text-muted-foreground/30' : 'text-muted-foreground font-medium';
+
+  if (range.inRange) {
+    if (range.type === 'period') {
+      textStyle = 'text-pink-600 dark:text-pink-300 font-bold';
+      if (range.isStart && range.isEnd) {
+        rangeStyle = 'w-10 rounded-full bg-pink-500/30 mx-auto';
+      } else if (range.isStart) {
+        rangeStyle = 'w-full rounded-l-full rounded-r-none bg-pink-500/25';
+      } else if (range.isEnd) {
+        rangeStyle = 'w-full rounded-r-full rounded-l-none bg-pink-500/25';
+      } else {
+        rangeStyle = 'w-full rounded-none bg-pink-500/25 font-semibold';
+      }
+    } else if (range.type === 'pregnancy') {
+      textStyle = 'text-amber-700 dark:text-amber-300 font-bold';
+      if (range.isStart && range.isEnd) {
+        rangeStyle = 'w-10 rounded-full bg-amber-500/35 mx-auto';
+      } else if (range.isStart) {
+        rangeStyle = 'w-full rounded-l-full rounded-r-none bg-amber-500/25';
+      } else if (range.isEnd) {
+        rangeStyle = 'w-full rounded-r-full rounded-l-none bg-amber-500/25';
+      } else {
+        rangeStyle = 'w-full rounded-none bg-amber-500/25 font-semibold';
+      }
+    } else if (range.type === 'predicted_period') {
+      textStyle = 'text-pink-400 font-bold';
+      if (range.isStart && range.isEnd) {
+        rangeStyle = 'w-10 rounded-full border-2 border-dashed border-pink-300 dark:border-pink-500/50 mx-auto';
+      } else if (range.isStart) {
+        rangeStyle = 'w-full rounded-l-full rounded-r-none border-y-2 border-l-2 border-dashed border-pink-300 dark:border-pink-500/50 bg-transparent';
+      } else if (range.isEnd) {
+        rangeStyle = 'w-full rounded-r-full rounded-l-none border-y-2 border-r-2 border-dashed border-pink-300 dark:border-pink-500/50 bg-transparent';
+      } else {
+        rangeStyle = 'w-full rounded-none border-y-2 border-dashed border-pink-300 dark:border-pink-500/50 bg-transparent';
+      }
+    }
+  } else if (today && !isSel) {
+    // Today's Date: Purple outline only
+    rangeStyle = 'w-10 h-10 border-2 border-purple-500 rounded-full text-purple-600 dark:text-purple-400 font-bold mx-auto';
+  }
+
+  return (
+    <div className="flex flex-col items-center justify-center h-11 relative w-full">
+      <button
+        onClick={() => handleDateTap(day)}
+        className={`
+          relative h-10 flex items-center justify-center text-sm transition-all active:scale-95
+          ${rangeStyle}
+          ${textStyle}
+        `}
+      >
+        {isSel ? (
+          <span className="w-9 h-9 rounded-full bg-purple-600 text-white font-bold flex items-center justify-center shadow-lg transform scale-105 transition-transform">
+            {format(day, 'd')}
+          </span>
+        ) : (
+          <span>{format(day, 'd')}</span>
+        )}
+
+        {/* Indicators for Notes & Custom Events */}
+        {!isSel && (hasEvent || hasNote) && (
+          <div className="absolute bottom-0.5 flex items-center justify-center gap-0.5">
+            {hasEvent && (
+              <span className="w-1.5 h-1.5 bg-purple-500 rounded-full" title="Custom Event" />
+            )}
+            {hasNote && (
+              <span className="w-1.5 h-1.5 bg-muted-foreground/60 rounded-full" title="Note" />
+            )}
+          </div>
+        )}
+      </button>
+    </div>
+  );
+});
+
+CalendarDay.displayName = 'CalendarDay';
+
+export default function CycleTrackerPage() {
   const supabase = createClient();
-  const { cycleHistory, wellnessMode, refreshAll, pregnancyDueDate } = useHerSync();
+  const { cycleHistory, setCycleHistory, wellnessMode, refreshAll, refreshCycleHistory, pregnancyDueDate } = useHerSync();
   const [currentDate, setCurrentDate] = useState(new Date());
   
-  // Selection & Bottom Sheet State
+  const [isSaving, setIsSaving] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [sheetView, setSheetView] = useState<'menu' | 'mood' | 'water' | 'sleep' | 'exercise' | 'note' | 'event' | 'symptoms'>('menu');
-  
-  // Data for the current month view
+  const [sheetView, setSheetView] = useState<'menu' | 'note' | 'event' | 'symptoms' | 'locked' | 'view_cycle'>('menu');
   const [monthData, setMonthData] = useState<Record<string, any>>({});
-  
-  // Input States
   const [inputValue, setInputValue] = useState<any>('');
+  const [unlockedCycleId, setUnlockedCycleId] = useState<string | null>(null);
 
+  // Find active cycle (period started, but no end date yet)
+  const activeCycle = useMemo(() => {
+    return cycleHistory.find(c => !c.end_date);
+  }, [cycleHistory]);
+
+  // Fetch month logs (checkins, custom events, notes)
   const fetchMonth = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -50,90 +170,160 @@ export default function NativeCycleTracker() {
       const start = format(startOfWeek(startOfMonth(currentDate)), 'yyyy-MM-dd');
       const end = format(endOfWeek(endOfMonth(currentDate)), 'yyyy-MM-dd');
 
-      const [checkins, moods, waters, sleeps, exercises, skins] = await Promise.all([
-        supabase.from('daily_checkins').select('*').eq('user_id', user.id).gte('date', start).lte('date', end),
-        supabase.from('mood_logs').select('*').eq('user_id', user.id).gte('date', start).lte('date', end),
-        supabase.from('water_logs').select('*').eq('user_id', user.id).gte('date', start).lte('date', end),
-        supabase.from('sleep_logs').select('*').eq('user_id', user.id).gte('date', start).lte('date', end),
-        supabase.from('exercise_logs').select('*').eq('user_id', user.id).gte('date', start).lte('date', end),
-        supabase.from('skin_logs').select('*').eq('user_id', user.id).gte('date', start).lte('date', end)
-      ]);
+      const { data: checkins } = await supabase
+        .from('daily_checkins')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('date', start)
+        .lte('date', end);
 
       const aggregated: Record<string, any> = {};
-      const process = (arr: any[] | null, key: string, mapFn: (item: any) => any) => {
-        if (!arr) return;
-        arr.forEach(item => {
-          if (!aggregated[item.date]) aggregated[item.date] = {};
-          aggregated[item.date][key] = mapFn(item);
+      if (checkins) {
+        checkins.forEach(item => {
+          aggregated[item.date] = {
+            checkin: item,
+            meta: parseSummary(item.summary),
+          };
         });
-      };
-
-      process(checkins.data, 'checkin', i => ({ ...i, meta: parseSummary(i.summary) }));
-      process(moods.data, 'mood', i => i);
-      process(waters.data, 'water', i => i.amount_ml);
-      process(sleeps.data, 'sleep', i => i.duration_hours);
-      process(exercises.data, 'exercise', i => i.duration_minutes);
-      process(skins.data, 'skin', i => i.condition);
-
+      }
       setMonthData(aggregated);
     } catch (e) {
-      console.error(e);
+      console.error('Error fetching month data:', e);
     }
   };
 
   useEffect(() => {
     fetchMonth();
-  }, [currentDate, supabase, cycleHistory]); // Re-fetch if cycleHistory triggers (via refreshAll)
+  }, [currentDate, supabase, cycleHistory]);
 
-  // Derived Cycle Predictions
+  // Calculate Predictions (supporting PCOD irregular cycles)
   const predictions = useMemo(() => {
     if (!cycleHistory || cycleHistory.length === 0) return null;
     let totalCycleLength = 0;
-    let totalPeriodLength = 0;
     let validCycles = 0;
-    let validPeriods = 0;
 
-    for (let i = 0; i < cycleHistory.length; i++) {
-      const c = cycleHistory[i];
-      if (c.start_date && c.end_date) {
-        totalPeriodLength += differenceInDays(new Date(c.end_date), new Date(c.start_date)) + 1;
-        validPeriods++;
-      }
-      if (i < cycleHistory.length - 1) {
-        totalCycleLength += differenceInDays(new Date(c.start_date), new Date(cycleHistory[i+1].start_date));
+    for (let i = 0; i < cycleHistory.length - 1; i++) {
+      const currentStart = new Date(cycleHistory[i].start_date);
+      const prevStart = new Date(cycleHistory[i + 1].start_date);
+      const diff = differenceInDays(currentStart, prevStart);
+      if (diff > 15 && diff < 90) {
+        totalCycleLength += diff;
         validCycles++;
       }
     }
 
-    const avgCycle = validCycles > 0 ? Math.round(totalCycleLength / validCycles) : 28;
-    const avgPeriod = validPeriods > 0 ? Math.round(totalPeriodLength / validPeriods) : 5;
+    const isPcos = wellnessMode === 'pcos';
+    const defaultAvgCycle = isPcos ? 35 : 28;
+    const avgCycle = validCycles > 0 ? Math.round(totalCycleLength / validCycles) : defaultAvgCycle;
+    
     const lastCycle = cycleHistory[0];
     const lastStartDate = new Date(lastCycle.start_date);
-    
+    const today = new Date();
+    const currentCycleDay = differenceInDays(today, lastStartDate) + 1;
+
     const nextPeriodStart = addDays(lastStartDate, avgCycle);
-    const predictedOvulation = subDays(nextPeriodStart, 14);
-    const fertileStart = subDays(predictedOvulation, 3);
-    const fertileEnd = addDays(predictedOvulation, 1);
+    const nextPeriodEnd = addDays(nextPeriodStart, 4); // Assume 5 day duration
+    const daysRemaining = Math.max(0, differenceInDays(nextPeriodStart, today));
 
-    return { avgPeriod, nextPeriodStart, predictedOvulation, fertileStart, fertileEnd };
-  }, [cycleHistory]);
+    let currentPhase = 'Follicular';
+    if (currentCycleDay <= 5) {
+      currentPhase = 'Menstrual';
+    } else if (currentCycleDay >= (avgCycle - 16) && currentCycleDay <= (avgCycle - 12)) {
+      currentPhase = 'Ovulation';
+    } else if (currentCycleDay > (avgCycle - 12)) {
+      currentPhase = 'Luteal';
+    }
 
-  const isPeriodDay = (day: Date) => {
-    return cycleHistory.some(c => {
-      const s = new Date(c.start_date);
-      const e = c.end_date ? new Date(c.end_date) : s;
-      return isSameDay(day, s) || isSameDay(day, e) || isWithinInterval(day, { start: s, end: e });
-    });
-  };
+    return {
+      avgCycle,
+      currentCycleDay,
+      currentPhase,
+      daysRemaining,
+      isPcos,
+      nextPeriodStart,
+      nextPeriodEnd
+    };
+  }, [cycleHistory, wellnessMode]);
 
-  const isFertileDay = (day: Date) => {
-    if (!predictions || isBefore(day, new Date(new Date().setHours(0,0,0,0)))) return false;
-    return isWithinInterval(day, { start: predictions.fertileStart, end: predictions.fertileEnd });
-  };
+// Helper to parse date string into local timezone date (00:00:00) without UTC shifts
+const parseLocalDate = (dateStr: string | null) => {
+  if (!dateStr) return null;
+  const clean = dateStr.slice(0, 10);
+  const parts = clean.split('-');
+  if (parts.length === 3) {
+    return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 0, 0, 0, 0);
+  }
+  return startOfDay(new Date(dateStr));
+};
 
-  const isOvulationDay = (day: Date) => {
-    if (!predictions || isBefore(day, new Date(new Date().setHours(0,0,0,0)))) return false;
-    return isSameDay(day, predictions.predictedOvulation);
+  // Centralized Date Range Engine using normalized local timestamps
+  const getDayRangeStyle = (day: Date) => {
+    const currentTs = getNormalizedTimestamp(day)!;
+
+    // 1. Period Cycle Ranges
+    for (const c of cycleHistory) {
+      if (!c.start_date) continue;
+      const startTs = getNormalizedTimestamp(c.start_date)!;
+      const endTs = c.end_date ? getNormalizedTimestamp(c.end_date) : null;
+      const isLocked = endTs !== null && c.id !== unlockedCycleId;
+
+      if (endTs === null) {
+        // Active cycle (Period Start logged, Period End pending)
+        if (currentTs === startTs) {
+          return { type: 'period', isStart: true, isEnd: true, inRange: true, isLocked: false, cycle: c };
+        }
+      } else {
+        // Completed cycle (both Period Start and Period End exist)
+        if (currentTs >= startTs && currentTs <= endTs) {
+          return {
+            type: 'period',
+            inRange: true,
+            isStart: currentTs === startTs,
+            isEnd: currentTs === endTs,
+            isLocked,
+            cycle: c
+          };
+        }
+      }
+    }
+
+    // 2. Predicted Future Period Range
+    if (predictions?.nextPeriodStart && predictions?.nextPeriodEnd) {
+      const predStartTs = getNormalizedTimestamp(predictions.nextPeriodStart)!;
+      const predEndTs = getNormalizedTimestamp(predictions.nextPeriodEnd)!;
+      
+      if (currentTs >= predStartTs && currentTs <= predEndTs) {
+        return {
+          type: 'predicted_period',
+          inRange: true,
+          isStart: currentTs === predStartTs,
+          isEnd: currentTs === predEndTs,
+          isLocked: false,
+          cycle: null
+        };
+      }
+    }
+
+    // 3. Pregnancy Range
+    if (wellnessMode === 'pregnancy' && pregnancyDueDate) {
+      const dueTs = getNormalizedTimestamp(pregnancyDueDate)!;
+      const pregStartTs = dueTs - (280 * 86400000);
+      const todayTs = getNormalizedTimestamp(new Date())!;
+      const endBoundaryTs = todayTs < dueTs ? todayTs : dueTs;
+
+      if (currentTs >= pregStartTs && currentTs <= endBoundaryTs) {
+        return {
+          type: 'pregnancy',
+          inRange: true,
+          isStart: currentTs === pregStartTs,
+          isEnd: currentTs === endBoundaryTs,
+          isLocked: false,
+          cycle: null
+        };
+      }
+    }
+
+    return { type: null, isStart: false, isEnd: false, inRange: false, isLocked: false, cycle: null };
   };
 
   const daysInMonth = eachDayOfInterval({ 
@@ -144,452 +334,631 @@ export default function NativeCycleTracker() {
   const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
   const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
 
-  // ─── ACTIONS ───
+  const handleDateTap = (day: Date) => {
+    setSelectedDate(day);
+    const range = getDayRangeStyle(day);
+    if (range.isLocked) {
+      setSheetView('locked');
+    } else {
+      setSheetView('menu');
+    }
+  };
 
+  // Log Period Started
   const logPeriodStart = async () => {
-    if (!selectedDate) return;
+    if (!selectedDate || isSaving) return;
+    setIsSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      await supabase.from('cycle_logs').insert({ 
-        user_id: user.id, 
-        start_date: format(selectedDate, 'yyyy-MM-dd'),
-        end_date: null
-      });
-      toast.success('Period started.');
-      refreshAll();
+
+      const dateStr = format(selectedDate, 'yyyy-MM-dd');
+      
+      if (unlockedCycleId) {
+        // Editing existing cycle
+        const target = cycleHistory.find(c => c.id === unlockedCycleId);
+        if (target?.end_date) {
+          const endTs = getNormalizedTimestamp(target.end_date)!;
+          const selTs = getNormalizedTimestamp(selectedDate)!;
+          if (selTs > endTs) {
+            toast.error('Period start date cannot be after period end date.');
+            setIsSaving(false);
+            return;
+          }
+        }
+        
+        // Optimistic Update
+        const optimisticHistory = cycleHistory.map(c => 
+          c.id === unlockedCycleId ? { ...c, start_date: dateStr } : c
+        );
+        setCycleHistory(optimisticHistory);
+
+        const { data: updatedData } = await supabase.from('cycle_logs').update({ start_date: dateStr }).eq('id', unlockedCycleId).select().single();
+        if (updatedData) {
+           setCycleHistory(cycleHistory.map(c => c.id === unlockedCycleId ? updatedData : c));
+        }
+        toast.success('Period start updated.');
+      } else {
+        // Strict Guard: Prevent duplicate active period starts
+        const { data: existingActive } = await supabase
+          .from('cycle_logs')
+          .select('id')
+          .eq('user_id', user.id)
+          .is('end_date', null)
+          .maybeSingle();
+
+        if (existingActive) {
+          toast.error('A period is already active. Please log Period Ended before starting a new cycle.');
+          setIsSaving(false);
+          return;
+        }
+
+        // Optimistic Update
+        const tempId = `temp-${Date.now()}`;
+        const newCycle = { id: tempId, start_date: dateStr, end_date: null, flow_intensity: null, symptoms: null };
+        setCycleHistory([newCycle, ...cycleHistory]);
+
+        // Create new active cycle and return it
+        const { data: insertedData, error } = await supabase.from('cycle_logs').insert({ user_id: user.id, start_date: dateStr, end_date: null }).select().single();
+        if (error || !insertedData) throw error;
+        
+        // Update state with TRUE DB data, replacing the temp optimistic cycle
+        setCycleHistory([insertedData, ...cycleHistory.filter(c => c.id !== tempId)]);
+        toast.success('Period started logged.');
+      }
+      
+      setUnlockedCycleId(null);
       setSelectedDate(null);
-    } catch (e) { toast.error('Failed to log period.'); }
+      // Fire refreshAll for dashboard, but skip cycle history to prevent stale reads
+      refreshAll({ skipCycleHistory: true });
+    } catch (e) {
+      toast.error('Failed to log period start.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
+  // Log Period Ended
   const logPeriodEnd = async () => {
-    if (!selectedDate) return;
+    if (!selectedDate || isSaving) return;
+    setIsSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user || cycleHistory.length === 0) return;
-      const activeCycle = cycleHistory.find(c => isSameDay(selectedDate, new Date(c.start_date)) || !c.end_date) || cycleHistory[0];
-      await supabase.from('cycle_logs').update({ 
-        end_date: format(selectedDate, 'yyyy-MM-dd')
-      }).eq('id', activeCycle.id);
-      toast.success('Period ended.');
-      refreshAll();
+      if (!user) return;
+      
+      const dateStr = format(selectedDate, 'yyyy-MM-dd');
+      const targetCycle = unlockedCycleId 
+        ? cycleHistory.find(c => c.id === unlockedCycleId) 
+        : activeCycle;
+
+      if (!targetCycle) {
+        toast.error('No active period found to end.');
+        setIsSaving(false);
+        return;
+      }
+
+      const startTs = getNormalizedTimestamp(targetCycle.start_date)!;
+      const selTs = getNormalizedTimestamp(selectedDate)!;
+
+      if (selTs < startTs) {
+        toast.error('Period end date cannot be before period start date.');
+        setIsSaving(false);
+        return;
+      }
+
+      // Optimistic Update (and remove stale temp actives if any)
+      const optimisticHistory = cycleHistory.map(c => 
+        c.id === targetCycle.id ? { ...c, end_date: dateStr } : c
+      ).filter(c => c.id === targetCycle.id || c.end_date !== null);
+      setCycleHistory(optimisticHistory);
+
+      // Update active cycle with end date and get it back
+      const { data: updatedData } = await supabase.from('cycle_logs').update({ end_date: dateStr }).eq('id', targetCycle.id).select().single();
+      if (updatedData) {
+         setCycleHistory(optimisticHistory.map(c => c.id === targetCycle.id ? updatedData : c));
+      }
+      
+      // Clean up any stale/duplicate active cycles in database if they exist
+      const staleActives = cycleHistory.filter(c => !c.end_date && c.id !== targetCycle.id);
+      for (const stale of staleActives) {
+        await supabase.from('cycle_logs').delete().eq('id', stale.id);
+      }
+
+      toast.success('Period ended. Cycle completed & saved!');
+      
+      setUnlockedCycleId(null);
       setSelectedDate(null);
-    } catch (e) { toast.error('Failed to update period.'); }
+      // Fire refreshAll for dashboard, but skip cycle history to prevent stale reads
+      refreshAll({ skipCycleHistory: true });
+    } catch (e) {
+      toast.error('Failed to log period end.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
+  // Log Pregnancy Started
   const logPregnancyStart = async () => {
     if (!selectedDate) return;
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const dueDate = addDays(selectedDate, 280).toISOString();
-      await supabase.from('pregnancy_logs').insert({ user_id: user.id, due_date: dueDate });
-      await supabase.from('user_preferences').update({ theme: 'pregnancy' }).eq('user_id', user.id);
-      toast.success('Pregnancy journey started! 🎉');
-      refreshAll();
+      const dueDate = addDays(selectedDate, 280).toISOString().slice(0, 10);
+      await supabase.from('pregnancy_logs').insert({ 
+        user_id: user.id, 
+        due_date: dueDate,
+        created_at: selectedDate.toISOString()
+      });
+      await supabase.from('user_preferences').upsert({ user_id: user.id, theme: 'pregnancy' }, { onConflict: 'user_id' });
+      toast.success('Pregnancy tracking started!');
+      await refreshAll();
       setSelectedDate(null);
-    } catch (e) { toast.error('Failed to start pregnancy tracking.'); }
+    } catch (e) {
+      toast.error('Failed to start pregnancy tracking.');
+    }
   };
 
+  // Log Pregnancy Ended
   const logPregnancyEnd = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      // In a robust app, we'd mark the pregnancy log as completed. Here we simply switch theme back to general.
-      await supabase.from('user_preferences').update({ theme: 'general' }).eq('user_id', user.id);
-      toast.success('Pregnancy tracking ended.');
-      refreshAll();
+      await supabase.from('user_preferences').upsert({ user_id: user.id, theme: 'general' }, { onConflict: 'user_id' });
+      toast.success('Pregnancy tracking completed.');
+      await refreshAll();
       setSelectedDate(null);
-    } catch (e) { toast.error('Failed to update preferences.'); }
+    } catch (e) {
+      toast.error('Failed to update preferences.');
+    }
   };
 
+  // Save Note / Event
   const saveCheckinMeta = async (updates: any) => {
     if (!selectedDate) return;
     try {
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const existing = monthData[dateStr]?.checkin?.meta || {};
-      const newMeta = { ...existing, ...updates };
-      await supabase.from('daily_checkins').upsert({ user_id: user.id, date: dateStr, summary: JSON.stringify(newMeta) }, { onConflict: 'user_id,date' });
+      const existing = monthData[dateStr]?.meta || {};
+      await supabase.from('daily_checkins').upsert({ 
+        user_id: user.id, 
+        date: dateStr, 
+        summary: JSON.stringify({ ...existing, ...updates }) 
+      }, { onConflict: 'user_id,date' });
+      
       toast.success('Saved successfully.');
-      fetchMonth(); // Refresh local data instantly without full app refresh
+      await fetchMonth();
       setSheetView('menu');
-    } catch (e) { toast.error('Failed to save.'); }
+    } catch (e) {
+      toast.error('Failed to save.');
+    }
   };
 
-  const saveVital = async (table: string, payload: any) => {
-    if (!selectedDate) return;
+  // Delete Cycle Entry
+  const deleteCycle = async (cycleId: string) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      await supabase.from(table).upsert({ user_id: user.id, date: format(selectedDate, 'yyyy-MM-dd'), ...payload }, { onConflict: 'id' });
-      toast.success('Logged successfully.');
-      fetchMonth();
-      setSheetView('menu');
-    } catch (e) { toast.error('Failed to save.'); }
-  };
-
-  const deleteEntry = async () => {
-    if (!selectedDate) return;
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const dateStr = format(selectedDate, 'yyyy-MM-dd');
-      await Promise.all([
-        supabase.from('daily_checkins').delete().eq('user_id', user.id).eq('date', dateStr),
-        supabase.from('mood_logs').delete().eq('user_id', user.id).eq('date', dateStr),
-        supabase.from('water_logs').delete().eq('user_id', user.id).eq('date', dateStr),
-        supabase.from('sleep_logs').delete().eq('user_id', user.id).eq('date', dateStr),
-        supabase.from('exercise_logs').delete().eq('user_id', user.id).eq('date', dateStr),
-        supabase.from('skin_logs').delete().eq('user_id', user.id).eq('date', dateStr)
-      ]);
-      toast.success('Entry deleted.');
-      fetchMonth();
+      await supabase.from('cycle_logs').delete().eq('id', cycleId);
+      toast.success('Cycle deleted.');
+      setUnlockedCycleId(null);
+      await refreshAll();
       setSelectedDate(null);
-    } catch (e) { toast.error('Failed to delete logs.'); }
+    } catch (e) {
+      toast.error('Failed to delete cycle.');
+    }
   };
 
-  // State initialization when opening a view
   const openView = (view: typeof sheetView) => {
-    const d = selectedDate ? monthData[format(selectedDate, 'yyyy-MM-dd')] : null;
-    if (view === 'note') setInputValue(d?.checkin?.meta?.note || '');
-    if (view === 'event') setInputValue(d?.checkin?.meta?.event || '');
-    if (view === 'water') setInputValue(d?.water || 2);
-    if (view === 'sleep') setInputValue(d?.sleep || 8);
-    if (view === 'exercise') setInputValue(d?.exercise || 30);
+    const dateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '';
+    const d = monthData[dateStr]?.meta;
+    if (view === 'note') setInputValue(d?.note || '');
+    if (view === 'event') setInputValue(d?.event || '');
     setSheetView(view);
   };
 
-  const selectedData = selectedDate ? monthData[format(selectedDate, 'yyyy-MM-dd')] : null;
-  const isPeriod = selectedDate ? isPeriodDay(selectedDate) : false;
+  const selectedRange = selectedDate ? getDayRangeStyle(selectedDate) : null;
+  const targetLockedCycle = selectedRange?.cycle;
 
   return (
-    <div className="min-h-screen bg-background pb-20 select-none max-w-6xl mx-auto w-full">
+    <div className="min-h-screen bg-background pb-24 select-none max-w-4xl mx-auto w-full px-4 md:px-6 pt-6">
       
-      {/* ─── NATIVE HEADER ─── */}
-      <div className="pt-12 pb-6 px-6 flex items-center justify-between bg-background z-10 sticky top-0">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">
+      {/* NATIVE CALENDAR HEADER */}
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold text-foreground tracking-tight">
           {format(currentDate, 'MMMM yyyy')}
         </h1>
-        <div className="flex items-center gap-4">
-          <button onClick={prevMonth} className="p-1 text-muted-foreground hover:text-foreground active:scale-90 transition-transform">
-            <ChevronLeft className="w-7 h-7" />
+        <div className="flex items-center gap-1">
+          <button 
+            onClick={() => setCurrentDate(new Date())} 
+            className="text-xs font-bold text-purple-600 dark:text-purple-400 mr-2 px-3 py-1.5 rounded-full bg-purple-500/10 hover:bg-purple-500/20 active:scale-95 transition-all"
+          >
+            Today
           </button>
-          <button onClick={nextMonth} className="p-1 text-muted-foreground hover:text-foreground active:scale-90 transition-transform">
-            <ChevronRight className="w-7 h-7" />
+          <button 
+            onClick={prevMonth} 
+            className="p-2 active:bg-secondary rounded-full text-foreground hover:bg-secondary/60 transition-colors"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={nextMonth} 
+            className="p-2 active:bg-secondary rounded-full text-foreground hover:bg-secondary/60 transition-colors"
+          >
+            <ChevronRight className="w-5 h-5" />
           </button>
         </div>
       </div>
 
-      {/* ─── CALENDAR GRID ─── */}
-      <div className="px-5">
-        <div className="grid grid-cols-7 mb-4">
-          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-            <div key={i} className="text-center text-xs font-semibold text-muted-foreground uppercase">{d}</div>
+      {/* CALENDAR GRID */}
+      <div className="bg-card rounded-3xl border border-border/40 p-4 shadow-sm mb-6">
+        <div className="grid grid-cols-7 mb-3">
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+            <div key={d} className="text-center text-[11px] font-extrabold text-muted-foreground uppercase tracking-widest py-1">
+              {d}
+            </div>
           ))}
         </div>
 
-        <div className="grid grid-cols-7 gap-y-5 gap-x-1">
+        <div className="grid grid-cols-7 gap-y-1">
           {daysInMonth.map((day, i) => {
-            const isCurrentMonth = isSameMonth(day, currentDate);
-            const isSel = selectedDate && isSameDay(day, selectedDate);
-            const today = isToday(day);
-            
-            const period = isPeriodDay(day);
-            const fertile = isFertileDay(day);
-            const ovulation = isOvulationDay(day);
-            const hasData = monthData[format(day, 'yyyy-MM-dd')];
-            
-            const hasEvent = hasData?.checkin?.meta?.event;
-            const hasNotes = hasData?.skin || hasData?.checkin?.meta?.note || hasData?.checkin?.meta?.symptoms;
-            const hasVitals = hasData?.sleep || hasData?.water || hasData?.exercise || hasData?.mood;
+            const dateStr = format(day, 'yyyy-MM-dd');
+            const isSel = selectedDate ? isSameDay(day, selectedDate) : false;
+            const range = getDayRangeStyle(day);
+            const dayMeta = monthData[dateStr]?.meta;
+            const hasEvent = !!dayMeta?.event;
+            const hasNote = !!dayMeta?.note;
 
             return (
-              <div key={i} className="flex flex-col items-center justify-start h-[3.5rem]">
-                <button
-                  onClick={() => { setSelectedDate(day); setSheetView('menu'); }}
-                  className={`
-                    relative w-10 h-10 flex items-center justify-center rounded-full text-base font-medium transition-transform active:scale-95
-                    ${!isCurrentMonth ? 'text-muted-foreground/30' : 'text-foreground'}
-                    ${today && !isSel ? 'border border-foreground' : ''}
-                  `}
-                  style={{
-                    backgroundColor: isSel ? 'var(--hs-glass-bg)' : 'transparent',
-                    color: isSel ? 'var(--hs-violet)' : undefined,
-                    fontWeight: isSel ? '700' : undefined
-                  }}
-                >
-                  {format(day, 'd')}
-                  {hasEvent && !isSel && (
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full border-2 border-background" />
-                  )}
-                </button>
-                
-                {/* Minimal Dots */}
-                <div className="flex gap-1 mt-1 justify-center h-1.5">
-                  {period && <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--hs-pink)' }} />}
-                  {ovulation && <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--hs-violet)' }} />}
-                  {fertile && !ovulation && <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#34D399' }} />}
-                  {hasNotes && !period && <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#FBBF24' }} />}
-                  {hasVitals && !hasNotes && !period && <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#60A5FA' }} />}
-                </div>
-              </div>
+              <CalendarDay
+                key={i}
+                day={day}
+                currentDate={currentDate}
+                isSel={isSel}
+                range={range}
+                hasNote={hasNote}
+                hasEvent={hasEvent}
+                handleDateTap={handleDateTap}
+              />
             );
           })}
         </div>
       </div>
 
-      {/* ─── NATIVE BOTTOM SHEET ─── */}
+      {/* SUMMARY CARD */}
+      {predictions && wellnessMode !== 'pregnancy' && (
+        <div className="bg-card rounded-3xl border border-border/40 p-5 shadow-sm flex items-center justify-between gap-2">
+          <div className="flex flex-col flex-1 border-r border-border/40 pr-3">
+            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mb-1">Cycle Day</span>
+            <span className="text-2xl font-extrabold text-foreground">{predictions.currentCycleDay}</span>
+          </div>
+          <div className="flex flex-col flex-1 text-center border-r border-border/40 px-3">
+            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mb-1">Phase</span>
+            <span className="text-xl font-extrabold text-foreground">{predictions.currentPhase}</span>
+          </div>
+          <div className="flex flex-col flex-1 text-right pl-3">
+            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mb-1">
+              {predictions.isPcos ? 'PCOD Window' : 'Next Period'}
+            </span>
+            <span className="text-xl font-extrabold text-pink-500">
+              {predictions.daysRemaining === 0 ? 'Today' : `${predictions.daysRemaining}d`}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* BOTTOM SHEET MENU */}
       <AnimatePresence>
         {selectedDate && (
           <>
             <motion.div 
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
               onClick={() => setSelectedDate(null)}
-              className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]"
+              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
             />
             <motion.div
-              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              drag="y"
-              dragConstraints={{ top: 0 }}
-              dragElastic={0.2}
-              onDragEnd={(e, info) => {
-                if (info.offset.y > 100 || info.velocity.y > 500) {
-                  setSelectedDate(null);
-                }
-              }}
-              className="fixed bottom-0 left-0 right-0 z-50 bg-background rounded-t-[32px] shadow-[0_-10px_40px_rgba(0,0,0,0.15)] max-h-[85vh] flex flex-col"
+              initial={{ y: '100%' }} 
+              animate={{ y: 0 }} 
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+              className="fixed bottom-0 left-0 right-0 z-50 bg-card rounded-t-[36px] border-t border-border/40 shadow-2xl max-h-[85vh] flex flex-col max-w-xl mx-auto"
             >
-              <div className="w-12 h-1.5 rounded-full bg-border mx-auto mt-4 mb-2 shrink-0" />
-
-              <div className="px-6 pb-4 pt-2 flex items-center justify-between shrink-0">
-                {sheetView !== 'menu' ? (
-                  <button onClick={() => setSheetView('menu')} className="p-2 -ml-2 rounded-full active:bg-secondary text-foreground">
+              <div className="w-12 h-1.5 rounded-full bg-border/60 mx-auto mt-4 mb-2 shrink-0" />
+              
+              {/* SHEET HEADER */}
+              <div className="px-6 pb-3 pt-2 flex items-center justify-between shrink-0 border-b border-border/20">
+                {sheetView !== 'menu' && sheetView !== 'locked' ? (
+                  <button 
+                    onClick={() => setSheetView(targetLockedCycle && !unlockedCycleId ? 'locked' : 'menu')} 
+                    className="p-2 -ml-2 rounded-full active:bg-secondary text-foreground hover:bg-secondary/60"
+                  >
                     <ArrowLeft size={20} />
                   </button>
                 ) : (
                   <div>
                     <h3 className="text-xl font-bold text-foreground">{format(selectedDate, 'EEEE')}</h3>
-                    <p className="text-sm" style={{ color: 'var(--hs-pink)' }}>{format(selectedDate, 'MMMM d, yyyy')}</p>
+                    <p className="text-xs font-semibold text-muted-foreground">{format(selectedDate, 'MMMM d, yyyy')}</p>
                   </div>
                 )}
                 
-                {sheetView === 'menu' && (
-                  <button onClick={() => setSelectedDate(null)} className="p-2 bg-secondary rounded-full active:scale-95 text-muted-foreground hover:text-foreground">
-                    <X size={18} />
-                  </button>
-                )}
-                {sheetView !== 'menu' && (
-                  <span className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">{sheetView}</span>
-                )}
+                <button 
+                  onClick={() => setSelectedDate(null)} 
+                  className="p-2 bg-secondary/80 rounded-full active:scale-95 text-muted-foreground hover:text-foreground transition-all"
+                >
+                  <X size={18} />
+                </button>
               </div>
 
-              {/* Data Summary (Only shown on menu view) */}
-              {sheetView === 'menu' && selectedData && (
-                <div className="px-6 mb-4 flex gap-2 overflow-x-auto no-scrollbar shrink-0">
-                  {selectedData.checkin?.meta?.event && (
-                    <div className="px-3 py-1.5 rounded-full bg-blue-500/10 text-blue-500 border border-blue-500/20 text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap">
-                      <CalendarCheck className="w-3.5 h-3.5" /> {selectedData.checkin.meta.event}
-                    </div>
-                  )}
-                  {selectedData.mood && (
-                    <div className="px-3 py-1.5 rounded-full bg-secondary border border-border text-xs font-medium flex items-center gap-1.5 whitespace-nowrap">
-                      <Smile className="w-3.5 h-3.5" /> <span className="capitalize">{selectedData.mood.mood || selectedData.mood}</span>
-                    </div>
-                  )}
-                  {selectedData.sleep && (
-                    <div className="px-3 py-1.5 rounded-full bg-secondary border border-border text-xs font-medium flex items-center gap-1.5 whitespace-nowrap">
-                      <Moon className="w-3.5 h-3.5" /> {selectedData.sleep}h
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ─── SCROLLABLE CONTENT AREA ─── */}
-              <div className="px-6 pb-8 overflow-y-auto flex-1">
+              {/* SHEET CONTENT BODY */}
+              <div className="px-6 py-6 overflow-y-auto flex-1 space-y-3">
                 
-                {/* MENU VIEW */}
-                {sheetView === 'menu' && (
-                  <div className="space-y-1 pb-4">
-                    {!isPeriod ? (
-                      <button onClick={logPeriodStart} className="w-full flex items-center gap-4 p-3 rounded-2xl hover:bg-secondary active:bg-secondary transition-colors text-left">
-                        <div className="w-10 h-10 rounded-full bg-pink-500/10 flex items-center justify-center">
-                          <Droplets className="w-5 h-5 text-pink-500" />
-                        </div>
-                        <span className="text-base font-medium">Period Started</span>
+                {/* LOCKED CYCLE VIEW */}
+                {sheetView === 'locked' && targetLockedCycle && (
+                  <div className="space-y-4">
+                    <div className="flex flex-col items-center text-center p-6 bg-pink-500/10 rounded-3xl border border-pink-500/20">
+                      <div className="w-14 h-14 rounded-full bg-pink-500/20 flex items-center justify-center mb-3 text-pink-500">
+                        <CheckCircle2 className="w-8 h-8" />
+                      </div>
+                      <h4 className="text-lg font-bold text-foreground">Completed Cycle</h4>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {format(new Date(targetLockedCycle.start_date), 'MMM d, yyyy')} → {format(new Date(targetLockedCycle.end_date!), 'MMM d, yyyy')}
+                      </p>
+                      <p className="text-xs font-semibold text-pink-600 dark:text-pink-400 mt-2">
+                        Duration: {differenceInDays(new Date(targetLockedCycle.end_date!), new Date(targetLockedCycle.start_date)) + 1} Days
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 pt-2">
+                      <button 
+                        onClick={() => setSheetView('view_cycle')} 
+                        className="flex items-center justify-center gap-2 p-4 rounded-2xl bg-secondary hover:bg-secondary/80 transition-colors text-foreground font-bold active:scale-95 border border-border/40 text-sm"
+                      >
+                        <Eye className="w-4 h-4 text-purple-500" />
+                        View Cycle
                       </button>
-                    ) : (
-                      <button onClick={logPeriodEnd} className="w-full flex items-center gap-4 p-3 rounded-2xl hover:bg-secondary active:bg-secondary transition-colors text-left">
-                        <div className="w-10 h-10 rounded-full bg-pink-500/10 flex items-center justify-center">
+                      
+                      <button 
+                        onClick={() => {
+                          setUnlockedCycleId(targetLockedCycle.id);
+                          setSheetView('menu');
+                        }} 
+                        className="flex items-center justify-center gap-2 p-4 rounded-2xl bg-purple-600 hover:bg-purple-700 transition-colors text-white font-bold active:scale-95 shadow-md text-sm"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                        Edit Cycle
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* VIEW CYCLE DETAILS VIEW */}
+                {sheetView === 'view_cycle' && targetLockedCycle && (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-secondary/40 rounded-2xl space-y-2 border border-border/30">
+                      <h4 className="font-bold text-sm text-foreground mb-2">Cycle Log Details</h4>
+                      <div className="flex justify-between text-xs py-1 border-b border-border/20">
+                        <span className="text-muted-foreground">Start Date:</span>
+                        <span className="font-bold">{format(new Date(targetLockedCycle.start_date), 'MMMM d, yyyy')}</span>
+                      </div>
+                      <div className="flex justify-between text-xs py-1 border-b border-border/20">
+                        <span className="text-muted-foreground">End Date:</span>
+                        <span className="font-bold">{format(new Date(targetLockedCycle.end_date!), 'MMMM d, yyyy')}</span>
+                      </div>
+                      <div className="flex justify-between text-xs py-1">
+                        <span className="text-muted-foreground">Cycle Duration:</span>
+                        <span className="font-bold text-pink-500">
+                          {differenceInDays(new Date(targetLockedCycle.end_date!), new Date(targetLockedCycle.start_date)) + 1} Days
+                        </span>
+                      </div>
+                    </div>
+
+                    <button 
+                      onClick={() => setSheetView('locked')} 
+                      className="w-full py-3 rounded-2xl bg-secondary text-foreground font-bold text-sm"
+                    >
+                      Back
+                    </button>
+                  </div>
+                )}
+
+                {/* STANDARD MENU VIEW */}
+                {sheetView === 'menu' && (
+                  <div className="space-y-2.5">
+                    
+                    {/* UNLOCKED EDITING BANNER */}
+                    {unlockedCycleId && (
+                      <div className="px-4 py-3 bg-purple-500/15 border border-purple-500/30 text-purple-600 dark:text-purple-300 rounded-2xl text-xs font-bold flex items-center justify-between mb-3">
+                        <span>Editing Completed Cycle</span>
+                        <button 
+                          onClick={() => {
+                            setUnlockedCycleId(null);
+                            setSelectedDate(null);
+                            toast.success('Cycle changes saved & locked.');
+                          }} 
+                          className="px-3 py-1 bg-purple-600 text-white rounded-full text-xs hover:bg-purple-700 shadow-sm"
+                        >
+                          Save & Lock
+                        </button>
+                      </div>
+                    )}
+
+                    {/* DYNAMIC LOG OPTIONS BASED ON CYCLE STATE */}
+                    {wellnessMode === 'pregnancy' ? (
+                      <button 
+                        onClick={logPregnancyEnd} 
+                        className="w-full flex items-center gap-4 p-4 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 transition-colors text-left border border-amber-500/30 active:scale-98"
+                      >
+                        <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
+                          <Baby className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-base font-bold text-foreground">Pregnancy Ended</span>
+                          <span className="text-xs text-muted-foreground">Complete pregnancy tracking</span>
+                        </div>
+                      </button>
+                    ) : unlockedCycleId ? (
+                      <>
+                        <button 
+                          onClick={logPeriodStart} 
+                          className="w-full flex items-center gap-4 p-4 rounded-2xl bg-pink-500/10 hover:bg-pink-500/20 transition-colors text-left border border-pink-500/30 active:scale-98"
+                        >
+                          <div className="w-10 h-10 rounded-full bg-pink-500/20 flex items-center justify-center shrink-0">
+                            <Droplets className="w-5 h-5 text-pink-500" />
+                          </div>
+                          <span className="text-base font-bold text-foreground">Update Period Start</span>
+                        </button>
+
+                        <button 
+                          onClick={logPeriodEnd} 
+                          className="w-full flex items-center gap-4 p-4 rounded-2xl bg-pink-500/10 hover:bg-pink-500/20 transition-colors text-left border border-pink-500/30 active:scale-98"
+                        >
+                          <div className="w-10 h-10 rounded-full bg-pink-500/20 flex items-center justify-center shrink-0">
+                            <CalendarCheck className="w-5 h-5 text-pink-500" />
+                          </div>
+                          <span className="text-base font-bold text-foreground">Update Period End</span>
+                        </button>
+
+                        <button 
+                          onClick={() => deleteCycle(unlockedCycleId)} 
+                          className="w-full flex items-center gap-4 p-4 rounded-2xl bg-red-500/10 hover:bg-red-500/20 transition-colors text-left border border-red-500/30 text-red-500 active:scale-98"
+                        >
+                          <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center shrink-0">
+                            <Trash2 className="w-5 h-5 text-red-500" />
+                          </div>
+                          <span className="text-base font-bold">Delete Cycle</span>
+                        </button>
+                      </>
+                    ) : activeCycle ? (
+                      // ACTIVE CYCLE OPEN (Only Period Ended shown)
+                      <button 
+                        onClick={logPeriodEnd} 
+                        className="w-full flex items-center gap-4 p-4 rounded-2xl bg-pink-500/10 hover:bg-pink-500/20 transition-colors text-left border border-pink-500/30 active:scale-98"
+                      >
+                        <div className="w-10 h-10 rounded-full bg-pink-500/20 flex items-center justify-center shrink-0">
                           <CalendarCheck className="w-5 h-5 text-pink-500" />
                         </div>
-                        <span className="text-base font-medium">Period Ended</span>
-                      </button>
-                    )}
-
-                    {wellnessMode !== 'pregnancy' ? (
-                      <button onClick={logPregnancyStart} className="w-full flex items-center gap-4 p-3 rounded-2xl hover:bg-secondary active:bg-secondary transition-colors text-left">
-                        <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center">
-                          <Baby className="w-5 h-5 text-orange-500" />
+                        <div className="flex flex-col">
+                          <span className="text-base font-bold text-foreground">Period Ended</span>
+                          <span className="text-xs text-muted-foreground">Complete active period range</span>
                         </div>
-                        <span className="text-base font-medium">Pregnancy Started</span>
                       </button>
                     ) : (
-                      <button onClick={logPregnancyEnd} className="w-full flex items-center gap-4 p-3 rounded-2xl hover:bg-secondary active:bg-secondary transition-colors text-left">
-                        <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center">
-                          <CalendarCheck className="w-5 h-5 text-orange-500" />
-                        </div>
-                        <span className="text-base font-medium">Pregnancy Ended</span>
-                      </button>
-                    )}
-
-                    <div className="w-full h-px bg-border my-2" />
-
-                    <button onClick={() => openView('event')} className="w-full flex items-center gap-4 p-3 rounded-2xl hover:bg-secondary active:bg-secondary transition-colors text-left">
-                      <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center">
-                        <CalendarHeart className="w-5 h-5 text-blue-500" />
-                      </div>
-                      <span className="text-base font-medium">Add Custom Event</span>
-                    </button>
-
-                    <button onClick={() => openView('note')} className="w-full flex items-center gap-4 p-3 rounded-2xl hover:bg-secondary active:bg-secondary transition-colors text-left">
-                      <div className="w-10 h-10 rounded-full bg-yellow-500/10 flex items-center justify-center">
-                        <FileText className="w-5 h-5 text-yellow-500" />
-                      </div>
-                      <span className="text-base font-medium">Add Note</span>
-                    </button>
-
-                    <button onClick={() => openView('symptoms')} className="w-full flex items-center gap-4 p-3 rounded-2xl hover:bg-secondary active:bg-secondary transition-colors text-left">
-                      <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center">
-                        <Sparkles className="w-5 h-5 text-purple-500" />
-                      </div>
-                      <span className="text-base font-medium">Log Symptoms</span>
-                    </button>
-
-                    <button onClick={() => openView('mood')} className="w-full flex items-center gap-4 p-3 rounded-2xl hover:bg-secondary active:bg-secondary transition-colors text-left">
-                      <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
-                        <Smile className="w-5 h-5 text-emerald-500" />
-                      </div>
-                      <span className="text-base font-medium">Log Mood</span>
-                    </button>
-
-                    <div className="grid grid-cols-3 gap-2 mt-2 px-1">
-                      <button onClick={() => openView('water')} className="p-3 rounded-2xl bg-secondary hover:bg-secondary/80 flex flex-col items-center gap-2">
-                        <Droplets className="w-5 h-5 text-blue-400" />
-                        <span className="text-xs font-semibold">Water</span>
-                      </button>
-                      <button onClick={() => openView('sleep')} className="p-3 rounded-2xl bg-secondary hover:bg-secondary/80 flex flex-col items-center gap-2">
-                        <Moon className="w-5 h-5 text-indigo-400" />
-                        <span className="text-xs font-semibold">Sleep</span>
-                      </button>
-                      <button onClick={() => openView('exercise')} className="p-3 rounded-2xl bg-secondary hover:bg-secondary/80 flex flex-col items-center gap-2">
-                        <Dumbbell className="w-5 h-5 text-emerald-400" />
-                        <span className="text-xs font-semibold">Exercise</span>
-                      </button>
-                    </div>
-
-                    {selectedData && (
+                      // NO ACTIVE CYCLE (Period Started & Pregnancy Started shown)
                       <>
-                        <div className="w-full h-px bg-border my-4" />
-                        <button onClick={deleteEntry} className="w-full p-4 rounded-2xl bg-red-500/10 text-red-500 font-bold text-center active:scale-95 transition-transform">
-                          Delete Entry
+                        <button 
+                          onClick={logPeriodStart} 
+                          className="w-full flex items-center gap-4 p-4 rounded-2xl bg-pink-500/10 hover:bg-pink-500/20 transition-colors text-left border border-pink-500/30 active:scale-98"
+                        >
+                          <div className="w-10 h-10 rounded-full bg-pink-500/20 flex items-center justify-center shrink-0">
+                            <Droplets className="w-5 h-5 text-pink-500" />
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-base font-bold text-foreground">Period Started</span>
+                            <span className="text-xs text-muted-foreground">Log start of new cycle</span>
+                          </div>
+                        </button>
+
+                        <button 
+                          onClick={logPregnancyStart} 
+                          className="w-full flex items-center gap-4 p-4 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 transition-colors text-left border border-amber-500/30 active:scale-98"
+                        >
+                          <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
+                            <Baby className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-base font-bold text-foreground">Pregnancy Started</span>
+                            <span className="text-xs text-muted-foreground">Start pregnancy tracking</span>
+                          </div>
                         </button>
                       </>
                     )}
+
+                    <div className="w-full h-px bg-border/40 my-3" />
+
+                    {/* CUSTOM EVENT & NOTE BUTTONS */}
+                    <button 
+                      onClick={() => openView('event')} 
+                      className="w-full flex items-center gap-4 p-3.5 rounded-2xl hover:bg-secondary/70 transition-colors text-left border border-border/20"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-purple-500/15 flex items-center justify-center shrink-0">
+                        <CalendarHeart className="w-5 h-5 text-purple-500" />
+                      </div>
+                      <span className="text-sm font-semibold text-foreground">Add Custom Event</span>
+                    </button>
+
+                    <button 
+                      onClick={() => openView('note')} 
+                      className="w-full flex items-center gap-4 p-3.5 rounded-2xl hover:bg-secondary/70 transition-colors text-left border border-border/20"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-slate-500/15 flex items-center justify-center shrink-0">
+                        <FileText className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                      </div>
+                      <span className="text-sm font-semibold text-foreground">Add Note</span>
+                    </button>
+
+                    <button 
+                      onClick={() => openView('symptoms')} 
+                      className="w-full flex items-center gap-4 p-3.5 rounded-2xl hover:bg-secondary/70 transition-colors text-left border border-border/20"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-pink-500/15 flex items-center justify-center shrink-0">
+                        <Sparkles className="w-5 h-5 text-pink-500" />
+                      </div>
+                      <span className="text-sm font-semibold text-foreground">Log Symptoms</span>
+                    </button>
+
                   </div>
                 )}
 
-                {/* NOTE & EVENT VIEWS */}
+                {/* ADD NOTE / EVENT VIEW */}
                 {(sheetView === 'note' || sheetView === 'event') && (
-                  <div className="space-y-4">
-                    <p className="text-sm text-muted-foreground">{sheetView === 'note' ? 'Write a journal entry or observations for this date.' : 'E.g., Doctor Appointment, Scan, Travel'}</p>
+                  <div className="space-y-4 pt-1">
+                    <h4 className="font-bold text-sm text-foreground capitalize">
+                      {sheetView === 'note' ? 'Add Note' : 'Add Custom Event'}
+                    </h4>
                     <textarea 
                       value={inputValue}
                       onChange={(e) => setInputValue(e.target.value)}
-                      placeholder={sheetView === 'note' ? "Felt energetic today..." : "Doctor Appointment"}
-                      className="w-full p-4 rounded-2xl bg-secondary border-none resize-none min-h-[120px] focus:ring-2 focus:ring-[var(--hs-pink)]"
+                      placeholder={sheetView === 'note' ? 'Write your note here...' : 'Event details (e.g. Doctor appointment, ovulation test)'}
+                      className="w-full p-4 rounded-2xl bg-secondary/60 border border-border/40 resize-none min-h-[130px] text-foreground text-sm focus:outline-none focus:border-purple-500"
                     />
                     <button 
                       onClick={() => saveCheckinMeta(sheetView === 'note' ? { note: inputValue } : { event: inputValue })}
-                      className="w-full py-4 rounded-2xl text-white font-bold shadow-lg active:scale-95 transition-transform"
-                      style={{ background: 'var(--hs-pink)' }}
+                      className="w-full py-3.5 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm shadow-md active:scale-95 transition-all"
                     >
                       Save {sheetView === 'note' ? 'Note' : 'Event'}
                     </button>
                   </div>
                 )}
 
-                {/* MOOD VIEW */}
-                {sheetView === 'mood' && (
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-3 gap-3">
-                      {[
-                        { v: 'happy', e: '😊', l: 'Happy' }, { v: 'calm', e: '😌', l: 'Calm' },
-                        { v: 'anxious', e: '😰', l: 'Anxious' }, { v: 'sad', e: '😢', l: 'Sad' },
-                        { v: 'angry', e: '😠', l: 'Angry' }, { v: 'mood_swings', e: '🎢', l: 'Swings' }
-                      ].map(m => (
-                        <button 
-                          key={m.v} 
-                          onClick={() => saveVital('mood_logs', { mood: m.v, intensity: 5 })}
-                          className="h-20 flex flex-col items-center justify-center gap-2 rounded-2xl bg-secondary hover:bg-secondary/80 active:scale-95 transition-transform"
-                        >
-                          <span className="text-3xl">{m.e}</span>
-                          <span className="text-xs font-semibold">{m.l}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* SYMPTOMS VIEW */}
                 {sheetView === 'symptoms' && (
-                  <div className="space-y-4">
-                    <p className="text-sm text-muted-foreground mb-2">Select symptoms experienced on this day.</p>
+                  <div className="space-y-4 pt-1">
+                    <h4 className="font-bold text-sm text-foreground">Log Daily Symptoms</h4>
                     <div className="flex flex-wrap gap-2">
-                      {['Cramps', 'Bloating', 'Fatigue', 'Headache', 'Nausea', 'Backache', 'Tender Breasts', 'Acne'].map(sym => {
-                        const currentSymptoms = selectedData?.checkin?.meta?.symptoms || [];
+                      {['Cramps', 'Bloating', 'Fatigue', 'Headache', 'Nausea', 'Backache', 'Tender Breasts', 'Acne', 'Mood Swings'].map(sym => {
+                        const dateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '';
+                        const currentSymptoms = monthData[dateStr]?.meta?.symptoms || [];
                         const isActive = currentSymptoms.includes(sym);
                         return (
                           <button 
                             key={sym}
                             onClick={() => {
-                              const next = isActive ? currentSymptoms.filter((s: string) => s !== sym) : [...currentSymptoms, sym];
-                              setInputValue(next);
+                              const next = isActive 
+                                ? currentSymptoms.filter((s: string) => s !== sym) 
+                                : [...currentSymptoms, sym];
                               saveCheckinMeta({ symptoms: next });
                             }}
-                            className={`px-4 py-2.5 rounded-full text-sm font-semibold transition-colors ${isActive ? 'text-white' : 'bg-secondary text-foreground'}`}
-                            style={isActive ? { background: 'var(--hs-pink)' } : {}}
+                            className={`px-4 py-2.5 rounded-full text-xs font-bold transition-all ${
+                              isActive 
+                                ? 'bg-pink-600 text-white shadow-sm' 
+                                : 'bg-secondary text-foreground hover:bg-secondary/80'
+                            }`}
                           >
                             {sym}
                           </button>
                         );
                       })}
                     </div>
-                  </div>
-                )}
-
-                {/* VITALS (WATER, SLEEP, EXERCISE) VIEW */}
-                {(sheetView === 'water' || sheetView === 'sleep' || sheetView === 'exercise') && (
-                  <div className="flex flex-col items-center justify-center py-8 space-y-8">
-                    <div className="flex items-center gap-6">
-                      <button onClick={() => setInputValue(Math.max(0, inputValue - (sheetView === 'water' ? 0.5 : sheetView === 'sleep' ? 1 : 10)))} className="w-14 h-14 rounded-full bg-secondary flex items-center justify-center text-2xl font-bold active:scale-90 transition-transform">-</button>
-                      <div className="text-5xl font-bold text-foreground w-32 text-center flex flex-col items-center">
-                        {inputValue}
-                        <span className="text-sm font-medium text-muted-foreground mt-1 uppercase tracking-widest">
-                          {sheetView === 'water' ? 'Liters' : sheetView === 'sleep' ? 'Hours' : 'Minutes'}
-                        </span>
-                      </div>
-                      <button onClick={() => setInputValue(inputValue + (sheetView === 'water' ? 0.5 : sheetView === 'sleep' ? 1 : 10))} className="w-14 h-14 rounded-full bg-secondary flex items-center justify-center text-2xl font-bold active:scale-90 transition-transform">+</button>
-                    </div>
-                    <button 
-                      onClick={() => saveVital(`${sheetView}_logs`, sheetView === 'water' ? { amount_ml: inputValue * 1000 } : sheetView === 'sleep' ? { duration_hours: inputValue } : { duration_minutes: inputValue, type: 'General' })}
-                      className="w-full py-4 rounded-2xl text-white font-bold shadow-lg active:scale-95 transition-transform"
-                      style={{ background: 'var(--hs-pink)' }}
-                    >
-                      Save {sheetView}
-                    </button>
                   </div>
                 )}
 

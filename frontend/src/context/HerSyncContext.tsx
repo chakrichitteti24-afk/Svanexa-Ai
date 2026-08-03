@@ -8,6 +8,7 @@ import {
   useCallback,
   useRef,
   type ReactNode,
+  useMemo,
 } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { apiFetch } from '@/utils/api-client';
@@ -94,7 +95,7 @@ export interface HealthState {
 
 interface HerSyncContextValue extends HealthState {
   /** Call after any daily check-in save to broadcast changes to all modules */
-  refreshAll: () => Promise<void>;
+  refreshAll: (options?: { skipCycleHistory?: boolean }) => Promise<void>;
   /** Call after cycle log changes */
   refreshCycleHistory: () => Promise<void>;
   /** Call after skin log changes */
@@ -103,6 +104,8 @@ interface HerSyncContextValue extends HealthState {
   toggleTask: (taskId: string) => void;
   /** Set wellness tasks from the wellness plan page */
   setWellnessTasks: (tasks: WellnessTask[]) => void;
+  /** Set cycle history optimistically */
+  setCycleHistory: (history: CycleLog[]) => void;
   /** Derived helpers */
   wellnessMode: 'general' | 'pcos' | 'pregnancy';
   userName: string;
@@ -145,7 +148,7 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
     lastRefreshed: 0,
   });
 
-  const fetchAll = useCallback(async () => {
+  const fetchAll = useCallback(async (options: { skipCycleHistory?: boolean } = {}) => {
     setState(prev => ({ ...prev, isLoading: true }));
     try {
       // Fetch health summary from backend (handles auth, streak, cycle phase)
@@ -186,10 +189,13 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const [cycleRes, skinRes] = await Promise.all([
-        supabase.from('cycle_logs').select('*').eq('user_id', user.id).order('start_date', { ascending: false }).limit(12),
-        supabase.from('skin_logs').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(10),
-      ]);
+      const skinRes = await supabase.from('skin_logs').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(10);
+      
+      let cycleData: CycleLog[] | undefined = undefined;
+      if (!options.skipCycleHistory) {
+        const cycleRes = await supabase.from('cycle_logs').select('*').eq('user_id', user.id).order('start_date', { ascending: false }).limit(12);
+        if (cycleRes.data) cycleData = cycleRes.data as CycleLog[];
+      }
 
       setState(prev => ({
         ...prev,
@@ -203,7 +209,7 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         currentStreak,
         cycleStatus,
         pregnancyDueDate,
-        cycleHistory: (cycleRes.data as CycleLog[]) || [],
+        cycleHistory: cycleData !== undefined ? cycleData : prev.cycleHistory,
         skinLogs: (skinRes.data as SkinLog[]) || [],
         wellnessTasks,
         isLoading: false,
@@ -234,6 +240,10 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
 
   const setWellnessTasks = useCallback((tasks: WellnessTask[]) => {
     setState(prev => ({ ...prev, wellnessTasks: tasks }));
+  }, []);
+
+  const setCycleHistory = useCallback((history: CycleLog[]) => {
+    setState(prev => ({ ...prev, cycleHistory: history }));
   }, []);
 
   const toggleTask = useCallback((taskId: string) => {
@@ -268,41 +278,58 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
     };
   }, [fetchAll]);
 
-  // Subscribe to realtime checkin changes
+  // Smart Background Syncing on Window Focus (Replaces heavy WebSockets)
   useEffect(() => {
-    const channel = supabase
-      .channel('hersync_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_checkins' }, () => {
-        fetchAll();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'mood_logs' }, () => {
-        fetchAll();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cycle_logs' }, () => {
-        refreshCycleHistory();
-      })
-      .subscribe();
+    let timeoutId: NodeJS.Timeout;
+
+    const handleFocus = () => {
+      // Debounce the refresh to prevent spam if user switches tabs rapidly
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        // Only fetch if we haven't fetched in the last 15 seconds to avoid over-fetching
+        if (Date.now() - state.lastRefreshed > 15000) {
+          fetchAll();
+        }
+      }, 500);
+    };
+
+    window.addEventListener('focus', handleFocus);
 
     return () => {
-      supabase.removeChannel(channel);
+      window.removeEventListener('focus', handleFocus);
+      clearTimeout(timeoutId);
     };
-  }, [supabase, fetchAll, refreshCycleHistory]);
+  }, [fetchAll, state.lastRefreshed]);
+
+
 
   const wellnessMode: 'general' | 'pcos' | 'pregnancy' = (state.preferences?.theme as 'general' | 'pcos' | 'pregnancy') || 'general';
   const userName = state.profile?.first_name || 'there';
   const aiName = state.profile?.ai_name || 'Luna';
 
-  const value: HerSyncContextValue = {
+  const value: HerSyncContextValue = useMemo(() => ({
     ...state,
     refreshAll: fetchAll,
     refreshCycleHistory,
     refreshSkinLogs,
     toggleTask,
     setWellnessTasks,
+    setCycleHistory,
     wellnessMode,
     userName,
     aiName,
-  };
+  }), [
+    state,
+    fetchAll,
+    refreshCycleHistory,
+    refreshSkinLogs,
+    toggleTask,
+    setWellnessTasks,
+    setCycleHistory,
+    wellnessMode,
+    userName,
+    aiName
+  ]);
 
   return (
     <HerSyncContext.Provider value={value}>
