@@ -345,7 +345,7 @@ export default function DashboardPage() {
               <BrainCircuit className="w-5 h-5 text-white" />
             </div>
           </div>
-          <p className={styles.observationText}>{generateObservation()}</p>
+          <p className={styles.observationText}>{observation}</p>
         </div>
       </motion.section>
 

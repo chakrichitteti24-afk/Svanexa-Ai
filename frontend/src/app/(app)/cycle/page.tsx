@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, memo } from 'react';
+import { useState, useEffect, useMemo, memo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   format, addMonths, subMonths, startOfMonth, endOfMonth, 
@@ -72,13 +72,13 @@ const CalendarDay = memo(({
     if (range.type === 'period') {
       textStyle = 'text-white font-bold';
       if (range.isStart && range.isEnd) {
-        rangeStyle = 'w-9 h-9 rounded-full bg-pink-500 text-white font-bold shadow-md shadow-pink-500/30 mx-auto flex items-center justify-center';
+        rangeStyle = 'w-10 h-10 rounded-full bg-pink-500 text-white font-bold shadow-md shadow-pink-500/30 mx-auto flex items-center justify-center';
       } else if (range.isStart) {
-        rangeStyle = 'w-full h-9 rounded-l-full rounded-r-none bg-pink-500 text-white font-bold flex items-center justify-center';
+        rangeStyle = 'w-full h-10 rounded-l-full rounded-r-none bg-pink-500 text-white font-bold flex items-center justify-center';
       } else if (range.isEnd) {
-        rangeStyle = 'w-full h-9 rounded-r-full rounded-l-none bg-pink-500 text-white font-bold flex items-center justify-center';
+        rangeStyle = 'w-full h-10 rounded-r-full rounded-l-none bg-pink-500 text-white font-bold flex items-center justify-center';
       } else {
-        rangeStyle = 'w-full h-9 rounded-none bg-pink-500/70 dark:bg-pink-500/60 text-white font-bold flex items-center justify-center';
+        rangeStyle = 'w-full h-10 rounded-none bg-pink-500 text-white font-bold flex items-center justify-center';
       }
     } else if (range.type === 'pregnancy') {
       textStyle = 'text-white font-bold';
@@ -121,7 +121,7 @@ const CalendarDay = memo(({
         `}
       >
         {isSel ? (
-          <span className={`w-9 h-9 rounded-full ${isPeriod ? 'bg-pink-600 ring-2 ring-white text-white' : 'bg-purple-600 text-white'} font-bold flex items-center justify-center shadow-lg transform scale-105 transition-transform`}>
+          <span className={`w-9 h-9 rounded-full ${isPeriod ? 'bg-pink-600 ring-2 ring-white text-white' : 'bg-pink-500/20 text-pink-600 dark:text-pink-400 font-bold border-2 border-pink-500'} font-bold flex items-center justify-center shadow-lg transform scale-105 transition-transform`}>
             {format(day, 'd')}
           </span>
         ) : (
@@ -152,16 +152,16 @@ export default function CycleTrackerPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   
   const [isSaving, setIsSaving] = useState(false);
-  const isSavingRef = React.useRef(false);
+  const isSavingRef = useRef(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [sheetView, setSheetView] = useState<'menu' | 'note' | 'event' | 'symptoms' | 'locked' | 'view_cycle'>('menu');
   const [monthData, setMonthData] = useState<Record<string, any>>({});
   const [inputValue, setInputValue] = useState<any>('');
   const [unlockedCycleId, setUnlockedCycleId] = useState<string | null>(null);
 
-  // Find active cycle (period started, but no end date yet)
+  // Find active cycle (period started, but no end date logged yet or end_date === start_date)
   const activeCycle = useMemo(() => {
-    return cycleHistory.find(c => !c.end_date);
+    return cycleHistory.find(c => !c.end_date || c.end_date === c.start_date);
   }, [cycleHistory]);
 
   // Fetch month logs (checkins, custom events, notes)
@@ -270,16 +270,17 @@ const parseLocalDate = (dateStr: string | null) => {
       const endTs = c.end_date ? getNormalizedTimestamp(c.end_date) : null;
       const isLocked = endTs !== null && c.id !== unlockedCycleId;
 
-      if (endTs === null) {
+      const isActive = !c.end_date || c.end_date === c.start_date;
+
+      if (isActive) {
         // Active cycle (Period Start logged, Period End pending)
-        const todayTs = getNormalizedTimestamp(new Date())!;
-        const maxTs = Math.max(startTs, todayTs);
-        if (currentTs >= startTs && currentTs <= maxTs) {
+        // Highlight ONLY the Period Start date!
+        if (currentTs === startTs) {
           return {
             type: 'period',
             inRange: true,
-            isStart: currentTs === startTs,
-            isEnd: currentTs === maxTs,
+            isStart: true,
+            isEnd: true,
             isLocked: false,
             cycle: c
           };
@@ -401,47 +402,80 @@ const parseLocalDate = (dateStr: string | null) => {
         }
         toast.success('Period start updated.');
       } else {
-        // Strict Guard: Prevent duplicate active period starts
-        const { data: existingActive } = await supabase
+        // Check if an active cycle already exists in DB
+        const { data: latestCycle } = await supabase
           .from('cycle_logs')
-          .select('id')
+          .select('*')
           .eq('user_id', user.id)
-          .is('end_date', null)
+          .order('start_date', { ascending: false })
+          .limit(1)
           .maybeSingle();
 
+        const existingActive = latestCycle && (!latestCycle.end_date || latestCycle.end_date === latestCycle.start_date) ? latestCycle : null;
+
         if (existingActive) {
-          toast.error('A period is already active. Please log Period Ended before starting a new cycle.');
-          isSavingRef.current = false;
-          setIsSaving(false);
-          return;
-        }
+          const oldStartTs = getNormalizedTimestamp(existingActive.start_date)!;
+          const newStartTs = getNormalizedTimestamp(selectedDate)!;
+          const diffDays = Math.abs(differenceInDays(new Date(newStartTs), new Date(oldStartTs)));
 
-        // Optimistic Update
-        const tempId = `temp-${Date.now()}`;
-        const newCycle = { id: tempId, start_date: dateStr, end_date: null, flow_intensity: null, symptoms: null };
-        setCycleHistory([newCycle, ...cycleHistory]);
+          if (diffDays > 14) {
+            // Auto-close stale active cycle from past month
+            const autoEndDate = format(addDays(new Date(existingActive.start_date), 4), 'yyyy-MM-dd');
+            await supabase.from('cycle_logs').update({ end_date: autoEndDate }).eq('id', existingActive.id);
+            
+            // Insert new active cycle (end_date = dateStr to avoid NOT NULL constraint)
+            const { data: insertedData, error } = await supabase
+              .from('cycle_logs')
+              .insert({ user_id: user.id, start_date: dateStr, end_date: dateStr })
+              .select()
+              .single();
+            if (error || !insertedData) throw error;
 
-        // Create new active cycle and return it
-        const { data: insertedData, error } = await supabase.from('cycle_logs').insert({ user_id: user.id, start_date: dateStr, end_date: null }).select().single();
-        if (error || !insertedData) {
-          // Revert optimistic update
-          setCycleHistory(cycleHistory);
-          throw error;
+            setCycleHistory([insertedData, ...cycleHistory.map(c => c.id === existingActive.id ? { ...c, end_date: autoEndDate } : c)]);
+            toast.success('Period started logged.');
+          } else {
+            // Update existing active cycle start date
+            const { data: updatedData, error } = await supabase
+              .from('cycle_logs')
+              .update({ start_date: dateStr, end_date: dateStr })
+              .eq('id', existingActive.id)
+              .select()
+              .single();
+            if (error || !updatedData) throw error;
+
+            setCycleHistory(cycleHistory.map(c => c.id === existingActive.id ? updatedData : c));
+            toast.success('Period start updated.');
+          }
+        } else {
+          // Create new active cycle (end_date = dateStr to avoid NOT NULL constraint)
+          const tempId = `temp-${Date.now()}`;
+          const newCycle = { id: tempId, start_date: dateStr, end_date: dateStr, flow_intensity: null, symptoms: null };
+          setCycleHistory([newCycle, ...cycleHistory]);
+
+          const { data: insertedData, error } = await supabase
+            .from('cycle_logs')
+            .insert({ user_id: user.id, start_date: dateStr, end_date: dateStr })
+            .select()
+            .single();
+
+          if (error || !insertedData) {
+            setCycleHistory(cycleHistory);
+            throw error;
+          }
+          
+          setCycleHistory([insertedData, ...cycleHistory.filter(c => c.id !== tempId)]);
+          toast.success('Period started logged.');
         }
-        
-        // Update state with TRUE DB data, replacing the temp optimistic cycle
-        setCycleHistory([insertedData, ...cycleHistory.filter(c => c.id !== tempId)]);
-        toast.success('Period started logged.');
       }
       
       setUnlockedCycleId(null);
       setSelectedDate(null);
       // Fire refreshAll for dashboard, but skip cycle history to prevent stale reads
       refreshAll({ skipCycleHistory: true });
-    } catch (e) {
-      // Hard refresh context to clear any ghost optimistic states
+    } catch (e: any) {
+      console.error('Error logging period start:', e);
       refreshCycleHistory();
-      toast.error('Failed to log period start.');
+      toast.error(e?.message || 'Failed to log period start.');
     } finally {
       isSavingRef.current = false;
       setIsSaving(false);
@@ -496,7 +530,7 @@ const parseLocalDate = (dateStr: string | null) => {
       }
       
       // Clean up any stale/duplicate active cycles in database if they exist
-      const staleActives = cycleHistory.filter(c => !c.end_date && c.id !== targetCycle.id);
+      const staleActives = cycleHistory.filter(c => (!c.end_date || c.end_date === c.start_date) && c.id !== targetCycle.id);
       for (const stale of staleActives) {
         if (!stale.id.startsWith('temp-')) {
           await supabase.from('cycle_logs').delete().eq('id', stale.id);
@@ -509,9 +543,10 @@ const parseLocalDate = (dateStr: string | null) => {
       setSelectedDate(null);
       // Fire refreshAll for dashboard, but skip cycle history to prevent stale reads
       refreshAll({ skipCycleHistory: true });
-    } catch (e) {
+    } catch (e: any) {
+      console.error('Error logging period end:', e);
       refreshCycleHistory();
-      toast.error('Failed to log period end.');
+      toast.error(e?.message || 'Failed to log period end.');
     } finally {
       isSavingRef.current = false;
       setIsSaving(false);
@@ -870,36 +905,21 @@ const parseLocalDate = (dateStr: string | null) => {
                         </button>
                       </>
                     ) : activeCycle ? (
-                      // ACTIVE CYCLE OPEN (Show Period Ended & Update Period Start)
-                      <>
-                        <button 
-                          onClick={logPeriodEnd} 
-                          className="w-full flex items-center gap-4 p-4 rounded-2xl bg-pink-500/10 hover:bg-pink-500/20 transition-colors text-left border border-pink-500/30 active:scale-98"
-                        >
-                          <div className="w-10 h-10 rounded-full bg-pink-500/20 flex items-center justify-center shrink-0">
-                            <CalendarCheck className="w-5 h-5 text-pink-500" />
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="text-base font-bold text-foreground">
-                              {selectedDate ? `Period Ended on ${format(selectedDate, 'MMM d')}` : 'Period Ended'}
-                            </span>
-                            <span className="text-xs text-muted-foreground">Complete active period range</span>
-                          </div>
-                        </button>
-
-                        <button 
-                          onClick={logPeriodStart} 
-                          className="w-full flex items-center gap-4 p-4 rounded-2xl bg-pink-500/10 hover:bg-pink-500/20 transition-colors text-left border border-pink-500/30 active:scale-98"
-                        >
-                          <div className="w-10 h-10 rounded-full bg-pink-500/20 flex items-center justify-center shrink-0">
-                            <Droplets className="w-5 h-5 text-pink-500" />
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="text-base font-bold text-foreground">Update Period Start</span>
-                            <span className="text-xs text-muted-foreground">Change start date of active cycle</span>
-                          </div>
-                        </button>
-                      </>
+                      // ACTIVE CYCLE OPEN (Show ONLY Period Ended)
+                      <button 
+                        onClick={logPeriodEnd} 
+                        className="w-full flex items-center gap-4 p-4 rounded-2xl bg-pink-500/10 hover:bg-pink-500/20 transition-colors text-left border border-pink-500/30 active:scale-98"
+                      >
+                        <div className="w-10 h-10 rounded-full bg-pink-500/20 flex items-center justify-center shrink-0">
+                          <CalendarCheck className="w-5 h-5 text-pink-500" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-base font-bold text-foreground">
+                            {selectedDate ? `Period Ended on ${format(selectedDate, 'MMM d')}` : 'Period Ended'}
+                          </span>
+                          <span className="text-xs text-muted-foreground">Complete active period range</span>
+                        </div>
+                      </button>
                     ) : (
                       // NO ACTIVE CYCLE (Show Period Started & Period Ended & Pregnancy Started)
                       <>
