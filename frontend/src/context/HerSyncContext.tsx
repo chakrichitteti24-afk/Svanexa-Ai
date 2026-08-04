@@ -189,7 +189,7 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const skinRes = await supabase.from('skin_logs').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(10);
+      const skinRes = await supabase.from('skin_logs').select('*').eq('user_id', user.id).order('log_date', { ascending: false }).limit(10);
       
       let cycleData: CycleLog[] | undefined = undefined;
       if (!options.skipCycleHistory) {
@@ -232,7 +232,7 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
   const refreshSkinLogs = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data } = await supabase.from('skin_logs').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(10);
+    const { data } = await supabase.from('skin_logs').select('*').eq('user_id', user.id).order('log_date', { ascending: false }).limit(10);
     if (data) {
       setState(prev => ({ ...prev, skinLogs: data as SkinLog[] }));
     }

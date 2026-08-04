@@ -20,7 +20,7 @@ const navItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Daily Check-In', href: '/check-in', icon: CheckSquare },
   { name: 'Cycle Tracker', href: '/cycle', icon: CalendarHeart },
-  { name: 'Skin Tracker', href: '/skin', icon: Droplets },
+  { name: 'Skin Scanner', href: '/skin', icon: Droplets },
   { name: 'Wellness Plan', href: '/wellness-plan', icon: Award, premium: true },
   { name: 'Reports', href: '/reports', icon: LineChart },
   { name: 'Profile', href: '/profile', icon: User },
