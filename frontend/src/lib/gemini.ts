@@ -11,7 +11,7 @@ export async function getCompanionResponse(
   history: { role: 'user' | 'model'; parts: { text: string }[] }[],
   language: string = 'English',
   personality: string = 'Friendly',
-  companionName: string = 'HerSync AI',
+  companionName: string = 'Svanexa AI',
   healthSummary: string = '{}'
 ): Promise<string> {
   try {

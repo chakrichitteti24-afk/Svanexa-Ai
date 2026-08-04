@@ -12,9 +12,9 @@ export function Navbar() {
       {/* Brand */}
       <Link href="/" className="flex items-center gap-2 group">
         <div className="w-7 h-7 rounded-lg overflow-hidden shadow-md shadow-violet-500/30 relative">
-          <Image src="/logo.jpg" alt="HerSync" fill className="object-cover" />
+          <Image src="/logo.jpg" alt="Svanexa" fill className="object-cover" />
         </div>
-        <span className="text-base font-bold gradient-text tracking-tight">HerSync</span>
+        <span className="text-base font-bold gradient-text tracking-tight">Svanexa</span>
       </Link>
 
       {/* Hamburger → Slide-in Sidebar */}

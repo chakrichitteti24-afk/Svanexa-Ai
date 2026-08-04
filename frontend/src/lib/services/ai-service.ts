@@ -26,7 +26,7 @@ export class AIService {
     companionName: string,
     userName: string,
     forceGemini: boolean = false
-  ): Promise<{ response: string; modelUsed: 'llama-3.1-8b' | 'gemini-2.5-flash'; error?: string }> {
+  ): Promise<{ response: string; modelUsed: 'llama-3.1-8b' | 'gemini-1.5-flash'; error?: string }> {
     const trimmedMsg = message.trim().toLowerCase();
     if (trimmedMsg === 'hi') {
       return { response: "Hey 😊\nHow are you doing today?", modelUsed: 'llama-3.1-8b' };
@@ -144,7 +144,7 @@ export class AIService {
       personality = 'Gentle, Calm, Warm, Reassuring, Protective.';
     }
 
-    const systemPrompt = `You are ${companionName}, the AI Wellness Companion inside HerSync.
+    const systemPrompt = `You are ${companionName}, the AI Wellness Companion inside Svanexa.
 
 Your role is to behave like a trusted family wellness companion.
 
@@ -253,10 +253,10 @@ Active Wellness Data for this turn: ${relevantDataText}`;
     if (forceGemini) {
       try {
         const responseText = await this.queryGemini(systemPrompt, history, message, maxTokens);
-        return { response: responseText, modelUsed: 'gemini-2.5-flash' };
+        return { response: responseText, modelUsed: 'gemini-1.5-flash' };
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
-        return { response: "I'm having trouble analyzing your wellness data right now. Please try again soon. 🌸", modelUsed: 'gemini-2.5-flash', error: errorMsg };
+        return { response: "I'm having trouble analyzing your wellness data right now. Please try again soon. 🌸", modelUsed: 'gemini-1.5-flash', error: errorMsg };
       }
     }
 
@@ -299,7 +299,7 @@ Active Wellness Data for this turn: ${relevantDataText}`;
             const responseText = await this.queryGemini(systemPrompt, history, message, maxTokens);
             return {
               response: responseText,
-              modelUsed: 'gemini-2.5-flash'
+              modelUsed: 'gemini-1.5-flash'
             };
           } catch (geminiError) {
             return {
@@ -320,9 +320,9 @@ Active Wellness Data for this turn: ${relevantDataText}`;
       if (this.gemini) {
         try {
           const responseText = await this.queryGemini(systemPrompt, history, message, maxTokens);
-          return { response: responseText, modelUsed: 'gemini-2.5-flash' };
+          return { response: responseText, modelUsed: 'gemini-1.5-flash' };
         } catch (err) {
-          return { response: "Backend API keys are not fully configured.", modelUsed: 'gemini-2.5-flash', error: String(err) };
+          return { response: "Backend API keys are not fully configured.", modelUsed: 'gemini-1.5-flash', error: String(err) };
         }
       }
     }
@@ -336,7 +336,7 @@ Active Wellness Data for this turn: ${relevantDataText}`;
     }
 
     const model = this.gemini.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-1.5-flash',
       systemInstruction: systemInstruction,
     });
 

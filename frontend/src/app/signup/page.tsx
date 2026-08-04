@@ -152,7 +152,7 @@ export default function SignUpPage() {
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-tr from-pink-500 to-violet-500 text-white mb-2 shadow-lg shadow-pink-500/20">
             <Heart className="w-6 h-6 fill-white" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Join HerSync</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Join Svanexa</h1>
           <p className="text-sm text-muted-foreground">Your AI-powered wellness journey begins here.</p>
         </div>
 

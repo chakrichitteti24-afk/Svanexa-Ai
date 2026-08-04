@@ -90,7 +90,7 @@ export function FloatingCompanion() {
     pathname === '/cycle'          ? 'Cycle Tracker' :
     pathname === '/skin'           ? 'Skin Tracker' :
     pathname === '/reports'        ? 'Reports' :
-    pathname === '/profile'        ? 'Profile' : 'HerSync'
+    pathname === '/profile'        ? 'Profile' : 'Svanexa'
   );
 
   const [isOpen, setIsOpen] = useState(false);

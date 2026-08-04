@@ -10,7 +10,7 @@ export default function LandingPage() {
         <div className="flex items-center gap-2">
           <Sparkles className="h-6 w-6 text-pink-500" />
           <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-violet-500">
-            HerSync AI
+            Svanexa AI
           </span>
         </div>
         <nav className="hidden md:flex gap-6">
@@ -91,7 +91,7 @@ export default function LandingPage() {
             <div className="flex-1">
               <h2 className="text-3xl md:text-5xl font-bold mb-6">Always there when you need support</h2>
               <p className="text-lg text-muted-foreground mb-8">
-                Dealing with PCOS can be overwhelming. HerSync AI provides a judgment-free space to ask questions, vent about symptoms, and receive motivational guidance in multiple languages including English, Hindi, and Telugu.
+                Dealing with PCOS can be overwhelming. Svanexa AI provides a judgment-free space to ask questions, vent about symptoms, and receive motivational guidance in multiple languages including English, Hindi, and Telugu.
               </p>
               <ul className="space-y-4 mb-8">
                 {['Customizable personality', 'Multilingual support', 'Empathy-first responses', 'Privacy-focused (local storage)'].map((item, i) => (
@@ -157,16 +157,16 @@ export default function LandingPage() {
       <footer className="py-12 px-6 border-t border-border/40 text-center text-muted-foreground">
         <div className="flex items-center justify-center gap-2 mb-4">
           <Sparkles className="h-5 w-5 text-pink-500" />
-          <span className="font-bold text-foreground">HerSync AI</span>
+          <span className="font-bold text-foreground">Svanexa AI</span>
         </div>
         <p className="max-w-md mx-auto text-sm mb-6">
           Empowering women with PCOS and PCOD to understand their bodies and reclaim their wellness journey.
         </p>
         <p className="text-xs opacity-60">
-          Disclaimer: HerSync AI is a wellness tracking tool and not a replacement for professional medical advice.
+          Disclaimer: Svanexa AI is a wellness tracking tool and not a replacement for professional medical advice.
         </p>
         <div className="mt-8 text-xs">
-          © {new Date().getFullYear()} HerSync AI. Built for wellness.
+          © {new Date().getFullYear()} Svanexa AI. Built for wellness.
         </div>
       </footer>
     </div>

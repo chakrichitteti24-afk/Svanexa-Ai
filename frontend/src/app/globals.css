@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /* =====================================================
-   HERSYNC AI — PREMIUM DESIGN SYSTEM
+   SVANEXA AI — PREMIUM DESIGN SYSTEM
    Dark mode, Pink/Purple gradients, Glassmorphism
    ===================================================== */
 
@@ -47,7 +47,7 @@
   --radius-3xl: calc(var(--radius) * 2.2);
 }
 
-/* Force dark mode always for HerSync */
+/* Force dark mode always for Svanexa */
 :root {
   color-scheme: dark;
 
@@ -81,7 +81,7 @@
   --sidebar-border: rgba(168, 85, 247, 0.1);
   --sidebar-ring: #a855f7;
 
-  /* HerSync Brand Tokens (Default / General Mode - Purple + Lavender) */
+  /* Svanexa Brand Tokens (Default / General Mode - Purple + Lavender) */
   --hs-pink: #ec4899;
   --hs-violet: #8b5cf6;
   --hs-purple: #a855f7;

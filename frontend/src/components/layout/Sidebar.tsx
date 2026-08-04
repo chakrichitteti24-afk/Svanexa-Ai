@@ -42,9 +42,9 @@ export function Sidebar({ className }: { className?: string }) {
       <div className="h-16 flex items-center px-6 border-b border-[rgba(168,85,247,0.1)] shrink-0">
         <Link href="/" className="flex items-center gap-2.5 group">
           <div className="w-8 h-8 rounded-xl overflow-hidden shadow-lg shadow-violet-500/30 relative">
-            <Image src="/logo.jpg" alt="HerSync" fill className="object-cover" />
+            <Image src="/logo.jpg" alt="Svanexa" fill className="object-cover" />
           </div>
-          <span className="text-xl font-bold gradient-text tracking-tight">HerSync</span>
+          <span className="text-xl font-bold gradient-text tracking-tight">Svanexa</span>
         </Link>
       </div>
 
@@ -88,7 +88,7 @@ export function Sidebar({ className }: { className?: string }) {
       {/* Footer */}
       <div className="px-4 py-4 border-t border-[rgba(168,85,247,0.1)] shrink-0">
         <p className="text-[10px] text-[#7c71a4] text-center leading-relaxed">
-          HerSync AI is not medical advice.
+          Svanexa AI is not medical advice.
         </p>
       </div>
     </div>

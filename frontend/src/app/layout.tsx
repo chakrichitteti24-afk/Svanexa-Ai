@@ -6,8 +6,8 @@ import { Toaster } from '@/components/ui/sonner';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'HerSync AI | PCOS & PCOD Wellness Platform',
-  description: 'AI-powered PCOS/PCOD wellness platform tracking mood, cycle, skin, and lifestyle.',
+  title: 'Svanexa AI | Intelligent Wellness, Empowered by AI',
+  description: 'Svanexa AI is an AI-powered women\'s wellness platform designed to provide personalized wellness guidance, secure health tracking, and intelligent insights through Artificial Intelligence.',
   icons: {
     icon: [
       { url: '/favicon.ico' },

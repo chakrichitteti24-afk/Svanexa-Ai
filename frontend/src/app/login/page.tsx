@@ -48,7 +48,7 @@ export default function LoginPage() {
             <Heart className="w-6 h-6 fill-white" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Welcome Back</h1>
-          <p className="text-sm text-muted-foreground">Sign in to your HerSync account</p>
+          <p className="text-sm text-muted-foreground">Sign in to your Svanexa account</p>
         </div>
 
         <Card className="border-pink-500/10 shadow-xl shadow-pink-500/5 bg-card/60 backdrop-blur-xl">
