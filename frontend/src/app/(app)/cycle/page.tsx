@@ -270,9 +270,7 @@ const parseLocalDate = (dateStr: string | null) => {
       const endTs = c.end_date ? getNormalizedTimestamp(c.end_date) : null;
       const isLocked = endTs !== null && c.id !== unlockedCycleId;
 
-      const isActive = !c.end_date || c.end_date === c.start_date;
-
-      if (isActive) {
+      if (endTs === null || c.end_date === c.start_date) {
         // Active cycle (Period Start logged, Period End pending)
         // Highlight ONLY the Period Start date!
         if (currentTs === startTs) {
@@ -286,7 +284,7 @@ const parseLocalDate = (dateStr: string | null) => {
           };
         }
       } else {
-        // Completed cycle (both Period Start and Period End exist)
+        // Completed cycle (both Period Start and Period End exist, endTs is non-null)
         let sTs = startTs;
         let eTs = endTs;
         // Self-heal corrupted DB records where end < start
