@@ -91,9 +91,30 @@ export class WellnessPlanService {
   }
 
   async toggleTask(userId: string, planId: string, taskId: string, todayStr: string, targetStatus?: 'pending' | 'completed' | 'skipped') {
-    const { data: planData } = await this.supabase
-      .from('wellness_plans').select('*').eq('id', planId).single();
-    if (!planData) throw new Error('Plan not found');
+    let planData: any = null;
+
+    if (planId && planId !== 'temp') {
+      const { data } = await this.supabase
+        .from('wellness_plans').select('*').eq('id', planId).maybeSingle();
+      planData = data;
+    }
+
+    if (!planData) {
+      const { data } = await this.supabase
+        .from('wellness_plans').select('*').eq('user_id', userId).eq('title', todayStr).maybeSingle();
+      planData = data;
+    }
+
+    if (!planData) {
+      const loaded = await this.getDailyWellnessPlan(userId, todayStr, 'general');
+      if (loaded.plan) {
+        const { data } = await this.supabase
+          .from('wellness_plans').select('*').eq('user_id', userId).eq('title', todayStr).maybeSingle();
+        planData = data;
+      }
+    }
+
+    if (!planData) throw new Error('Plan not found for today');
 
     const tasks: WellnessTask[] = JSON.parse(planData.content).map((t: any) => {
       if (t.id === taskId) {
@@ -113,7 +134,8 @@ export class WellnessPlanService {
     });
 
     await this.supabase.from('wellness_plans')
-      .update({ content: JSON.stringify(tasks) }).eq('id', planId);
+      .update({ content: JSON.stringify(tasks), updated_at: new Date().toISOString() })
+      .eq('id', planData.id);
 
     if (tasks.every(t => t.completed || t.status === 'completed')) {
       await this.updateStreak(userId, todayStr);
@@ -122,7 +144,7 @@ export class WellnessPlanService {
     const metrics = await this.loadMetrics(userId, todayStr);
     const [streak, prefs] = await Promise.all([
       this.getOrCreateStreak(userId),
-      this.supabase.from('user_preferences').select('theme').eq('user_id', userId).single()
+      this.supabase.from('user_preferences').select('theme').eq('user_id', userId).maybeSingle()
     ]);
     const mode = prefs.data?.theme || 'general';
     const score = this.computeScore(metrics, tasks);
@@ -202,32 +224,25 @@ export class WellnessPlanService {
   // ── SCORE ──────────────────────────────────────────────────────────────────
 
   private computeScore(m: any, tasks: WellnessTask[]): number {
-    let score = 50; // base
-    // Sleep 0-20 pts
-    if (m.todaySleep !== null) {
-      const s = Number(m.todaySleep);
-      if (s >= 7 && s <= 9) score += 20;
-      else if (s >= 6) score += 12;
-      else score += 5;
+    if (!tasks || tasks.length === 0) {
+      return 0;
     }
-    // Hydration 0-15 pts
-    if (m.todayWater !== null) {
-      const w = Number(m.todayWater);
-      if (w >= 2) score += 15;
-      else score += Math.round((w / 2) * 15);
-    }
-    // Exercise 0-10 pts
-    if (m.todayExercise !== null) {
-      const e = Number(m.todayExercise);
-      if (e >= 30) score += 10;
-      else score += Math.round((e / 30) * 10);
-    }
-    // Mood/stress 0-5 pts
-    if (m.todayMood && ['happy', 'calm', 'energetic'].includes(m.todayMood)) score += 5;
-    // Task completion bonus
-    const completedPct = tasks.length > 0 ? tasks.filter(t => t.completed).length / tasks.length : 0;
-    score = Math.round(score + completedPct * 0) ; // tasks affect score dynamically
-    return Math.min(100, Math.max(0, score));
+
+    const morningTasks = tasks.filter(t => t.timeSlot === 'morning');
+    const afternoonTasks = tasks.filter(t => t.timeSlot === 'afternoon');
+    const eveningTasks = tasks.filter(t => t.timeSlot === 'evening');
+
+    const morningDone = morningTasks.filter(t => t.completed || t.status === 'completed').length;
+    const afternoonDone = afternoonTasks.filter(t => t.completed || t.status === 'completed').length;
+    const eveningDone = eveningTasks.filter(t => t.completed || t.status === 'completed').length;
+
+    // Slot Weight Allocation: Morning = 30%, Afternoon = 30%, Evening = 40% -> Total 100%
+    const morningScore = morningTasks.length > 0 ? (morningDone / morningTasks.length) * 30 : 0;
+    const afternoonScore = afternoonTasks.length > 0 ? (afternoonDone / afternoonTasks.length) * 30 : 0;
+    const eveningScore = eveningTasks.length > 0 ? (eveningDone / eveningTasks.length) * 40 : 0;
+
+    const totalScore = Math.round(morningScore + afternoonScore + eveningScore);
+    return Math.min(100, Math.max(0, totalScore));
   }
 
   // ── INSIGHT ────────────────────────────────────────────────────────────────
@@ -298,11 +313,11 @@ export class WellnessPlanService {
       category: t.category || 'mindfulness',
       timeSlot: slot as any,
       priority: (t.priority || 'recommended') as any,
-      status: (t.status || 'pending') as any,
+      status: 'pending',
       estimatedTime: t.estimatedTime || '5 mins',
       rationale: t.rationale || 'Tailored to your daily health check-in data and wellness goals.',
-      completed: t.status === 'completed',
-      completedAt: t.status === 'completed' ? new Date().toISOString() : null,
+      completed: false,
+      completedAt: null,
     }));
   }
 

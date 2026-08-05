@@ -4,7 +4,7 @@
   max-width: 1200px;
   width: 100%;
   margin: 0 auto;
-  padding: 0 16px 96px 16px;
+  padding: 0 16px max(6rem, calc(5rem + env(safe-area-inset-bottom))) 16px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;

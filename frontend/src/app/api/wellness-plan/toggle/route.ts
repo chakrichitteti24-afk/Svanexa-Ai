@@ -26,8 +26,8 @@ export async function POST(req: Request) {
       // Fallback
     }
 
-    if (!planId || !taskId) {
-      return NextResponse.json({ success: false, error: 'planId and taskId are required in body' }, { status: 400 });
+    if (!taskId) {
+      return NextResponse.json({ success: false, error: 'taskId is required in body' }, { status: 400 });
     }
 
     const userId = user.id;

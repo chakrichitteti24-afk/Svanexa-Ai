@@ -1,14 +1,14 @@
 /* FAB Button */
 .fab {
   position: fixed !important;
-  bottom: 90px;
-  right: 16px;
+  bottom: calc(4.75rem + env(safe-area-inset-bottom));
+  right: 1rem;
   z-index: 9999 !important;
-  width: 60px;
-  height: 60px;
+  width: 56px;
+  height: 56px;
   border-radius: 9999px;
   background: linear-gradient(135deg, #8B5CF6, #EC4899);
-  box-shadow: 0 10px 30px rgba(236, 72, 153, 0.5), 0 0 20px rgba(139, 92, 246, 0.4);
+  box-shadow: 0 10px 30px rgba(236, 72, 153, 0.45), 0 0 20px rgba(139, 92, 246, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -18,15 +18,17 @@
   outline: none;
   padding: 0;
   overflow: hidden;
-  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
+  touch-action: manipulation;
 }
 
 @media (min-width: 768px) {
   .fab {
-    bottom: 24px;
-    right: 24px;
-    width: 68px;
-    height: 68px;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    width: 64px;
+    height: 64px;
   }
 }
 

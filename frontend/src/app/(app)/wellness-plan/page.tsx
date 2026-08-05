@@ -285,19 +285,41 @@ function WellnessPlanContent() {
     return tasks.length > 0 && tasks.every(t => t.completed || t.status === 'completed');
   }, [plan]);
 
-  // ── Loading Skeleton ──
-  if (loading) {
+  // ── Premium AI Generation Loading Skeleton ──
+  if (loading || generating) {
     return (
       <div className={styles.page}>
-        <div className="max-w-4xl mx-auto w-full space-y-6 animate-pulse p-4">
-          <div className="h-8 w-64 bg-card/60 rounded-xl" />
-          <div className="h-4 w-48 bg-card/40 rounded-lg" />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
-            <div className="h-48 bg-card/60 rounded-3xl" />
-            <div className="md:col-span-2 space-y-4">
-              <div className="h-24 bg-card/60 rounded-3xl" />
-              <div className="h-24 bg-card/60 rounded-3xl" />
-              <div className="h-24 bg-card/60 rounded-3xl" />
+        <div className="max-w-5xl mx-auto w-full space-y-6 p-4 md:p-8">
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col items-center justify-center text-center p-6 bg-card/80 backdrop-blur-xl border border-violet-500/25 rounded-3xl shadow-xl space-y-3 relative overflow-hidden"
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-violet-500/10 via-pink-500/10 to-violet-500/10 animate-pulse pointer-events-none" />
+            <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-violet-500 to-pink-500 flex items-center justify-center text-white shadow-lg shadow-pink-500/25 animate-bounce">
+              <Sparkles className="w-7 h-7 fill-white/20 animate-pulse" />
+            </div>
+            <div className="space-y-1 z-10">
+              <h3 className="text-base md:text-lg font-bold text-foreground flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-pink-400" />
+                Generating your personalized wellness plan...
+              </h3>
+              <p className="text-xs text-muted-foreground font-medium">
+                Analyzing cycle phase, mood & vitals for tailored daily recommendations.
+              </p>
+            </div>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 pt-2 animate-pulse">
+            <div className="md:col-span-5 space-y-4">
+              <div className="h-56 bg-card/60 rounded-3xl border border-border/30" />
+              <div className="h-40 bg-card/40 rounded-3xl border border-border/20" />
+              <div className="h-32 bg-card/40 rounded-3xl border border-border/20" />
+            </div>
+            <div className="md:col-span-7 space-y-4">
+              <div className="h-28 bg-card/60 rounded-2xl border border-border/30" />
+              <div className="h-28 bg-card/60 rounded-2xl border border-border/30" />
+              <div className="h-28 bg-card/60 rounded-2xl border border-border/30" />
             </div>
           </div>
         </div>
@@ -403,7 +425,7 @@ function WellnessPlanContent() {
                   </div>
                 </div>
                 <div className={styles.progressBar}>
-                  <div className={styles.progressFill} style={{ width: `${(done / Math.max(total, 1)) * 100}%` }} />
+                  <div className={styles.progressFill} style={{ width: `${animScore}%` }} />
                 </div>
                 <div style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)', fontWeight: 600 }}>
                   {done} of {total} tasks completed
@@ -455,48 +477,48 @@ function WellnessPlanContent() {
 
           {/* Progress & Consistency Breakdown */}
           <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '1rem', padding: '1rem', marginBottom: '1rem' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--hs-pink)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>
+            <div className={styles.premiumCard} style={{ padding: '1.25rem', marginBottom: '1.25rem' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--hs-pink)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.85rem' }}>
                 📊 Progress Tracking
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '0.5rem', textAlign: 'center' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)' }}>🌅 Morning</span>
-                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#FBBF24' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.65rem', marginBottom: '0.85rem' }}>
+                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', padding: '0.65rem', borderRadius: '0.85rem', textAlign: 'center' }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)', fontWeight: 600 }}>🌅 Morning (30%)</span>
+                  <div style={{ fontSize: '1rem', fontWeight: 900, color: '#FBBF24', marginTop: '0.2rem' }}>
                     {plan.tasks.filter(t => t.timeSlot === 'morning').length > 0
                       ? Math.round((plan.tasks.filter(t => t.timeSlot === 'morning' && (t.completed || t.status === 'completed')).length / plan.tasks.filter(t => t.timeSlot === 'morning').length) * 100)
                       : 0}%
                   </div>
                 </div>
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '0.5rem', textAlign: 'center' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)' }}>☀️ Afternoon</span>
-                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#38BDF8' }}>
+                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', padding: '0.65rem', borderRadius: '0.85rem', textAlign: 'center' }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)', fontWeight: 600 }}>☀️ Afternoon (30%)</span>
+                  <div style={{ fontSize: '1rem', fontWeight: 900, color: '#38BDF8', marginTop: '0.2rem' }}>
                     {plan.tasks.filter(t => t.timeSlot === 'afternoon').length > 0
                       ? Math.round((plan.tasks.filter(t => t.timeSlot === 'afternoon' && (t.completed || t.status === 'completed')).length / plan.tasks.filter(t => t.timeSlot === 'afternoon').length) * 100)
                       : 0}%
                   </div>
                 </div>
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '0.5rem', textAlign: 'center' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)' }}>🌙 Evening</span>
-                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#A78BFA' }}>
+                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', padding: '0.65rem', borderRadius: '0.85rem', textAlign: 'center' }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)', fontWeight: 600 }}>🌙 Evening (40%)</span>
+                  <div style={{ fontSize: '1rem', fontWeight: 900, color: '#A78BFA', marginTop: '0.2rem' }}>
                     {plan.tasks.filter(t => t.timeSlot === 'evening').length > 0
                       ? Math.round((plan.tasks.filter(t => t.timeSlot === 'evening' && (t.completed || t.status === 'completed')).length / plan.tasks.filter(t => t.timeSlot === 'evening').length) * 100)
                       : 0}%
                   </div>
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '0.5rem', textAlign: 'center' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)' }}>Daily Progress</span>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#10B981' }}>{total > 0 ? Math.round((done / total) * 100) : 0}%</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.65rem' }}>
+                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', padding: '0.65rem', borderRadius: '0.85rem', textAlign: 'center' }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)', fontWeight: 600 }}>Daily Progress</span>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#10B981', marginTop: '0.2rem' }}>{animScore}%</div>
                 </div>
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '0.5rem', textAlign: 'center' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)' }}>Weekly</span>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--hs-violet)' }}>{streak?.weeklyConsistency ?? 0}%</div>
+                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', padding: '0.65rem', borderRadius: '0.85rem', textAlign: 'center' }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)', fontWeight: 600 }}>Weekly</span>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--hs-violet)', marginTop: '0.2rem' }}>{streak?.weeklyConsistency ?? 0}%</div>
                 </div>
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '0.5rem', textAlign: 'center' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)' }}>Monthly</span>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--hs-pink)' }}>{Math.min(100, Math.round(((streak?.currentStreak ?? 1) / 30) * 100))}%</div>
+                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', padding: '0.65rem', borderRadius: '0.85rem', textAlign: 'center' }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)', fontWeight: 600 }}>Monthly</span>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--hs-pink)', marginTop: '0.2rem' }}>{Math.min(100, Math.round(((streak?.currentStreak ?? 1) / 30) * 100))}%</div>
                 </div>
               </div>
             </div>
@@ -688,9 +710,9 @@ function WellnessPlanContent() {
                       <motion.div
                         key={task.id}
                         className={`${styles.taskCard} ${isDone ? styles.completed : ''} ${isSkipped ? 'opacity-50' : ''} ${styles[task.priority as keyof typeof styles] || ''}`}
-                        initial={{ opacity: 0, x: -8 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.25 + slotIdx * 0.08 + taskIdx * 0.04 }}
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.1 + slotIdx * 0.06 + taskIdx * 0.04, duration: 0.3, ease: 'easeOut' }}
                       >
                         {/* Check circle */}
                         <div 

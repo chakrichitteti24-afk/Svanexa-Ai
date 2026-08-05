@@ -249,11 +249,16 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
   const toggleTask = useCallback((taskId: string) => {
     setState(prev => ({
       ...prev,
-      wellnessTasks: prev.wellnessTasks.map(t =>
-        t.id === taskId
-          ? { ...t, completed: !t.completed, completedAt: !t.completed ? new Date().toISOString() : null }
-          : t
-      ),
+      wellnessTasks: prev.wellnessTasks.map(t => {
+        if (t.id !== taskId) return t;
+        const isNowDone = !t.completed;
+        return {
+          ...t,
+          completed: isNowDone,
+          status: isNowDone ? 'completed' : 'pending',
+          completedAt: isNowDone ? (t.completedAt || new Date().toISOString()) : null
+        };
+      }),
     }));
   }, []);
 

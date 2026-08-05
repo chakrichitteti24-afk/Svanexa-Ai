@@ -64,7 +64,7 @@ const MarkdownRenderer = memo(({ content }: { content: string }) => {
 });
 MarkdownRenderer.displayName = 'MarkdownRenderer';
 
-export function FloatingCompanion() {
+export const FloatingCompanion = memo(function FloatingCompanion() {
   const { userName, aiName, isLoading: profileLoading, allSlotsComplete, todayLog } = useHerSync();
   const viewportHeight = useVisualViewport();
   const pathname = usePathname();
@@ -282,15 +282,15 @@ export function FloatingCompanion() {
         aria-label="Open AI Companion"
         animate={
           isLoading
-            ? { scale: [1, 1.08, 1] }
-            : { y: [0, -6, 0] }
+            ? { scale: [1, 1.06, 1] }
+            : { scale: 1 }
         }
         transition={
           isLoading
             ? { duration: 1.2, repeat: Infinity, ease: 'easeInOut' }
-            : { duration: 4, repeat: Infinity, ease: 'easeInOut' }
+            : { duration: 0.2 }
         }
-        whileHover={{ scale: 1.08 }}
+        whileHover={{ scale: 1.06 }}
         whileTap={{ scale: 0.94 }}
       >
         {isLoading && (
@@ -448,4 +448,4 @@ export function FloatingCompanion() {
       </AnimatePresence>
     </>
   );
-}
+});

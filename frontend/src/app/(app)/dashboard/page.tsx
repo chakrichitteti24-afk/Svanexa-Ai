@@ -34,6 +34,7 @@ export default function DashboardPage() {
     isLoading,
     refreshAll,
     toggleTask,
+    setWellnessTasks,
   } = useHerSync();
   const [showWelcome, setShowWelcome] = useState(false);
   const [togglingTask, setTogglingTask] = useState<string | null>(null);
@@ -140,7 +141,7 @@ export default function DashboardPage() {
   const slotTasks = wellnessTasks.filter(t => t.timeSlot === activeSlot);
   const areTasksCompleted = slotTasks.length > 0 && slotTasks.every(t => t.completed);
 
-  const handleToggleTask = async (taskId: string, planId: string) => {
+  const handleToggleTask = async (taskId: string, planId?: string) => {
     if (togglingTask) return;
     setTogglingTask(taskId);
 
@@ -156,14 +157,19 @@ export default function DashboardPage() {
     }
 
     try {
-      // Optimistic update in global context (no lag!)
+      // Optimistic update in global context (instant UI toggle!)
       toggleTask(taskId);
 
       const res = await apiFetch('/api/wellness-plan/toggle', {
         method: 'POST',
-        body: JSON.stringify({ taskId, planId, status: isCompleting ? 'completed' : 'pending' }),
+        body: JSON.stringify({ taskId, planId: planId || '', status: isCompleting ? 'completed' : 'pending' }),
       });
-      if (!res.ok) {
+      if (res.ok) {
+        const body = await res.json();
+        if (body.tasks) {
+          setWellnessTasks(body.tasks);
+        }
+      } else {
         // Revert on error
         toggleTask(taskId);
         toast.error('Failed to update task');
@@ -237,14 +243,12 @@ export default function DashboardPage() {
         {!allSlotsComplete && (
           <Link
             href="/check-in"
-            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full transition-all"
+            className="flex items-center justify-center gap-1.5 text-xs font-bold px-4 py-2.5 min-h-[44px] rounded-full transition-all active:scale-95 shadow-md shadow-pink-500/20 text-white"
             style={{ 
-              color: 'var(--hs-pink)', 
-              backgroundColor: 'var(--hs-glow-pink)', 
-              border: '1px solid var(--hs-glass-border)'
+              background: 'linear-gradient(135deg, var(--hs-pink), var(--hs-violet))', 
             }}
           >
-            Complete Check-in <ArrowRight className="w-3 h-3" />
+            Complete Check-in <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         )}
       </motion.header>
@@ -419,8 +423,14 @@ export default function DashboardPage() {
               {slotTasks.map(task => (
                 <div 
                   key={task.id} 
-                  onClick={() => handleToggleTask(task.id, wellnessTasks[0]?.id || '')}
-                  className={`relative flex items-start gap-3 p-3.5 rounded-xl border transition-all cursor-pointer select-none ${task.completed ? 'bg-secondary/40 border-border/30 opacity-70' : 'bg-card border-violet-500/20 hover:border-violet-500/50 shadow-sm hover:scale-[1.01]'}`}
+                  onClick={() => {
+                    if (togglingTask !== task.id) {
+                      handleToggleTask(task.id);
+                    }
+                  }}
+                  className={`relative flex items-center gap-3.5 p-3.5 rounded-xl border transition-all cursor-pointer select-none min-h-[48px] ${
+                    togglingTask === task.id ? 'pointer-events-none opacity-80' : ''
+                  } ${task.completed ? 'bg-secondary/40 border-border/30 opacity-70' : 'bg-card border-violet-500/20 hover:border-violet-500/50 shadow-sm hover:scale-[1.005]'}`}
                 >
                   {showSparkles === task.id && (
                     <motion.div 
@@ -432,14 +442,27 @@ export default function DashboardPage() {
                       ✨
                     </motion.div>
                   )}
-                  <button className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all ${task.completed ? 'bg-emerald-500 border-emerald-500 text-white scale-105' : 'border-violet-400 text-transparent hover:border-violet-500'}`}>
+                  <button 
+                    type="button"
+                    disabled={togglingTask === task.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (togglingTask !== task.id) {
+                        handleToggleTask(task.id);
+                      }
+                    }}
+                    aria-label={`Mark task ${task.text} as ${task.completed ? 'incomplete' : 'complete'}`}
+                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all min-h-[24px] min-w-[24px] ${
+                      task.completed ? 'bg-emerald-500 border-emerald-500 text-white scale-105' : 'border-violet-400 text-transparent hover:border-violet-500'
+                    }`}
+                  >
                     {togglingTask === task.id ? <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-500" /> : <Check className="w-3.5 h-3.5" />}
                   </button>
-                  <div className="flex-1">
+                  <div className="flex-1 flex flex-col justify-center gap-0.5">
                     <p className={`text-sm font-medium transition-all ${task.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                       {task.text}
                     </p>
-                    <span className="text-[10px] font-semibold text-violet-400 mt-1 uppercase tracking-wider bg-violet-500/10 px-2 py-0.5 rounded-full inline-block">
+                    <span className="text-[10px] font-semibold text-violet-400 uppercase tracking-wider bg-violet-500/10 px-2 py-0.5 rounded-full inline-block w-fit">
                       {task.category}
                     </span>
                   </div>

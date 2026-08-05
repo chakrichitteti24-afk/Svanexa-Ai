@@ -21,7 +21,7 @@ const navItems = [
   { name: 'Daily Check-In', href: '/check-in', icon: CheckSquare },
   { name: 'Cycle Tracker', href: '/cycle', icon: CalendarHeart },
   { name: 'Skin Scanner', href: '/skin', icon: Droplets },
-  { name: 'Wellness Plan', href: '/wellness-plan', icon: Award, premium: true },
+  { name: 'Wellness Plan', href: '/wellness-plan', icon: Award },
   { name: 'Reports', href: '/reports', icon: LineChart },
   { name: 'Profile', href: '/profile', icon: User },
 ];
@@ -71,11 +71,6 @@ export function Sidebar({ className }: { className?: string }) {
                   )}
                 />
                 <span className="flex-1 truncate">{item.name}</span>
-                {item.premium && (
-                  <span className="text-[9px] font-bold bg-gradient-to-r from-amber-400 to-orange-400 text-black px-1.5 py-0.5 rounded-full leading-none">
-                    PRO
-                  </span>
-                )}
                 {isActive && (
                   <div className="w-1 h-1 rounded-full bg-pink-400" />
                 )}

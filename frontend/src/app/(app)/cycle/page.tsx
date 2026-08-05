@@ -111,11 +111,12 @@ const CalendarDay = memo(({
   const isPeriod = range.inRange && range.type === 'period';
 
   return (
-    <div className="flex flex-col items-center justify-center h-11 relative w-full">
+    <div className="flex flex-col items-center justify-center h-11 min-h-[44px] relative w-full">
       <button
         onClick={() => handleDateTap(day)}
+        aria-label={`Select date ${format(day, 'MMMM d, yyyy')}`}
         className={`
-          relative h-10 flex items-center justify-center text-sm transition-all active:scale-95
+          relative h-10 min-h-[40px] w-full flex items-center justify-center text-sm transition-all active:scale-95 touch-manipulation select-none
           ${rangeStyle}
           ${textStyle}
         `}
