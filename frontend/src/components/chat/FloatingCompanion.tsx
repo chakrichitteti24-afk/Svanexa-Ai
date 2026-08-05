@@ -349,10 +349,15 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
 
             <motion.div
               ref={panelRef}
-              initial={{ x: '100%', opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: '100%', opacity: 0 }}
-              transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+              initial={{ opacity: 0, scale: 0.9, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 16 }}
+              transition={{
+                type: 'spring',
+                damping: 25,
+                stiffness: 300,
+                mass: 0.8,
+              }}
               className={`${styles.panel} ${styles.desktopPanel}`}
             >
               <div
@@ -405,7 +410,13 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
                 {messages.map((msg, idx) => {
                   const isUser = msg.role === 'user';
                   return (
-                    <motion.div key={idx} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`${styles.messageWrapper} ${isUser ? styles.user : styles.ai}`}>
+                    <motion.div
+                      key={idx}
+                      initial={{ opacity: 0, x: isUser ? 16 : -16, scale: 0.96 }}
+                      animate={{ opacity: 1, x: 0, scale: 1 }}
+                      transition={{ type: 'spring', damping: 24, stiffness: 320 }}
+                      className={`${styles.messageWrapper} ${isUser ? styles.user : styles.ai}`}
+                    >
                       {!isUser && (
                         <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-violet-500 to-pink-500 flex items-center justify-center text-white shadow-sm shrink-0 mt-0.5">
                           <Sparkles className="w-3.5 h-3.5 fill-white/20" />
@@ -432,7 +443,7 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
                 })}
 
                 {messages.length === 1 && messages[0].role === 'model' && !messages[0].isStreaming && !isLoading && (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-wrap gap-2 mt-2">
+                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap gap-2 mt-2">
                     {SUGGESTED_PROMPTS.map(prompt => (
                       <button key={prompt} onClick={() => handleSendMessage(prompt)} className="bg-white/5 border border-white/10 text-sm px-3 py-1.5 rounded-full hover:bg-white/10 transition-colors text-[#E2DDF0]">
                         {prompt}
@@ -442,16 +453,28 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
                 )}
 
                 {isLoading && messages.length > 0 && (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`${styles.messageWrapper} ${styles.ai}`}>
+                  <motion.div initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} className={`${styles.messageWrapper} ${styles.ai}`}>
                     <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-violet-500 to-pink-500 flex items-center justify-center text-white shadow-sm shrink-0 mt-0.5">
                       <Sparkles className="w-3.5 h-3.5 fill-white/20 animate-spin" />
                     </div>
                     <div className={`${styles.bubble} ${styles.aiBubble} flex items-center gap-2 px-4 py-3`}>
-                      <span className="text-sm font-medium text-[#e879f9]">Thinking</span>
-                      <div className="flex gap-1">
-                        <span className="w-1.5 h-1.5 bg-[#e879f9] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                        <span className="w-1.5 h-1.5 bg-[#e879f9] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                        <span className="w-1.5 h-1.5 bg-[#e879f9] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                      <span className="text-xs font-semibold text-[#e879f9] tracking-wide">Thinking</span>
+                      <div className="flex gap-1.5 items-center">
+                        <motion.span 
+                          className="w-1.5 h-1.5 bg-[#e879f9] rounded-full" 
+                          animate={{ y: [0, -4, 0], opacity: [0.4, 1, 0.4] }} 
+                          transition={{ duration: 0.8, repeat: Infinity, delay: 0 }} 
+                        />
+                        <motion.span 
+                          className="w-1.5 h-1.5 bg-[#e879f9] rounded-full" 
+                          animate={{ y: [0, -4, 0], opacity: [0.4, 1, 0.4] }} 
+                          transition={{ duration: 0.8, repeat: Infinity, delay: 0.15 }} 
+                        />
+                        <motion.span 
+                          className="w-1.5 h-1.5 bg-[#e879f9] rounded-full" 
+                          animate={{ y: [0, -4, 0], opacity: [0.4, 1, 0.4] }} 
+                          transition={{ duration: 0.8, repeat: Infinity, delay: 0.3 }} 
+                        />
                       </div>
                     </div>
                   </motion.div>
