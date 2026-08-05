@@ -23,10 +23,9 @@ export function useVisualViewport() {
       }
     };
 
-    // Listen to resize and scroll on visual viewport
+    // Listen to resize on visual viewport (e.g. keyboard show/hide)
     if (visualViewport) {
       visualViewport.addEventListener('resize', updateHeight);
-      visualViewport.addEventListener('scroll', updateHeight);
     } else {
       window.addEventListener('resize', updateHeight);
     }
@@ -37,7 +36,6 @@ export function useVisualViewport() {
     return () => {
       if (visualViewport) {
         visualViewport.removeEventListener('resize', updateHeight);
-        visualViewport.removeEventListener('scroll', updateHeight);
       } else {
         window.removeEventListener('resize', updateHeight);
       }
