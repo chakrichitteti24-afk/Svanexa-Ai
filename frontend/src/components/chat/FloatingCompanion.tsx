@@ -133,6 +133,21 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
     setActiveSessionId(newSession.id);
   };
 
+  const isUserScrolledUpRef = useRef(false);
+
+  const handleScroll = () => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const isFarFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight > 80;
+    isUserScrolledUpRef.current = isFarFromBottom;
+  };
+
+  const scrollToBottom = (force = false) => {
+    if ((force || !isUserScrolledUpRef.current) && bottomRef.current) {
+      bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  };
+
   const streamMessage = (fullText: string, sessionId: string, currentMessages: ChatMessage[]) => {
     const words = fullText.split(' ');
     let currentText = '';
@@ -145,7 +160,9 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
           if (s.id !== sessionId) return s;
           return { ...s, messages: [...currentMessages, { role: 'model', content: fullText, timestamp: new Date().getTime() }] };
         }));
-        if (bottomRef.current) bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        if (!isUserScrolledUpRef.current && bottomRef.current) {
+          bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
         return;
       }
       currentText += (wordIndex === 0 ? '' : ' ') + words[wordIndex];
@@ -154,7 +171,9 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
         return { ...s, messages: [...currentMessages, { role: 'model', content: currentText, timestamp: new Date().getTime(), isStreaming: true }] };
       }));
       wordIndex++;
-      if (bottomRef.current) bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      if (!isUserScrolledUpRef.current && bottomRef.current) {
+        bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }
     }, 30);
   };
 
@@ -193,15 +212,12 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
   const activeSession = sessions.find(s => s.id === activeSessionId);
   const messages = activeSession?.messages || [];
 
-  const scrollToBottom = () => {
-    if (bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    }
-  };
-
   useEffect(() => {
-    if (isOpen) scrollToBottom();
-  }, [messages.length, isLoading, isOpen]);
+    if (isOpen) {
+      isUserScrolledUpRef.current = false;
+      scrollToBottom(true);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     const ta = textareaRef.current;
@@ -243,7 +259,8 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
     const userMsg: ChatMessage = { role: 'user', content: messageToSend, timestamp: new Date().getTime() };
     const newMessages = [...messages, userMsg];
     updateActiveSession(newMessages);
-    scrollToBottom();
+    isUserScrolledUpRef.current = false;
+    scrollToBottom(true);
 
     try {
       const res = await apiFetch('/api/chat', {
@@ -362,7 +379,7 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
               </div>
 
               {/* Messages */}
-              <div className={styles.messageList} ref={scrollContainerRef}>
+              <div className={styles.messageList} ref={scrollContainerRef} onScroll={handleScroll}>
                 {messages.length === 0 && isLoading && (
                   <div className="flex-1 flex flex-col items-center justify-center gap-4">
                     <Sparkles className="w-10 h-10 animate-pulse text-[#e879f9]" />
