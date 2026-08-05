@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -15,9 +15,31 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
   const supabase = createClient();
+
+  useEffect(() => {
+    let isMounted = true;
+    async function checkSession() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session && isMounted) {
+          window.location.href = '/dashboard';
+          return;
+        }
+      } catch {
+        // Ignore auth check error on mount
+      } finally {
+        if (isMounted) {
+          setIsCheckingSession(false);
+        }
+      }
+    }
+    checkSession();
+    return () => { isMounted = false; };
+  }, [supabase]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,11 +55,22 @@ export default function LoginPage() {
       setError(error.message);
       setLoading(false);
     } else {
-      // Force a hard reload to ensure Next.js middleware and Server Components 
-      // see the fresh Supabase session cookie natively.
       window.location.href = '/dashboard';
     }
   };
+
+  if (isCheckingSession) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-pink-500 to-violet-500 flex items-center justify-center text-white shadow-xl shadow-pink-500/20 animate-pulse">
+            <Heart className="w-6 h-6 fill-white" />
+          </div>
+          <Loader2 className="w-5 h-5 text-pink-500 animate-spin" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-background p-4 selection:bg-pink-500/20">

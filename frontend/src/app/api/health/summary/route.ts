@@ -44,6 +44,21 @@ export async function GET() {
       supabase.from('wellness_plans').select('content').eq('user_id', userId).eq('title', today).maybeSingle(),
     ]);
 
+    let userProfile = profile;
+    if (!userProfile && user.user_metadata) {
+      const meta = user.user_metadata;
+      const { data: newProfile } = await supabase.from('profiles').upsert({
+        id: userId,
+        first_name: meta.first_name || meta.username || 'User',
+        last_name: meta.last_name || '',
+        email: user.email,
+        ai_name: meta.ai_name || 'Luna',
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'id' }).select('first_name, ai_name').maybeSingle();
+
+      userProfile = newProfile || { first_name: meta.first_name || 'User', ai_name: meta.ai_name || 'Luna' };
+    }
+
     let wellness_tasks = [];
     if (todayPlan?.content) {
       try { wellness_tasks = JSON.parse(todayPlan.content); } catch { wellness_tasks = []; }
@@ -87,7 +102,7 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       data: {
-        profile,
+        profile: userProfile,
         preferences: prefs,
         total_logs_count: checkinsCount || 0,
         has_checked_in_today: allSlotsComplete || Object.values(slotsMap).some(s => s.completed),

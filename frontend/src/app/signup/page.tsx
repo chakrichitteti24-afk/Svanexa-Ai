@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -43,8 +43,31 @@ export default function SignUpPage() {
   const [wellnessMode, setWellnessMode] = useState<'general' | 'pcos' | 'pregnancy'>('general');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [isEmailSent, setIsEmailSent] = useState(false);
   const router = useRouter();
   const supabase = createClient();
+
+  useEffect(() => {
+    let isMounted = true;
+    async function checkSession() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session && isMounted) {
+          window.location.href = '/dashboard';
+          return;
+        }
+      } catch {
+        // Ignore auth error on mount
+      } finally {
+        if (isMounted) {
+          setIsCheckingSession(false);
+        }
+      }
+    }
+    checkSession();
+    return () => { isMounted = false; };
+  }, [supabase]);
 
   const handleNextStep = (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,14 +99,16 @@ export default function SignUpPage() {
             first_name: firstName,
             last_name: lastName,
             username: firstName,
-            ai_name: aiName
+            ai_name: aiName,
+            wellness_mode: wellnessMode,
           },
         },
       });
 
       if (signUpError) {
         if (signUpError.message.toLowerCase().includes('already registered')) {
-          router.push('/login');
+          setError('An account with this email already exists. Please log in.');
+          setLoading(false);
           return;
         }
         throw signUpError;
@@ -91,33 +116,29 @@ export default function SignUpPage() {
       
       if (!authData.user) throw new Error('Failed to create account');
 
-      // If session is null, it means either:
-      // 1. Email confirmation is required
-      // 2. The user already exists (Supabase obfuscates this for security)
+      // CASE 1B: Email confirmation required (session is null)
       if (!authData.session) {
-        setError('If this email is new, please check your inbox to verify your account. If you already have an account, please log in.');
-        setStep(1);
+        setIsEmailSent(true);
         setLoading(false);
         return;
       }
 
-      // Automatically create the user profile in Supabase exactly once
-      await supabase.from('profiles').upsert(
-        {
-          id: authData.user.id,
-          first_name: firstName,
-          last_name: lastName,
-          email: email,
-          ai_name: aiName || 'Luna',
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'id' }
-      );
-
-      // Create all required default records
+      // CASE 1A: Instant session available (auto-confirm enabled)
+      // Upsert profile and defaults exactly once
       await Promise.all([
+        supabase.from('profiles').upsert(
+          {
+            id: authData.user.id,
+            first_name: firstName,
+            last_name: lastName,
+            email: email,
+            ai_name: aiName || 'Luna',
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'id' }
+        ),
         supabase.from('user_preferences').upsert(
-          { user_id: authData.user.id, theme: 'general', push_notifications: true },
+          { user_id: authData.user.id, theme: wellnessMode, push_notifications: true },
           { onConflict: 'user_id' }
         ),
         supabase.from('wellness_streaks').upsert(
@@ -126,23 +147,62 @@ export default function SignUpPage() {
         )
       ]);
 
-      // Force a hard reload to the dashboard so that the newly set Supabase cookies
-      // are natively sent to the Next.js middleware, preventing the router cache from
-      // bouncing the user back to the login page.
+      // Direct redirect to dashboard
       window.location.href = '/dashboard';
 
     } catch (err: any) {
       if (err.message?.toLowerCase().includes('already registered')) {
-        router.push('/login');
-        return;
+        setError('An account with this email already exists. Please log in.');
+      } else {
+        setError(err.message || 'An error occurred during sign up.');
       }
-      setError(err.message || 'An error occurred during sign up.');
-      setStep(1); 
-    } finally {
       setLoading(false);
     }
   };
 
+
+  if (isCheckingSession) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-pink-500 to-violet-500 flex items-center justify-center text-white shadow-xl shadow-pink-500/20 animate-pulse">
+            <Heart className="w-6 h-6 fill-white" />
+          </div>
+          <Loader2 className="w-5 h-5 text-pink-500 animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  if (isEmailSent) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background p-4 selection:bg-pink-500/20">
+        <div className="w-full max-w-md space-y-8 animate-in fade-in zoom-in duration-500">
+          <div className="text-center space-y-2">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-pink-500 to-violet-500 text-white mb-2 shadow-lg shadow-pink-500/20">
+              <Mail className="w-7 h-7" />
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Check Your Email</h1>
+            <p className="text-sm text-muted-foreground">
+              We sent a verification link to <span className="font-semibold text-foreground">{email}</span>
+            </p>
+          </div>
+
+          <Card className="border-pink-500/10 shadow-xl shadow-pink-500/5 bg-card/60 backdrop-blur-xl p-6 space-y-4 text-center">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Please click the link inside the email to confirm your account and log into Svanexa AI.
+            </p>
+            <Button
+              onClick={() => router.push('/login')}
+              className="w-full bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 text-white shadow-md h-11 mt-2"
+            >
+              Go to Sign In <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-background p-4 selection:bg-pink-500/20">
