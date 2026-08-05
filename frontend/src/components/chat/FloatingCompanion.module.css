@@ -228,6 +228,9 @@
 .messageList {
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   padding: 1.25rem;
   display: flex;
   flex-direction: column;

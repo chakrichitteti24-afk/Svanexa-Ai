@@ -114,13 +114,26 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen]);
 
-  // Handle swipe down to close on mobile
+  // Lock background body scroll when chat overlay is open on mobile
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
+  // Handle swipe down to close on mobile drag handle only
   const [startY, setStartY] = useState<number | null>(null);
   const handleTouchStart = (e: React.TouchEvent) => setStartY(e.touches[0].clientY);
   const handleTouchEnd = (e: React.TouchEvent) => {
     if (startY === null) return;
     const endY = e.changedTouches[0].clientY;
-    if (endY - startY > 100) setIsOpen(false); // Swipe down
+    if (endY - startY > 80) setIsOpen(false); // Swipe down on handle
     setStartY(null);
   };
 
@@ -341,10 +354,12 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
               exit={{ x: '100%', opacity: 0 }}
               transition={{ type: 'spring', damping: 28, stiffness: 220 }}
               className={`${styles.panel} ${styles.desktopPanel}`}
-              onTouchStart={handleTouchStart}
-              onTouchEnd={handleTouchEnd}
             >
-              <div className={styles.dragHandle} />
+              <div
+                className={styles.dragHandle}
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
+              />
               
               {/* Header */}
               <div className={styles.header}>
