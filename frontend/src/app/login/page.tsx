@@ -5,10 +5,11 @@ import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Eye, EyeOff, Loader2, Heart, Mail, Lock } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { motion } from 'framer-motion';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -52,7 +53,11 @@ export default function LoginPage() {
     });
 
     if (error) {
-      setError(error.message);
+      if (error.message.toLowerCase().includes('email not confirmed')) {
+        setError('Please verify your email before signing in. (If you just signed up, make sure email confirmation is disabled in your Supabase dashboard).');
+      } else {
+        setError(error.message);
+      }
       setLoading(false);
     } else {
       window.location.href = '/dashboard';
@@ -84,9 +89,19 @@ export default function LoginPage() {
           <p className="text-sm text-muted-foreground">Sign in to your Svanexa account</p>
         </div>
 
-        <Card className="border-pink-500/10 shadow-xl shadow-pink-500/5 bg-card/60 backdrop-blur-xl">
-          <form onSubmit={handleLogin}>
-            <CardContent className="space-y-4 pt-6">
+        {/* Segmented Tab Control */}
+        <div className="bg-secondary/50 p-1 rounded-xl flex items-center justify-between mx-auto">
+          <Link href="/login" className="flex-1 text-center py-2 text-sm font-semibold rounded-lg bg-background shadow-sm text-foreground">
+            Sign In
+          </Link>
+          <Link href="/signup" className="flex-1 text-center py-2 text-sm font-medium rounded-lg text-muted-foreground hover:text-foreground transition-colors">
+            Sign Up
+          </Link>
+        </div>
+
+        <Card className="border-pink-500/10 shadow-xl shadow-pink-500/5 bg-card/60 backdrop-blur-xl relative overflow-hidden">
+          <CardContent className="pt-6">
+            <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <div className="relative">
@@ -132,29 +147,21 @@ export default function LoginPage() {
               </div>
 
               {error && (
-                <div className="p-3 text-sm text-red-500 bg-red-500/10 border border-red-500/20 rounded-lg">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3 text-sm text-red-500 bg-red-500/10 border border-red-500/20 rounded-lg">
                   {error}
-                </div>
+                </motion.div>
               )}
-            </CardContent>
 
-            <CardFooter className="flex flex-col gap-4">
               <Button 
                 type="submit" 
-                className="w-full bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 text-white shadow-md shadow-pink-500/20 h-11"
+                className="w-full bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 text-white shadow-md shadow-pink-500/20 h-11 mt-4"
                 disabled={loading}
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
                 {loading ? 'Signing in...' : 'Sign In'}
               </Button>
-              <p className="text-sm text-center text-muted-foreground w-full">
-                Don&apos;t have an account?{' '}
-                <Link href="/signup" className="font-medium text-pink-500 hover:text-pink-600 transition-colors">
-                  Sign up
-                </Link>
-              </p>
-            </CardFooter>
-          </form>
+            </form>
+          </CardContent>
         </Card>
       </div>
     </div>

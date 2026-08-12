@@ -4,115 +4,109 @@ import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { CheckCircle2, Loader2, Sparkles } from 'lucide-react';
+import { CheckCircle2, Loader2, Sparkles, ArrowLeft, ArrowRight, HeartPulse, Info } from 'lucide-react';
 import { format } from 'date-fns';
 import { useHerSync } from '@/context/HerSyncContext';
 import { apiFetch } from '@/utils/api-client';
 
 type SlotType = 'morning' | 'afternoon' | 'evening';
-type QuestionType = 'choice' | 'slider' | 'text' | 'number';
 
-interface Question {
-  id: string;
-  text: string;
-  type: QuestionType;
-  options?: { value: string | number; label: string; emoji?: string }[];
-  min?: number;
-  max?: number;
-  placeholder?: string;
-  condition?: (answers: any, mode: string) => boolean;
+interface StressQuestion {
+  id: 'q1_feeling' | 'q2_focus' | 'q3_body' | 'q4_thoughts';
+  title: string;
+  question: string;
+  options: { score: number; label: string; emoji: string }[];
 }
 
-const MORNING_QUESTIONS: Question[] = [
-  { id: 'sleep', text: 'How many hours did you sleep?', type: 'number', min: 0, max: 24, placeholder: 'e.g. 7.5' },
-  { id: 'mood', text: 'How do you feel this morning?', type: 'choice', options: [
-      { value: 'happy', label: 'Happy', emoji: '😊' },
-      { value: 'calm', label: 'Calm', emoji: '😌' },
-      { value: 'tired', label: 'Tired', emoji: '🥱' },
-      { value: 'anxious', label: 'Anxious', emoji: '😰' },
-      { value: 'sad', label: 'Sad', emoji: '😢' },
-  ]},
-  { id: 'energy', text: 'Energy level?', type: 'choice', options: [
-      { value: 'Very Low', label: 'Very Low', emoji: '🪫' },
-      { value: 'Medium', label: 'Medium', emoji: '🔋' },
-      { value: 'Excellent', label: 'Excellent', emoji: '⚡' },
-  ]},
-  { id: 'water', text: 'Did you drink water yet?', type: 'choice', options: [
-      { value: 'yes', label: 'Yes', emoji: '💧' },
-      { value: 'no', label: 'Not yet', emoji: '🏜️' },
-  ]},
-  { id: 'breakfast', text: 'Did you have breakfast?', type: 'choice', options: [
-      { value: 'yes', label: 'Yes', emoji: '🍳' },
-      { value: 'no', label: 'Skipped', emoji: '❌' },
-  ]},
-  { id: 'pcos_symptoms', text: 'Any PCOS symptoms today?', type: 'choice', condition: (a, mode) => mode === 'pcos', options: [
-      { value: 'none', label: 'None', emoji: '✨' },
-      { value: 'mild', label: 'Mild', emoji: '🤏' },
-      { value: 'severe', label: 'Severe', emoji: '😣' },
-  ]},
-  { id: 'pregnancy_nausea', text: 'Experiencing morning sickness?', type: 'choice', condition: (a, mode) => mode === 'pregnancy', options: [
-      { value: 'none', label: 'No', emoji: '😌' },
-      { value: 'mild', label: 'A little', emoji: '🤢' },
-      { value: 'severe', label: 'Yes, a lot', emoji: '🤮' },
-  ]},
-  { id: 'notes', text: 'Morning Journal (Optional)', type: 'text', placeholder: 'Any thoughts before starting the day?' },
-];
-
-const AFTERNOON_QUESTIONS: Question[] = [
-  { id: 'water_so_far', text: 'Water intake so far (Liters)?', type: 'number', min: 0, max: 10, placeholder: 'e.g. 1.5' },
-  { id: 'lunch', text: 'Have you had lunch?', type: 'choice', options: [
-      { value: 'yes', label: 'Healthy lunch', emoji: '🥗' },
-      { value: 'yes_heavy', label: 'Heavy lunch', emoji: '🍔' },
-      { value: 'no', label: 'Not yet', emoji: '🕒' },
-  ]},
-  { id: 'exercise', text: 'Did you exercise today?', type: 'choice', options: [
-      { value: 'yes', label: 'Yes', emoji: '🏃‍♀️' },
-      { value: 'no', label: 'No', emoji: '🛋️' },
-  ]},
-  { id: 'stress', text: 'Current stress level?', type: 'slider', min: 1, max: 10 },
-  { id: 'mood', text: 'Current mood?', type: 'choice', options: [
-      { value: 'happy', label: 'Happy', emoji: '😊' },
-      { value: 'focused', label: 'Focused', emoji: '🧠' },
-      { value: 'stressed', label: 'Stressed', emoji: '😰' },
-      { value: 'tired', label: 'Tired', emoji: '🥱' },
-  ]},
-  { id: 'energy', text: 'Energy level?', type: 'choice', options: [
-      { value: 'high', label: 'High', emoji: '⚡' },
-      { value: 'medium', label: 'Medium', emoji: '🔋' },
-      { value: 'low', label: 'Crashing', emoji: '🪫' },
-  ]},
-  { id: 'notes', text: 'Afternoon Notes (Optional)', type: 'text', placeholder: 'How is your day going?' },
-];
-
-const EVENING_QUESTIONS: Question[] = [
-  { id: 'dinner', text: 'Did you have dinner?', type: 'choice', options: [
-      { value: 'light', label: 'Light dinner', emoji: '🥗' },
-      { value: 'heavy', label: 'Heavy dinner', emoji: '🍝' },
-      { value: 'no', label: 'Skipped', emoji: '❌' },
-  ]},
-  { id: 'activity', text: 'Any physical activity today?', type: 'choice', options: [
-      { value: 'yes', label: 'Yes', emoji: '💪' },
-      { value: 'no', label: 'Rest day', emoji: '🧘‍♀️' },
-  ]},
-  { id: 'skin', text: 'Skincare routine done?', type: 'choice', options: [
-      { value: 'yes', label: 'Yes', emoji: '🧴' },
-      { value: 'no', label: 'Skipped', emoji: '💤' },
-  ]},
-  { id: 'total_water', text: 'Total water intake (Liters)?', type: 'number', min: 0, max: 10, placeholder: 'e.g. 2.5' },
-  { id: 'overall_mood', text: 'Overall mood today?', type: 'choice', options: [
-      { value: 'great', label: 'Great', emoji: '🌟' },
-      { value: 'okay', label: 'Okay', emoji: '👍' },
-      { value: 'tough', label: 'Tough day', emoji: '🌧️' },
-  ]},
-  { id: 'health_rating', text: 'Rate your overall health today', type: 'slider', min: 1, max: 5 },
-  { id: 'reflection', text: 'Evening Reflection (Optional)', type: 'text', placeholder: 'What went well today?' },
+const STRESS_QUESTIONS: StressQuestion[] = [
+  {
+    id: 'q1_feeling',
+    title: 'Feeling',
+    question: 'How relaxed or overwhelmed do you feel right now?',
+    options: [
+      { score: 1, label: 'Very relaxed', emoji: '😌' },
+      { score: 2, label: 'Mostly relaxed', emoji: '🙂' },
+      { score: 3, label: 'Neutral', emoji: '😐' },
+      { score: 4, label: 'Somewhat overwhelmed', emoji: '😰' },
+      { score: 5, label: 'Very overwhelmed', emoji: '😫' },
+    ],
+  },
+  {
+    id: 'q2_focus',
+    title: 'Focus',
+    question: 'How easy is it for you to focus today?',
+    options: [
+      { score: 1, label: 'Very easy', emoji: '🎯' },
+      { score: 2, label: 'Easy', emoji: '✨' },
+      { score: 3, label: 'Okay', emoji: '👌' },
+      { score: 4, label: 'Difficult', emoji: '🧠' },
+      { score: 5, label: 'Very difficult', emoji: '🌀' },
+    ],
+  },
+  {
+    id: 'q3_body',
+    title: 'Body',
+    question: 'How has your body been feeling today?',
+    options: [
+      { score: 1, label: 'Very relaxed', emoji: '🧘‍♀️' },
+      { score: 2, label: 'Mostly relaxed', emoji: '😊' },
+      { score: 3, label: 'Normal', emoji: '👍' },
+      { score: 4, label: 'Tense or restless', emoji: '😬' },
+      { score: 5, label: 'Very tense or restless', emoji: '😣' },
+    ],
+  },
+  {
+    id: 'q4_thoughts',
+    title: 'Thoughts',
+    question: 'How much have your thoughts been bothering you today?',
+    options: [
+      { score: 1, label: 'Not at all', emoji: '🍃' },
+      { score: 2, label: 'A little', emoji: '🌤️' },
+      { score: 3, label: 'Sometimes', emoji: '💭' },
+      { score: 4, label: 'Quite a lot', emoji: '🌪️' },
+      { score: 5, label: 'A lot', emoji: '⛈️' },
+    ],
+  },
 ];
 
 function getCurrentSlot(): SlotType {
   const h = new Date().getHours();
-  if (h >= 5  && h < 12) return 'morning';
+  if (h >= 5 && h < 12) return 'morning';
   if (h >= 12 && h < 18) return 'afternoon';
   return 'evening';
+}
+
+function getStressInterpretation(score: number | null): { level: string; label: string; badgeColor: string; bgStyle: string } {
+  if (score === null) return { level: 'Pending', label: '', badgeColor: 'text-muted-foreground', bgStyle: 'bg-secondary/40' };
+  if (score <= 2.0) {
+    return {
+      level: 'Low stress indicator',
+      label: 'Your responses suggest you are feeling relaxed and balanced right now.',
+      badgeColor: 'text-emerald-500 border-emerald-500/30 bg-emerald-500/10',
+      bgStyle: 'from-emerald-500/10 to-teal-500/5',
+    };
+  } else if (score <= 3.0) {
+    return {
+      level: 'Mild stress indicator',
+      label: 'Your responses suggest mild stress levels today.',
+      badgeColor: 'text-blue-500 border-blue-500/30 bg-blue-500/10',
+      bgStyle: 'from-blue-500/10 to-cyan-500/5',
+    };
+  } else if (score <= 4.0) {
+    return {
+      level: 'Moderate stress indicator',
+      label: 'Your responses suggest you may be feeling more stressed today.',
+      badgeColor: 'text-amber-500 border-amber-500/30 bg-amber-500/10',
+      bgStyle: 'from-amber-500/10 to-orange-500/5',
+    };
+  } else {
+    return {
+      level: 'Higher stress indicator',
+      label: 'Your responses suggest higher stress levels right now.',
+      badgeColor: 'text-rose-500 border-rose-500/30 bg-rose-500/10',
+      bgStyle: 'from-rose-500/10 to-pink-500/5',
+    };
+  }
 }
 
 function useNextSlotCountdown(activeSlot: SlotType, isCompleted: boolean) {
@@ -125,25 +119,24 @@ function useNextSlotCountdown(activeSlot: SlotType, isCompleted: boolean) {
     const updateTimer = () => {
       const now = new Date();
       const currentHour = now.getHours();
-      
+
       let nextSlotHour = 0;
       let slotName = '';
-      
+
       if (activeSlot === 'morning') {
-        nextSlotHour = 12; // 12 PM Afternoon
+        nextSlotHour = 12;
         slotName = 'Afternoon';
       } else if (activeSlot === 'afternoon') {
-        nextSlotHour = 18; // 6 PM Evening
+        nextSlotHour = 18;
         slotName = 'Evening';
       } else {
-        nextSlotHour = 5; // 5 AM Next Day Morning
+        nextSlotHour = 5;
         slotName = 'Morning';
       }
 
       const nextTarget = new Date(now);
       nextTarget.setHours(nextSlotHour, 0, 0, 0);
-      
-      // If we are currently in evening (e.g. 8 PM), next target is 5 AM next day
+
       if (activeSlot === 'evening' && currentHour >= 18) {
         nextTarget.setDate(nextTarget.getDate() + 1);
       }
@@ -158,7 +151,7 @@ function useNextSlotCountdown(activeSlot: SlotType, isCompleted: boolean) {
       const h = Math.floor(diffMs / (1000 * 60 * 60));
       const m = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
       const s = Math.floor((diffMs % (1000 * 60)) / 1000);
-      
+
       setNextSlotName(slotName);
       setCountdown(`${h}h ${m}m ${s}s`);
     };
@@ -183,12 +176,12 @@ export default function CheckInPage() {
     evening:   { completed: false, completedAt: null, data: null },
   });
 
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [currentStep, setCurrentStep] = useState<number>(0);
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [saving, setSaving] = useState(false);
-
   const [isEditing, setIsEditing] = useState(false);
-  const isCurrentSlotCompleted = completedSlots[activeSlot].completed;
+
+  const isCurrentSlotCompleted = completedSlots[activeSlot]?.completed;
   const { countdown, nextSlotName } = useNextSlotCountdown(activeSlot, isCurrentSlotCompleted);
 
   const fetchStatus = useCallback(async () => {
@@ -210,66 +203,77 @@ export default function CheckInPage() {
 
   useEffect(() => { fetchStatus(); }, [fetchStatus]);
 
-  useEffect(() => {
-    if (loading) return;
-    
-    let qList = activeSlot === 'morning' ? MORNING_QUESTIONS : activeSlot === 'afternoon' ? AFTERNOON_QUESTIONS : EVENING_QUESTIONS;
-    qList = qList.filter(q => !q.condition || q.condition(answers, wellnessMode));
-    
-    // Initialize default values for sliders if not set
-    const initialAnswers = { ...answers };
-    let changed = false;
-    qList.forEach(q => {
-      if (q.type === 'slider' && initialAnswers[q.id] === undefined) {
-        initialAnswers[q.id] = Math.floor((q.min! + q.max!) / 2);
-        changed = true;
-      }
-    });
-    
-    if (changed) setAnswers(initialAnswers);
-    setQuestions(qList);
-    
-  }, [loading, activeSlot, wellnessMode, answers]);
-
-  const handleAnswerChange = (questionId: string, value: any) => {
-    setAnswers(prev => ({ ...prev, [questionId]: value }));
+  const handleSelectOption = (questionId: string, score: number) => {
+    setAnswers(prev => ({ ...prev, [questionId]: score }));
+    if (currentStep < 3) {
+      setTimeout(() => {
+        setCurrentStep(prev => Math.min(3, prev + 1));
+      }, 180);
+    }
   };
 
-  const isFormComplete = questions.every(q => {
-    if (q.type === 'text') return true; // text fields are optional
-    return answers[q.id] !== undefined && answers[q.id] !== '';
-  });
+  const q1 = answers.q1_feeling ? Number(answers.q1_feeling) : 0;
+  const q2 = answers.q2_focus ? Number(answers.q2_focus) : 0;
+  const q3 = answers.q3_body ? Number(answers.q3_body) : 0;
+  const q4 = answers.q4_thoughts ? Number(answers.q4_thoughts) : 0;
+
+  const allQuestionsAnswered = q1 > 0 && q2 > 0 && q3 > 0 && q4 > 0;
+  const averageScore = allQuestionsAnswered ? Number(((q1 + q2 + q3 + q4) / 4).toFixed(2)) : null;
+  const interpretation = getStressInterpretation(averageScore);
 
   const submitCheckin = async () => {
-    if (!isFormComplete) {
-      toast.error('Please answer all required questions.');
+    if (!allQuestionsAnswered) {
+      toast.error('Please answer all 4 questions.');
       return;
     }
-    
+
+    if (saving) return; // Prevent duplicate submissions
+
     setSaving(true);
     try {
-      const res = await apiFetch('/api/v1/health/checkin', { 
-        method: 'POST', 
-        body: JSON.stringify({ slot: activeSlot, data: answers }) 
+      const payload = {
+        slot: activeSlot,
+        data: {
+          q1_feeling: q1,
+          q2_focus: q2,
+          q3_body: q3,
+          q4_thoughts: q4,
+          averageScore,
+          stressIndicator: interpretation.level,
+          stressLabel: interpretation.label,
+          sleep: answers.sleep || (activeSlot === 'morning' ? 7.5 : null),
+          water: answers.water || null,
+          notes: answers.notes || '',
+        },
+      };
+
+      const res = await apiFetch('/api/v1/health/checkin', {
+        method: 'POST',
+        body: JSON.stringify(payload),
       });
+
       const result = await res.json();
       if (!res.ok) {
         toast.error('Failed to save check-in', { description: result.error || result.message || 'Unknown error' });
         setSaving(false);
         return;
       }
-      
+
       const now = new Date().toISOString();
-      setCompletedSlots(prev => ({ ...prev, [activeSlot]: { completed: true, completedAt: now, data: answers } }));
+      setCompletedSlots(prev => ({
+        ...prev,
+        [activeSlot]: { completed: true, completedAt: now, data: payload.data },
+      }));
       setIsEditing(false);
       toast.success(`${activeSlot.charAt(0).toUpperCase() + activeSlot.slice(1)} check-in saved!`);
-      
-      // Auto-generate wellness plan in the background
+
+      // Trigger AI wellness plan generation in background
       apiFetch('/api/wellness-plan', { method: 'POST' }).catch(console.error);
-      
+
+      // Instantly sync dashboard and global state
       await refreshAll();
     } catch (err: any) {
-      toast.error('Network Error', { description: err.message });
+      toast.error('Network Error', { description: err.message || 'Could not connect to server' });
     } finally {
       setSaving(false);
     }
@@ -285,49 +289,73 @@ export default function CheckInPage() {
 
   if (isCurrentSlotCompleted && !isEditing) {
     const slotTitle = activeSlot.charAt(0).toUpperCase() + activeSlot.slice(1);
-    const timeStr = completedSlots[activeSlot].completedAt 
+    const timeStr = completedSlots[activeSlot].completedAt
       ? format(new Date(completedSlots[activeSlot].completedAt!), 'hh:mm a')
       : '';
+    const savedData = completedSlots[activeSlot].data;
+    const savedScore = savedData?.averageScore ?? null;
+    const savedInterpretation = getStressInterpretation(savedScore);
 
     return (
       <div className="max-w-2xl mx-auto w-full pt-8 px-4 pb-24">
         <motion.div
-          initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-          className="flex flex-col items-center justify-center text-center p-10 bg-card/80 backdrop-blur-md border border-border/40 rounded-3xl shadow-xl shadow-emerald-500/5"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="flex flex-col items-center justify-center text-center p-8 md:p-10 bg-card/80 backdrop-blur-md border border-border/40 rounded-3xl shadow-xl shadow-emerald-500/5"
         >
-          <div className="w-24 h-24 rounded-full bg-emerald-500/10 flex items-center justify-center mb-6 relative overflow-hidden">
-             <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 animate-pulse" />
-            <CheckCircle2 className="w-12 h-12 text-emerald-500 relative z-10" />
+          <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center mb-5 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 animate-pulse" />
+            <CheckCircle2 className="w-10 h-10 text-emerald-500 relative z-10" />
           </div>
+
           <h2 className="text-2xl font-bold text-emerald-500 mb-1">
             ✓ {slotTitle} Check-in Completed
           </h2>
           {timeStr && (
-            <p className="text-sm font-semibold text-foreground/80 mb-2">
+            <p className="text-xs font-semibold text-foreground/80 mb-4">
               Completed at: {timeStr}
             </p>
           )}
+
+          {savedScore !== null && (
+            <div className={`w-full max-w-md p-4 rounded-2xl border mb-6 bg-gradient-to-r ${savedInterpretation.bgStyle}`}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <HeartPulse className="w-3.5 h-3.5 text-pink-500" /> Wellness Indicator
+                </span>
+                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${savedInterpretation.badgeColor}`}>
+                  Score {savedScore} / 5.0
+                </span>
+              </div>
+              <p className="text-sm font-semibold text-foreground text-left mt-2">
+                {savedInterpretation.label}
+              </p>
+            </div>
+          )}
+
           <p className="text-muted-foreground mb-6 text-sm max-w-md">
-            Your entries have been saved safely. Your AI Wellness Plan has been updated for this slot.
+            Your check-in responses have been saved. Your Svanexa AI Wellness Plan has been updated for this slot.
           </p>
 
           <div className="w-full bg-secondary/50 rounded-2xl p-5 border border-border/50 mb-6 flex flex-col items-center justify-center gap-1.5">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{nextSlotName} Check-in unlocks in</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {nextSlotName} Check-in unlocks in
+            </span>
             <div className="text-3xl font-black tabular-nums tracking-tight text-foreground/90 font-mono">
               {countdown || "..."}
             </div>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-            <button 
-              onClick={() => setIsEditing(true)} 
-              className="px-6 py-3 rounded-full border border-violet-500/30 hover:bg-violet-500/10 text-violet-400 font-semibold transition-all text-sm"
+            <button
+              onClick={() => setIsEditing(true)}
+              className="px-6 py-3 rounded-full border border-violet-500/30 hover:bg-violet-500/10 text-violet-400 font-semibold transition-all text-sm min-h-[44px]"
             >
               Edit Check-in
             </button>
-            <button 
-              onClick={() => router.push('/dashboard')} 
-              className="px-8 py-3 rounded-full bg-foreground hover:bg-foreground/90 text-background font-semibold shadow-lg transition-all text-sm"
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="px-8 py-3 rounded-full bg-foreground hover:bg-foreground/90 text-background font-semibold shadow-lg transition-all text-sm min-h-[44px]"
             >
               Return to Dashboard
             </button>
@@ -337,114 +365,227 @@ export default function CheckInPage() {
     );
   }
 
+  const activeQuestion = STRESS_QUESTIONS[currentStep];
+
   return (
-    <div className="max-w-2xl mx-auto w-full pt-4 md:pt-8 px-4 pb-32">
-      <div className="mb-8 flex items-center justify-between">
+    <div className="max-w-2xl mx-auto w-full pt-4 md:pt-8 px-4 pb-36">
+      {/* Header */}
+      <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight mb-2 capitalize bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-violet-500">
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight mb-1 capitalize bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-violet-500">
             {activeSlot} Check-in
           </h1>
-          <p className="text-muted-foreground flex items-center gap-2 font-medium">
+          <p className="text-xs md:text-sm text-muted-foreground flex items-center gap-1.5 font-medium">
             <Sparkles className="w-4 h-4 text-violet-400" />
-            Taking a moment for yourself
+            Taking a quick moment for your daily wellness
           </p>
         </div>
       </div>
 
-      <div className="space-y-6">
-        <AnimatePresence>
-          {questions.map((q, idx) => (
-            <motion.div 
-              key={q.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.05 }}
-              className="bg-card/60 backdrop-blur-md border border-border/50 rounded-3xl p-6 shadow-sm hover:shadow-md transition-shadow"
-            >
-              <h3 className="text-lg font-semibold mb-4 text-foreground/90">{q.text}</h3>
-              
-              {q.type === 'choice' && (
-                <div className="flex flex-wrap gap-3">
-                  {q.options?.map(opt => {
-                    const isSelected = answers[q.id] === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        onClick={() => handleAnswerChange(q.id, opt.value)}
-                        className={`flex items-center gap-2 px-5 py-3 rounded-2xl border-2 font-medium transition-all duration-200 ${
-                          isSelected 
-                            ? 'border-pink-500 bg-pink-500/10 text-pink-600 shadow-md shadow-pink-500/10 scale-[1.02]' 
-                            : 'border-border/50 bg-secondary/50 text-muted-foreground hover:bg-secondary hover:border-pink-500/30'
-                        }`}
-                      >
-                        {opt.emoji && <span className="text-xl drop-shadow-sm">{opt.emoji}</span>}
-                        {opt.label}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
+      {/* Progress Indicator */}
+      <div className="mb-6 bg-card/60 backdrop-blur-md border border-border/50 rounded-2xl p-4 shadow-sm">
+        <div className="flex items-center justify-between text-xs font-bold mb-2">
+          <span className="text-foreground/90">
+            Question {currentStep + 1} of 4
+          </span>
+          <span className="text-pink-500">
+            {Math.round(((currentStep + 1) / 4) * 100)}% Complete
+          </span>
+        </div>
+        
+        <div className="w-full h-2.5 bg-secondary rounded-full overflow-hidden p-0.5 border border-border/30">
+          <motion.div
+            className="h-full rounded-full bg-gradient-to-r from-pink-500 via-violet-500 to-indigo-500"
+            initial={{ width: 0 }}
+            animate={{ width: `${((currentStep + 1) / 4) * 100}%` }}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
+          />
+        </div>
 
-              {q.type === 'slider' && (
-                <div className="px-2 pt-2 pb-4 space-y-6">
-                  <input 
-                    type="range" min={q.min} max={q.max} 
-                    value={answers[q.id] || q.min} 
-                    onChange={e => handleAnswerChange(q.id, parseInt(e.target.value))}
-                    className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-violet-500"
-                  />
-                  <div className="flex justify-between items-center text-sm font-semibold">
-                    <span className="text-muted-foreground">Low ({q.min})</span>
-                    <span className="text-3xl font-black text-violet-500 drop-shadow-sm">{answers[q.id] || q.min}</span>
-                    <span className="text-muted-foreground">High ({q.max})</span>
-                  </div>
-                </div>
-              )}
-
-              {q.type === 'number' && (
-                <div className="flex items-center gap-3">
-                  <input 
-                    type="number" min={q.min} max={q.max} step="0.5"
-                    placeholder={q.placeholder}
-                    value={answers[q.id] || ''} 
-                    onChange={e => handleAnswerChange(q.id, parseFloat(e.target.value) || '')}
-                    className="w-full max-w-[200px] bg-secondary/30 border-2 border-border/50 rounded-2xl px-5 py-3 text-lg font-semibold outline-none focus:border-pink-500 focus:bg-background transition-all"
-                  />
-                </div>
-              )}
-
-              {q.type === 'text' && (
-                <div>
-                  <textarea 
-                    placeholder={q.placeholder}
-                    value={answers[q.id] || ''} 
-                    onChange={e => handleAnswerChange(q.id, e.target.value)}
-                    rows={3}
-                    className="w-full bg-secondary/30 border-2 border-border/50 rounded-2xl px-5 py-3 text-base outline-none focus:border-pink-500 focus:bg-background transition-all resize-none"
-                  />
-                </div>
-              )}
-            </motion.div>
-          ))}
-        </AnimatePresence>
+        {/* Step navigation dots */}
+        <div className="flex items-center justify-center gap-3 mt-3">
+          {STRESS_QUESTIONS.map((q, idx) => {
+            const isAnswered = answers[q.id] !== undefined;
+            const isCurrent = idx === currentStep;
+            return (
+              <button
+                key={q.id}
+                onClick={() => setCurrentStep(idx)}
+                aria-label={`Jump to Question ${idx + 1}`}
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all min-h-[32px] ${
+                  isCurrent
+                    ? 'bg-pink-500 text-white scale-110 shadow-md shadow-pink-500/20'
+                    : isAnswered
+                    ? 'bg-violet-500/20 text-violet-400 border border-violet-500/40'
+                    : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+                }`}
+              >
+                {isAnswered ? '✓' : idx + 1}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Sticky Bottom Bar */}
-      <div className="fixed bottom-[80px] md:bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-xl border-t border-border/50 flex justify-center z-50">
-        <div className="w-full max-w-2xl flex items-center justify-between gap-4">
-          <div className="text-sm font-medium text-muted-foreground hidden sm:block">
-            {isFormComplete ? <span className="text-emerald-500 flex items-center gap-1"><CheckCircle2 className="w-4 h-4"/> Ready to save</span> : 'Complete all fields'}
+      {/* Question Card */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeQuestion.id}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.25 }}
+          className="bg-card/70 backdrop-blur-md border border-border/50 rounded-3xl p-6 shadow-md mb-6"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-violet-400 bg-violet-500/10 px-3 py-1 rounded-full">
+              {activeQuestion.title}
+            </span>
           </div>
-          <button 
-            onClick={submitCheckin}
-            disabled={saving || !isFormComplete}
-            className="flex-1 sm:flex-none w-full sm:w-auto px-8 py-3.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold shadow-lg shadow-pink-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 text-lg"
+
+          <h2 className="text-xl md:text-2xl font-bold mb-6 text-foreground/90">
+            {activeQuestion.question}
+          </h2>
+
+          <div className="flex flex-col gap-3">
+            {activeQuestion.options.map(opt => {
+              const isSelected = answers[activeQuestion.id] === opt.score;
+              return (
+                <button
+                  key={opt.score}
+                  onClick={() => handleSelectOption(activeQuestion.id, opt.score)}
+                  className={`flex items-center justify-between w-full px-5 py-4 rounded-2xl border-2 font-semibold transition-all duration-200 min-h-[56px] text-left ${
+                    isSelected
+                      ? 'border-pink-500 bg-pink-500/10 text-pink-600 shadow-md shadow-pink-500/10 scale-[1.01]'
+                      : 'border-border/50 bg-secondary/40 text-foreground/80 hover:bg-secondary hover:border-pink-500/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl drop-shadow-sm flex-shrink-0">{opt.emoji}</span>
+                    <span className="text-base">{opt.label}</span>
+                  </div>
+                  {isSelected && (
+                    <CheckCircle2 className="w-5 h-5 text-pink-500 flex-shrink-0" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Wellness Indicator Live Card (Shown when all 4 questions are answered) */}
+      {allQuestionsAnswered && (
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`p-5 rounded-3xl border shadow-sm mb-6 bg-gradient-to-r ${interpretation.bgStyle}`}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <HeartPulse className="w-5 h-5 text-pink-500" />
+              <span className="text-sm font-bold text-foreground">Stress Wellness Indicator</span>
+            </div>
+            <span className={`text-xs font-bold px-3 py-1 rounded-full border ${interpretation.badgeColor}`}>
+              {interpretation.level}
+            </span>
+          </div>
+
+          <p className="text-sm text-foreground/90 font-medium mt-1">
+            {interpretation.label}
+          </p>
+
+          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-3 pt-3 border-t border-border/30">
+            <Info className="w-3.5 h-3.5 flex-shrink-0 text-violet-400" />
+            <span>Wellness indicator only — not a medical diagnosis.</span>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Optional Vitals Selector for Morning Slot */}
+      {activeSlot === 'morning' && (
+        <div className="bg-card/40 border border-border/40 rounded-3xl p-5 mb-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Morning Sleep & Vitals (Optional)</span>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-foreground/80 block mb-2">Hours of Sleep Last Night</label>
+            <div className="flex flex-wrap gap-2">
+              {[5, 6, 7, 7.5, 8, 9].map(val => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setAnswers(prev => ({ ...prev, sleep: val }))}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${
+                    answers.sleep === val
+                      ? 'border-violet-500 bg-violet-500/10 text-violet-400'
+                      : 'border-border/50 bg-secondary/30 text-muted-foreground hover:bg-secondary'
+                  }`}
+                >
+                  {val} hours
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Wizard Navigation Bar */}
+      <div className="flex items-center justify-between gap-3 mb-24">
+        <button
+          onClick={() => setCurrentStep(prev => Math.max(0, prev - 1))}
+          disabled={currentStep === 0}
+          className="flex items-center gap-1.5 px-5 py-3 rounded-full border border-border/50 text-sm font-semibold disabled:opacity-30 disabled:cursor-not-allowed hover:bg-secondary transition-all min-h-[44px]"
+        >
+          <ArrowLeft className="w-4 h-4" /> Previous
+        </button>
+
+        {currentStep < 3 ? (
+          <button
+            onClick={() => setCurrentStep(prev => Math.min(3, prev + 1))}
+            className="flex items-center gap-1.5 px-6 py-3 rounded-full bg-secondary hover:bg-secondary/80 text-foreground text-sm font-semibold transition-all min-h-[44px]"
           >
-            {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-            {saving ? 'Saving...' : 'Save Check-in'}
+            Next Question <ArrowRight className="w-4 h-4" />
+          </button>
+        ) : (
+          <span className="text-xs font-semibold text-emerald-500 flex items-center gap-1">
+            <CheckCircle2 className="w-4 h-4" /> All questions answered
+          </span>
+        )}
+      </div>
+
+      {/* Sticky Save Action Bar */}
+      <div className="fixed bottom-[72px] md:bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-xl border-t border-border/50 flex justify-center z-50">
+        <div className="w-full max-w-2xl flex items-center justify-between gap-4">
+          <div className="text-xs font-medium text-muted-foreground hidden sm:block">
+            {allQuestionsAnswered ? (
+              <span className="text-emerald-500 flex items-center gap-1 font-semibold">
+                <CheckCircle2 className="w-4 h-4" /> Ready to save
+              </span>
+            ) : (
+              `Complete all 4 questions (${[q1, q2, q3, q4].filter(x => x > 0).length}/4 answered)`
+            )}
+          </div>
+          <button
+            onClick={submitCheckin}
+            disabled={saving || !allQuestionsAnswered}
+            className="flex-1 sm:flex-none w-full sm:w-auto px-8 py-3.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold shadow-lg shadow-pink-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 text-base md:text-lg min-h-[50px]"
+          >
+            {saving ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>Saving your check-in...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-5 h-5" />
+                <span>Save Check-in</span>
+              </>
+            )}
           </button>
         </div>
       </div>
     </div>
   );
 }
+

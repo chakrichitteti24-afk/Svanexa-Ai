@@ -306,8 +306,10 @@ export default function DashboardPage() {
                 <div className={styles.snapshotItem}>
                   <div className={styles.snapshotIcon}><Activity className="w-4 h-4 text-emerald-400" /></div>
                   <div className={styles.snapshotData}>
-                    <span className={styles.snapshotLabel}>Stress</span>
-                    <span className={styles.snapshotValue}>{l.stress}/10</span>
+                    <span className={styles.snapshotLabel}>Stress Indicator</span>
+                    <span className={styles.snapshotValue}>
+                      {Number(l.stress) <= 5 ? `${l.stress}/5.0` : `${l.stress}/10`}
+                    </span>
                   </div>
                 </div>
               )}

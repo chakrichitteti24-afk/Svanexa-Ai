@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Sparkles, Heart, User, Lock, Mail, ChevronRight, Loader2, Baby, Activity, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,10 +41,10 @@ export default function SignUpPage() {
   const [lastName, setLastName] = useState('');
   const [aiName, setAiName] = useState('Luna');
   const [wellnessMode, setWellnessMode] = useState<'general' | 'pcos' | 'pregnancy'>('general');
+  
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
-  const [isEmailSent, setIsEmailSent] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
@@ -116,15 +116,7 @@ export default function SignUpPage() {
       
       if (!authData.user) throw new Error('Failed to create account');
 
-      // CASE 1B: Email confirmation required (session is null)
-      if (!authData.session) {
-        setIsEmailSent(true);
-        setLoading(false);
-        return;
-      }
-
-      // CASE 1A: Instant session available (auto-confirm enabled)
-      // Upsert profile and defaults exactly once
+      // Regardless of session state (auto-confirm or not), attempt to initialize profiles
       await Promise.all([
         supabase.from('profiles').upsert(
           {
@@ -147,8 +139,12 @@ export default function SignUpPage() {
         )
       ]);
 
-      // Direct redirect to dashboard
-      window.location.href = '/dashboard';
+      if (!authData.session) {
+        // If email confirm is still on in Supabase dashboard, we need to show an error or redirect to login.
+        router.push('/login?message=Account created. If confirmation is required, check your email. Otherwise, log in.');
+      } else {
+        window.location.href = '/dashboard';
+      }
 
     } catch (err: any) {
       if (err.message?.toLowerCase().includes('already registered')) {
@@ -159,7 +155,6 @@ export default function SignUpPage() {
       setLoading(false);
     }
   };
-
 
   if (isCheckingSession) {
     return (
@@ -174,36 +169,6 @@ export default function SignUpPage() {
     );
   }
 
-  if (isEmailSent) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background p-4 selection:bg-pink-500/20">
-        <div className="w-full max-w-md space-y-8 animate-in fade-in zoom-in duration-500">
-          <div className="text-center space-y-2">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-pink-500 to-violet-500 text-white mb-2 shadow-lg shadow-pink-500/20">
-              <Mail className="w-7 h-7" />
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Check Your Email</h1>
-            <p className="text-sm text-muted-foreground">
-              We sent a verification link to <span className="font-semibold text-foreground">{email}</span>
-            </p>
-          </div>
-
-          <Card className="border-pink-500/10 shadow-xl shadow-pink-500/5 bg-card/60 backdrop-blur-xl p-6 space-y-4 text-center">
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Please click the link inside the email to confirm your account and log into Svanexa AI.
-            </p>
-            <Button
-              onClick={() => router.push('/login')}
-              className="w-full bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 text-white shadow-md h-11 mt-2"
-            >
-              Go to Sign In <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex items-center justify-center min-h-screen bg-background p-4 selection:bg-pink-500/20">
       <div className="w-full max-w-xl space-y-8 animate-in fade-in zoom-in duration-500">
@@ -212,8 +177,22 @@ export default function SignUpPage() {
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-tr from-pink-500 to-violet-500 text-white mb-2 shadow-lg shadow-pink-500/20">
             <Heart className="w-6 h-6 fill-white" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Join Svanexa</h1>
-          <p className="text-sm text-muted-foreground">Your AI-powered wellness journey begins here.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+            Join Svanexa
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Your AI-powered wellness journey begins here.
+          </p>
+        </div>
+
+        {/* Segmented Tab Control */}
+        <div className="bg-secondary/50 p-1 rounded-xl flex items-center justify-between mx-auto">
+          <Link href="/login" className="flex-1 text-center py-2 text-sm font-medium rounded-lg text-muted-foreground hover:text-foreground transition-colors">
+            Sign In
+          </Link>
+          <Link href="/signup" className="flex-1 text-center py-2 text-sm font-semibold rounded-lg bg-background shadow-sm text-foreground">
+            Sign Up
+          </Link>
         </div>
 
         <Card className="border-pink-500/10 shadow-xl shadow-pink-500/5 bg-card/60 backdrop-blur-xl relative overflow-hidden">
@@ -221,7 +200,7 @@ export default function SignUpPage() {
           <div className="absolute top-0 left-0 w-full h-1 bg-secondary">
             <motion.div 
               className="h-full bg-gradient-to-r from-pink-500 to-violet-500"
-              initial={{ width: '50%' }}
+              initial={{ width: step === 1 ? '50%' : '100%' }}
               animate={{ width: step === 1 ? '50%' : '100%' }}
               transition={{ duration: 0.3 }}
             />
@@ -418,6 +397,7 @@ export default function SignUpPage() {
                       variant="outline"
                       onClick={() => setStep(1)}
                       className="w-24 h-11"
+                      disabled={loading}
                     >
                       Back
                     </Button>
@@ -435,13 +415,6 @@ export default function SignUpPage() {
             </AnimatePresence>
           </CardContent>
         </Card>
-
-        <p className="text-sm text-center text-muted-foreground mt-6">
-          Already have an account?{' '}
-          <Link href="/login" className="font-semibold text-pink-500 hover:text-pink-600 transition-colors">
-            Sign in
-          </Link>
-        </p>
       </div>
     </div>
   );

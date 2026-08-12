@@ -4,10 +4,11 @@ import { useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import Link from 'next/link';
 import { Mail, Heart, Loader2 } from 'lucide-react';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { motion } from 'framer-motion';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -66,14 +67,14 @@ export default function ForgotPasswordPage() {
               </div>
 
               {error && (
-                <div className="p-3 text-sm text-red-500 bg-red-500/10 border border-red-500/20 rounded-lg">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3 text-sm text-red-500 bg-red-500/10 border border-red-500/20 rounded-lg">
                   {error}
-                </div>
+                </motion.div>
               )}
               {message && (
-                <div className="p-3 text-sm text-green-500 bg-green-500/10 border border-green-500/20 rounded-lg">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3 text-sm text-green-500 bg-green-500/10 border border-green-500/20 rounded-lg">
                   {message}
-                </div>
+                </motion.div>
               )}
             </CardContent>
 

@@ -159,7 +159,7 @@ export class WellnessPlanService {
     const [checkinsRes, todayCheckinRes, cycleRes, skinRes, sleepRes, waterRes, moodRes, exerciseRes] =
       await Promise.all([
         this.supabase.from('daily_checkins').select('*').eq('user_id', userId).order('date', { ascending: false }).limit(14),
-        // Read slot completion state from daily_checkins.summary JSON (checkin_slots table doesn't exist)
+        // Read slot completion state from daily_checkins.summary JSON
         this.supabase.from('daily_checkins').select('summary').eq('user_id', userId).eq('date', todayStr).maybeSingle(),
         this.supabase.from('cycle_logs').select('*').eq('user_id', userId).order('start_date', { ascending: false }).limit(3),
         this.supabase.from('skin_logs').select('*').eq('user_id', userId).order('date', { ascending: false }).limit(7),
@@ -190,10 +190,14 @@ export class WellnessPlanService {
     const completedSlots = ['morning', 'afternoon', 'evening'].filter(s => slotMeta[s]?.completed);
     const allSlotsComplete = completedSlots.length === 3;
 
-    const todaySleep = sleepRes.data?.duration_hours ?? null;
+    // Extract latest check-in data from today's slots
+    const latestSlotData = slotMeta.evening?.data || slotMeta.afternoon?.data || slotMeta.morning?.data || {};
+
+    const todaySleep = sleepRes.data?.duration_hours ?? latestSlotData.sleep ?? null;
     const todayWater = waterRes.data ? Number(waterRes.data.amount_ml) / 1000 : null;
-    const todayMood = moodRes.data?.mood ?? null;
-    const todayStress = moodRes.data?.intensity ?? null;
+    const todayMood = latestSlotData.q1_feeling ? `Feeling ${latestSlotData.q1_feeling}/5` : (moodRes.data?.mood ?? null);
+    const todayStressScore = latestSlotData.averageScore ?? (moodRes.data?.intensity ? moodRes.data.intensity / 2 : null);
+    const todayStressIndicator = latestSlotData.stressIndicator ?? null;
     const todayExercise = exerciseRes.data?.duration_minutes ?? null;
 
     const skins = skinRes.data || [];
@@ -212,7 +216,8 @@ export class WellnessPlanService {
     return {
       totalLogs: checkins.length,
       sleepAvg, waterAvg, exerciseAvg, stressAvg,
-      todaySleep, todayWater, todayMood, todayStress, todayExercise,
+      todaySleep, todayWater, todayMood, todayStress: todayStressScore, todayStressIndicator,
+      todayExercise, latestSlotData,
       acneAvg, cycleStatus,
       hasCheckedInToday: completedSlots.length > 0,
       allSlotsComplete,
@@ -262,8 +267,8 @@ export class WellnessPlanService {
     if (m.todaySleep !== null && Number(m.todaySleep) < 6.5) {
       return `You slept ${Number(m.todaySleep).toFixed(1)} hours last night — a little below your goal. A short nap or early bedtime tonight can help you recover well.`;
     }
-    if (m.todayStress !== null && Number(m.todayStress) > 6) {
-      return `Your stress is elevated today (${m.todayStress}/10). Try the mindfulness task in your evening plan — even 5 minutes of breathing can make a real difference.`;
+    if (m.todayStress !== null && Number(m.todayStress) > 3.0) {
+      return `Your responses suggest you may be feeling more stressed today (${m.todayStressIndicator ?? 'Elevated'}). Try the mindfulness task in your plan — even 5 minutes of breathing can make a real difference.`;
     }
     if (mode === 'pregnancy') {
       return `You're doing wonderfully. Remember to rest when needed and keep sipping water throughout the day.`;
@@ -329,16 +334,19 @@ USER DATA (USE ONLY THIS — NO FAKE VALUES):
 - Avg Sleep: ${m.sleepAvg.toFixed(1)}h (today: ${m.todaySleep ?? 'not logged'})
 - Avg Water: ${m.waterAvg.toFixed(1)}L (today: ${m.todayWater ?? 'not logged'}L)
 - Avg Exercise: ${m.exerciseAvg.toFixed(0)}min (today: ${m.todayExercise ?? 'not logged'})
-- Avg Stress: ${m.stressAvg.toFixed(1)}/10 (today: ${m.todayStress ?? 'not logged'})
-- Mood today: ${m.todayMood ?? 'not logged'}
+- Stress Wellness Indicator: ${m.todayStress ? `${m.todayStress}/5.0 (${m.todayStressIndicator ?? 'Calculated'})` : 'not logged'}
+- Q1 Feeling Score: ${m.latestSlotData?.q1_feeling ?? 'N/A'} (1=relaxed, 5=overwhelmed)
+- Q2 Focus Score: ${m.latestSlotData?.q2_focus ?? 'N/A'} (1=easy, 5=difficult)
+- Q3 Body Score: ${m.latestSlotData?.q3_body ?? 'N/A'} (1=relaxed, 5=tense)
+- Q4 Thoughts Score: ${m.latestSlotData?.q4_thoughts ?? 'N/A'} (1=not at all, 5=a lot)
 - Cycle Phase: ${m.cycleStatus}
 - Skin Acne Avg: ${m.acneAvg.toFixed(1)}/10
 
 SMART RULES:
 - Only generate tasks for the '${slot}' slot.
-- Provide a brief 1-sentence 'rationale' explaining WHY Luna assigned each task based on their specific vitals (e.g. "You slept 6 hours today, so...").
+- Provide a brief 1-sentence 'rationale' explaining WHY Luna assigned each task based on their specific vitals (e.g. "Your responses suggest moderate stress, so...").
 - NEVER recommend medicines, medical drugs, or diagnose diseases.
-- PCOS: prioritize stress, cycle, gentle exercise, low GI nutrition.
+- PCOS: prioritize stress relief, cycle care, gentle exercise, low GI nutrition.
 - PREGNANCY: gentle tasks only, hydration, rest, baby & mother wellness.
 - Include 'estimatedTime' for each task (e.g. "5 mins", "10 mins", "15 mins").
 
@@ -360,6 +368,7 @@ Return ONLY raw JSON (no markdown):
     const tasks: any[] = [];
     const skipWater = m.todayWater !== null && Number(m.todayWater) >= 2;
     const skipExercise = m.todayExercise !== null && Number(m.todayExercise) >= 30;
+    const isElevatedStress = (m.todayStress !== null && m.todayStress > 3.0) || (m.latestSlotData?.q1_feeling >= 4);
 
     if (slot === 'morning') {
       tasks.push({ 
@@ -369,7 +378,15 @@ Return ONLY raw JSON (no markdown):
         estimatedTime: '2 mins',
         rationale: 'Rehydrating after sleep restores your cognitive function and metabolic momentum.'
       });
-      if (m.sleepAvg < 6.5) {
+      if (isElevatedStress) {
+        tasks.push({ 
+          text: 'Practice 4-7-8 calming breath technique for 3 minutes.', 
+          category: 'stress', 
+          priority: 'high',
+          estimatedTime: '3 mins',
+          rationale: 'Your check-in responses suggest feeling overwhelmed today. Controlled breathing calms the nervous system.'
+        });
+      } else if (m.sleepAvg < 6.5) {
         tasks.push({ 
           text: `Plan an earlier bedtime tonight to recover from your recent ${m.sleepAvg.toFixed(1)}h sleep average.`, 
           category: 'sleep', 
@@ -421,13 +438,13 @@ Return ONLY raw JSON (no markdown):
           rationale: 'Visual distance breaks relieve ocular strain and mitigate mental fatigue.'
         });
       }
-      if (m.stressAvg > 6) {
+      if (isElevatedStress) {
         tasks.push({ 
-          text: 'Practice 3 minutes of box breathing to lower stress.', 
+          text: 'Practice 3 minutes of box breathing to ease stress.', 
           category: 'stress', 
           priority: 'high',
           estimatedTime: '3 mins',
-          rationale: `Your recorded stress is elevated (${m.todayStress ?? 7}/10). Box breathing rapidly lowers heart rate.`
+          rationale: 'Your responses suggest you may be feeling more stressed today. Box breathing rapidly lowers tension.'
         });
       } else {
         tasks.push({ 
@@ -485,6 +502,7 @@ Return ONLY raw JSON (no markdown):
 
     return tasks;
   }
+
 
   // ── STREAK ─────────────────────────────────────────────────────────────────
 
