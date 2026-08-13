@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { User, Sparkles, Shield, Heart, LogOut, Loader2, Save } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/utils/supabase/client';
+import { HabitBadges } from '@/components/profile/HabitBadges';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -226,6 +227,9 @@ export default function ProfilePage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Collectible Habit Badges */}
+        <HabitBadges />
 
         <Button 
           type="submit" 
