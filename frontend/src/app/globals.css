@@ -261,6 +261,7 @@ body[data-dashboard-style="calm"] .glass-card {
   html {
     @apply font-sans;
     -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
     scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
   }
@@ -271,7 +272,7 @@ body[data-dashboard-style="calm"] .glass-card {
     min-height: 100dvh;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
-    overscroll-behavior-y: contain;
+    overscroll-behavior-y: bounce;
     touch-action: manipulation;
     background-image:
       radial-gradient(ellipse 80% 60% at 50% -10%, var(--bg-gradient-color1) 0%, transparent 60%),
@@ -282,6 +283,26 @@ body[data-dashboard-style="calm"] .glass-card {
                 color 0.35s cubic-bezier(0.16, 1, 0.3, 1);
     transform: translateZ(0);
     backface-visibility: hidden;
+  }
+
+  /* Apple iOS 18 Pro Max Signature Tactile Haptic Tap & Click Response */
+  button,
+  a,
+  [role="button"],
+  input[type="button"],
+  input[type="submit"] {
+    transition: transform 0.16s cubic-bezier(0.25, 1, 0.5, 1),
+                opacity 0.16s cubic-bezier(0.25, 1, 0.5, 1),
+                background-color 0.2s cubic-bezier(0.25, 1, 0.5, 1),
+                box-shadow 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+    touch-action: manipulation;
+  }
+
+  button:active,
+  a:active,
+  [role="button"]:active {
+    transform: scale(0.96) translateZ(0);
+    opacity: 0.92;
   }
 
   /* Remove default scrollbar in Chrome for chat areas */
