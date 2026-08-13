@@ -11,7 +11,6 @@ import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 import { HerSyncProvider, useHerSync } from '@/context/HerSyncContext';
 import { PWAInstaller } from '@/components/ui/PWAInstaller';
-import { AmbientAudioPlayer } from '@/components/ui/AmbientAudioPlayer';
 
 export default function AppLayout({
   children,
@@ -56,7 +55,6 @@ export default function AppLayout({
           
           <FloatingCompanion />
           <PWAInstaller />
-          <AmbientAudioPlayer activeSoundscape="soft_rain" />
           
           <BottomNav />
         </div>

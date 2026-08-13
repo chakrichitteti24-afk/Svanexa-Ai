@@ -262,6 +262,7 @@ body[data-dashboard-style="calm"] .glass-card {
     @apply font-sans;
     -webkit-tap-highlight-color: transparent;
     scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
@@ -269,13 +270,18 @@ body[data-dashboard-style="calm"] .glass-card {
     color: var(--foreground);
     min-height: 100dvh;
     overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    touch-action: manipulation;
     background-image:
       radial-gradient(ellipse 80% 60% at 50% -10%, var(--bg-gradient-color1) 0%, transparent 60%),
       radial-gradient(ellipse 40% 40% at 90% 100%, var(--bg-gradient-color2) 0%, transparent 50%);
     background-attachment: fixed;
-    transition: background-color 0.5s cubic-bezier(0.16, 1, 0.3, 1),
-                background-image 0.5s cubic-bezier(0.16, 1, 0.3, 1),
-                color 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: background-color 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+                background-image 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+                color 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    transform: translateZ(0);
+    backface-visibility: hidden;
   }
 
   /* Remove default scrollbar in Chrome for chat areas */
