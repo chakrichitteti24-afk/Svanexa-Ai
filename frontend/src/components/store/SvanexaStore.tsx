@@ -342,13 +342,16 @@ export function SvanexaStore() {
             return (
               <motion.div
                 key={item.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`relative group rounded-2xl p-5 border transition-all duration-300 flex flex-col justify-between ${
+                initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                whileHover={{ scale: 1.025, y: -3 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ type: 'spring', stiffness: 380, damping: 24 }}
+                className={`relative group rounded-3xl p-5 border backdrop-blur-xl transition-all duration-300 flex flex-col justify-between ${
                   active
-                    ? 'bg-purple-500/10 border-purple-500/50 shadow-lg shadow-purple-500/10'
+                    ? 'bg-purple-500/10 border-purple-500/50 shadow-xl shadow-purple-500/15'
                     : unlocked
-                    ? 'bg-white/[0.03] border-white/10 hover:border-purple-500/30'
+                    ? 'bg-white/[0.03] border-white/10 hover:border-purple-500/40 hover:bg-white/[0.05] hover:shadow-xl hover:shadow-purple-500/5'
                     : 'bg-white/[0.02] border-white/5 opacity-90'
                 }`}
               >

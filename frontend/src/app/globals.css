@@ -273,7 +273,9 @@ body[data-dashboard-style="calm"] .glass-card {
       radial-gradient(ellipse 80% 60% at 50% -10%, var(--bg-gradient-color1) 0%, transparent 60%),
       radial-gradient(ellipse 40% 40% at 90% 100%, var(--bg-gradient-color2) 0%, transparent 50%);
     background-attachment: fixed;
-    transition: background-color 0.4s ease, background-image 0.4s ease;
+    transition: background-color 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+                background-image 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+                color 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   /* Remove default scrollbar in Chrome for chat areas */
