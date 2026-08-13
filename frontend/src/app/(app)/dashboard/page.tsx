@@ -15,6 +15,7 @@ import { apiFetch } from '@/utils/api-client';
 import { toast } from 'sonner';
 import styles from './dashboard.module.css';
 import { DashboardMascot } from '@/components/chat/DashboardMascot';
+import { DashboardSkeleton } from '@/components/ui/skeleton';
 
 export default function DashboardPage() {
   const {
@@ -184,11 +185,7 @@ export default function DashboardPage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--hs-pink)' }} />
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (
