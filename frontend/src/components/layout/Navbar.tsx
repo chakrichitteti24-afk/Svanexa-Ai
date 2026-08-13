@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Menu } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { Sidebar } from './Sidebar';
@@ -8,6 +9,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 
 export function Navbar() {
+  const [open, setOpen] = useState(false);
+
   return (
     <header className="h-14 flex items-center justify-between px-4 sticky top-0 z-40 md:hidden bg-[rgba(10,8,18,0.88)] backdrop-blur-2xl border-b border-[rgba(168,85,247,0.1)] shrink-0">
       {/* Brand */}
@@ -22,8 +25,8 @@ export function Navbar() {
         {/* Coin Badge */}
         <CoinBalanceBadge />
 
-        {/* Hamburger → Slide-in Sidebar */}
-        <Sheet>
+        {/* Hamburger → Slide-in Sidebar with Auto-Close on Item Select */}
+        <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger className="inline-flex items-center justify-center w-9 h-9 rounded-xl hover:bg-white/5 text-[#9d91c4] transition-colors">
             <Menu className="h-5 w-5" />
           </SheetTrigger>
@@ -33,7 +36,7 @@ export function Navbar() {
           >
             <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
             <div className="h-full flex flex-col">
-              <Sidebar className="w-full flex" />
+              <Sidebar className="w-full flex" onNavigate={() => setOpen(false)} />
             </div>
           </SheetContent>
         </Sheet>

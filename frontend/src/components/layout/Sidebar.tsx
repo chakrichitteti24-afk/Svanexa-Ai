@@ -27,7 +27,13 @@ const navItems = [
   { name: 'Profile', href: '/profile', icon: User },
 ];
 
-export function Sidebar({ className }: { className?: string }) {
+export function Sidebar({
+  className,
+  onNavigate,
+}: {
+  className?: string;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
 
   return (
@@ -41,7 +47,7 @@ export function Sidebar({ className }: { className?: string }) {
     >
       {/* Logo + Coin Badge */}
       <div className="h-16 flex items-center justify-between px-4 border-b border-[rgba(168,85,247,0.1)] shrink-0">
-        <Link href="/" className="flex items-center gap-2 group">
+        <Link href="/" onClick={onNavigate} className="flex items-center gap-2 group">
           <div className="w-8 h-8 rounded-xl overflow-hidden shadow-lg shadow-violet-500/30 relative">
             <Image src="/logo.jpg" alt="Svanexa" fill className="object-cover" />
           </div>
@@ -59,6 +65,7 @@ export function Sidebar({ className }: { className?: string }) {
               <Link
                 key={item.name}
                 href={item.href}
+                onClick={onNavigate}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group',
                   isActive
