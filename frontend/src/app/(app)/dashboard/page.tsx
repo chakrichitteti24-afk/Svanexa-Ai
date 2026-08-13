@@ -375,8 +375,8 @@ export default function DashboardPage() {
                <p className="text-sm text-muted-foreground mb-4 max-w-[280px]">
                  Complete your {activeSlot} check-in to generate your personalized tasks based on how you feel right now.
                </p>
-               <Link href="/check-in" className="px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white font-medium text-sm rounded-full transition-colors">
-                 Start Check-in
+               <Link href="/check-in" className="px-5 py-2.5 bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 text-white font-semibold text-sm rounded-full transition-all shadow-md shadow-pink-500/20">
+                 Log Today&apos;s Reflection 🌸
                </Link>
             </div>
           ) : areTasksCompleted ? (

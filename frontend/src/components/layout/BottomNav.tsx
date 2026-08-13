@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 const mobileNavItems = [
   { name: 'Home', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Cycle', href: '/cycle', icon: CalendarHeart },
-  { name: 'Check-In', href: '/check-in', icon: CheckSquare },
+  { name: 'Journal', href: '/check-in', icon: CheckSquare },
   { name: 'Wellness', href: '/wellness-plan', icon: Sparkles },
   { name: 'Store', href: '/store', icon: ShoppingBag },
   { name: 'Profile', href: '/profile', icon: User },

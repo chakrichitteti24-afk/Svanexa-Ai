@@ -42,7 +42,7 @@ export default function LandingPage() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/signup">
               <Button size="lg" className="rounded-full bg-foreground text-background hover:bg-foreground/90 h-14 px-8 text-lg font-medium group">
-                Start Tracking Free
+                Begin Your Journey Free
                 <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
               </Button>
             </Link>

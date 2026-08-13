@@ -18,10 +18,10 @@ import { CoinBalanceBadge } from '@/components/ui/CoinBalanceBadge';
 
 const navItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Daily Check-In', href: '/check-in', icon: CheckSquare },
-  { name: 'Cycle Tracker', href: '/cycle', icon: CalendarHeart },
-  { name: 'Skin Scanner', href: '/skin', icon: Droplets },
-  { name: 'Wellness Plan', href: '/wellness-plan', icon: Award },
+  { name: 'Daily Care Journal', href: '/check-in', icon: CheckSquare },
+  { name: 'Cycle & Period Care', href: '/cycle', icon: CalendarHeart },
+  { name: 'Skin Care & Glow', href: '/skin', icon: Droplets },
+  { name: 'Wellness Care Plan', href: '/wellness-plan', icon: Award },
   { name: 'Svanexa Store', href: '/store', icon: ShoppingBag },
   { name: 'Reports', href: '/reports', icon: LineChart },
   { name: 'Profile', href: '/profile', icon: User },

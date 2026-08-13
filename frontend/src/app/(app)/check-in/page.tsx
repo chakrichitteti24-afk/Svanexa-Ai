@@ -580,12 +580,12 @@ export default function CheckInPage() {
             {saving ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Saving your check-in...</span>
+                <span>Saving your reflection...</span>
               </>
             ) : (
               <>
-                <Sparkles className="w-5 h-5" />
-                <span>Save Check-in</span>
+                <Sparkles className="w-5 h-5 text-amber-300" />
+                <span>Save My Reflection 🌸</span>
               </>
             )}
           </button>

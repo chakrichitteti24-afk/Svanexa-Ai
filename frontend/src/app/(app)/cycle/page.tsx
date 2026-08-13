@@ -931,7 +931,7 @@ const parseLocalDate = (dateStr: string | null) => {
                           </div>
                           <div className="flex flex-col">
                             <span className="text-base font-bold text-foreground">
-                              {selectedDate ? `Period Started on ${format(selectedDate, 'MMM d')}` : 'Period Started'}
+                              {selectedDate ? `Period Began on ${format(selectedDate, 'MMM d')} 🌸` : 'Period Began 🌸'}
                             </span>
                             <span className="text-xs text-muted-foreground">Log start of new cycle</span>
                           </div>
@@ -946,7 +946,7 @@ const parseLocalDate = (dateStr: string | null) => {
                           </div>
                           <div className="flex flex-col">
                             <span className="text-base font-bold text-foreground">
-                              {selectedDate ? `Period Ended on ${format(selectedDate, 'MMM d')}` : 'Period Ended'}
+                              {selectedDate ? `Period Completed on ${format(selectedDate, 'MMM d')} 🌿` : 'Period Completed 🌿'}
                             </span>
                             <span className="text-xs text-muted-foreground">Log end date for active period</span>
                           </div>
@@ -960,8 +960,8 @@ const parseLocalDate = (dateStr: string | null) => {
                             <Baby className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                           </div>
                           <div className="flex flex-col">
-                            <span className="text-base font-bold text-foreground">Pregnancy Started</span>
-                            <span className="text-xs text-muted-foreground">Start pregnancy tracking</span>
+                            <span className="text-base font-bold text-foreground">Pregnancy Journey Began 👶</span>
+                            <span className="text-xs text-muted-foreground">Begin your pregnancy & motherhood care</span>
                           </div>
                         </button>
                       </>

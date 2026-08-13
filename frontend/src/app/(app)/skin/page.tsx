@@ -247,8 +247,8 @@ export default function SkinTrackerPage() {
     <div className="max-w-6xl mx-auto w-full space-y-6 pb-24 animate-in fade-in duration-500 md:py-8">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight mb-1">Skin Scanner</h1>
-          <p className="text-xs text-muted-foreground">Real-time AI diagnostic scan and nutritional planner.</p>
+          <h1 className="text-2xl font-bold tracking-tight mb-1">Skin Care & Glow</h1>
+          <p className="text-xs text-muted-foreground">Personalized AI skin analysis, glow care & nutritional tips.</p>
         </div>
         <Button 
           onClick={handleStartNewScan}
@@ -257,7 +257,7 @@ export default function SkinTrackerPage() {
           className="bg-primary/10 border-primary/20 text-[#beadd3] hover:bg-primary/20 text-xs font-semibold"
         >
           <Plus className="w-3.5 h-3.5 mr-1" />
-          New Scan
+          New Glow Check 🧴
         </Button>
       </div>
 
