@@ -36,7 +36,40 @@ export async function POST(req: Request) {
     const service = new WellnessPlanService(supabase as any);
     const result = await service.toggleTask(userId, planId, taskId, todayStr, status);
 
-    return NextResponse.json({ success: true, ...result });
+    let coinsEarned = 0;
+    let newBalance = 0;
+
+    const isTaskCompleted = status === 'completed' || result?.tasks?.find((t: any) => t.id === taskId)?.completed;
+
+    // Award +5 coins if task status is completed
+    if (isTaskCompleted) {
+      try {
+        const taskRef = `task:${todayStr}:${taskId}`;
+        const { data: coinRes } = await supabase.rpc('award_user_coins', {
+          p_user_id: userId,
+          p_amount: 5,
+          p_type: 'wellness_task',
+          p_ref_id: taskRef,
+          p_description: 'Wellness task completed',
+        });
+
+        if (coinRes?.awarded) {
+          coinsEarned = coinRes.amount;
+          newBalance = coinRes.new_balance;
+        } else {
+          newBalance = coinRes?.new_balance ?? 0;
+        }
+      } catch (coinErr) {
+        console.warn('Skipping task coin award:', coinErr);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      ...result,
+      coinsEarned,
+      newBalance,
+    });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

@@ -25,6 +25,9 @@ export interface UserProfile {
   first_name: string | null;
   last_name: string | null;
   date_of_birth: string | null;
+  active_theme?: string;
+  active_dashboard_style?: string;
+  active_companion_style?: string;
 }
 
 export interface UserPreferences {
@@ -71,6 +74,16 @@ export interface WellnessTask {
   completedAt: string | null;
 }
 
+export interface UnlockedItem {
+  type: string;
+  itemId: string;
+}
+
+export interface CoinAnimationState {
+  id: string;
+  amount: number;
+}
+
 export interface HealthState {
   profile: UserProfile | null;
   preferences: UserPreferences | null;
@@ -89,6 +102,13 @@ export interface HealthState {
   skinLogs: SkinLog[];
   wellnessTasks: WellnessTask[];
   pregnancyDueDate: string | null;
+  // Svanexa Rewards State
+  coinBalance: number;
+  unlockedItems: UnlockedItem[];
+  activeTheme: string;
+  activeDashboardStyle: string;
+  activeCompanionStyle: string;
+  coinAnimation: CoinAnimationState | null;
   isLoading: boolean;
   lastRefreshed: number;
 }
@@ -101,11 +121,17 @@ interface HerSyncContextValue extends HealthState {
   /** Call after skin log changes */
   refreshSkinLogs: () => Promise<void>;
   /** Toggle wellness task completion */
-  toggleTask: (taskId: string) => void;
+  toggleTask: (taskId: string) => Promise<void>;
   /** Set wellness tasks from the wellness plan page */
   setWellnessTasks: (tasks: WellnessTask[]) => void;
   /** Set cycle history optimistically */
   setCycleHistory: (history: CycleLog[]) => void;
+  /** Svanexa Store actions */
+  purchaseItem: (itemType: string, itemId: string, cost: number, itemName: string) => Promise<boolean>;
+  setActiveCustomization: (itemType: string, itemId: string) => Promise<void>;
+  refreshCoins: () => Promise<void>;
+  triggerCoinAnimation: (amount: number) => void;
+  updateCoinBalanceLocally: (newBalance: number, earnedAmount?: number) => void;
   /** Derived helpers */
   wellnessMode: 'general' | 'pcos' | 'pregnancy';
   userName: string;
@@ -144,15 +170,68 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
     skinLogs: [],
     wellnessTasks: [],
     pregnancyDueDate: null,
+    coinBalance: 0,
+    unlockedItems: [],
+    activeTheme: 'default',
+    activeDashboardStyle: 'minimal',
+    activeCompanionStyle: 'friendly',
+    coinAnimation: null,
     isLoading: true,
     lastRefreshed: 0,
   });
 
+  const triggerCoinAnimation = useCallback((amount: number) => {
+    if (amount <= 0) return;
+    const animId = Date.now().toString();
+    setState(prev => ({
+      ...prev,
+      coinAnimation: { id: animId, amount },
+    }));
+    setTimeout(() => {
+      setState(prev => (prev.coinAnimation?.id === animId ? { ...prev, coinAnimation: null } : prev));
+    }, 1200);
+  }, []);
+
+  const updateCoinBalanceLocally = useCallback((newBalance: number, earnedAmount?: number) => {
+    setState(prev => ({
+      ...prev,
+      coinBalance: newBalance,
+    }));
+    if (earnedAmount && earnedAmount > 0) {
+      triggerCoinAnimation(earnedAmount);
+    }
+  }, [triggerCoinAnimation]);
+
+  const refreshCoins = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/coins/balance');
+      if (res.ok) {
+        const { data } = await res.json();
+        setState(prev => ({
+          ...prev,
+          coinBalance: data.balance ?? 0,
+          unlockedItems: (data.unlockedItems || []).map((u: any) => ({
+            type: u.item_type,
+            itemId: u.item_id,
+          })),
+          activeTheme: data.activeTheme || 'default',
+          activeDashboardStyle: data.activeDashboardStyle || 'minimal',
+          activeCompanionStyle: data.activeCompanionStyle || 'friendly',
+        }));
+      }
+    } catch (err) {
+      console.error('Error fetching coins balance', err);
+    }
+  }, []);
+
   const fetchAll = useCallback(async (options: { skipCycleHistory?: boolean } = {}) => {
     setState(prev => ({ ...prev, isLoading: true }));
     try {
-      // Fetch health summary from backend (handles auth, streak, cycle phase)
-      const healthRes = await apiFetch('/api/health/summary');
+      // Fetch health summary & coins in parallel
+      const [healthRes, coinsRes] = await Promise.all([
+        apiFetch('/api/health/summary'),
+        apiFetch('/api/coins/balance'),
+      ]);
 
       let profile: UserProfile | null = null;
       let preferences: UserPreferences | null = null;
@@ -185,15 +264,43 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         wellnessTasks = data.wellness_tasks || [];
       }
 
+      let coinBalance = 0;
+      let unlockedItems: UnlockedItem[] = [];
+      let activeTheme = 'default';
+      let activeDashboardStyle = 'minimal';
+      let activeCompanionStyle = 'friendly';
+
+      if (coinsRes.ok) {
+        const { data: coinData } = await coinsRes.json();
+        coinBalance = coinData.balance ?? 0;
+        unlockedItems = (coinData.unlockedItems || []).map((u: any) => ({
+          type: u.item_type,
+          itemId: u.item_id,
+        }));
+        activeTheme = coinData.activeTheme || 'default';
+        activeDashboardStyle = coinData.activeDashboardStyle || 'minimal';
+        activeCompanionStyle = coinData.activeCompanionStyle || 'friendly';
+      }
+
       // Fetch cycle history and skin logs directly from Supabase client
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const skinRes = await supabase.from('skin_logs').select('*').eq('user_id', user.id).order('log_date', { ascending: false }).limit(10);
+      const skinRes = await supabase
+        .from('skin_logs')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('log_date', { ascending: false })
+        .limit(10);
       
       let cycleData: CycleLog[] | undefined = undefined;
       if (!options.skipCycleHistory) {
-        const cycleRes = await supabase.from('cycle_logs').select('*').eq('user_id', user.id).order('start_date', { ascending: false }).limit(12);
+        const cycleRes = await supabase
+          .from('cycle_logs')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('start_date', { ascending: false })
+          .limit(12);
         if (cycleRes.data) cycleData = cycleRes.data as CycleLog[];
       }
 
@@ -212,6 +319,11 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         cycleHistory: cycleData !== undefined ? cycleData : prev.cycleHistory,
         skinLogs: (skinRes.data as SkinLog[]) || [],
         wellnessTasks,
+        coinBalance,
+        unlockedItems,
+        activeTheme,
+        activeDashboardStyle,
+        activeCompanionStyle,
         isLoading: false,
         lastRefreshed: Date.now(),
       }));
@@ -223,7 +335,12 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
   const refreshCycleHistory = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data } = await supabase.from('cycle_logs').select('*').eq('user_id', user.id).order('start_date', { ascending: false }).limit(12);
+    const { data } = await supabase
+      .from('cycle_logs')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('start_date', { ascending: false })
+      .limit(12);
     if (data) {
       setState(prev => ({ ...prev, cycleHistory: data as CycleLog[] }));
     }
@@ -232,7 +349,12 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
   const refreshSkinLogs = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data } = await supabase.from('skin_logs').select('*').eq('user_id', user.id).order('log_date', { ascending: false }).limit(10);
+    const { data } = await supabase
+      .from('skin_logs')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('log_date', { ascending: false })
+      .limit(10);
     if (data) {
       setState(prev => ({ ...prev, skinLogs: data as SkinLog[] }));
     }
@@ -246,20 +368,94 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
     setState(prev => ({ ...prev, cycleHistory: history }));
   }, []);
 
-  const toggleTask = useCallback((taskId: string) => {
+  const toggleTask = useCallback(async (taskId: string) => {
+    const targetTask = state.wellnessTasks.find(t => t.id === taskId);
+    if (!targetTask) return;
+    const nextCompleted = !targetTask.completed;
+    const nextStatus = nextCompleted ? 'completed' : 'pending';
+
+    // Optimistic UI update
     setState(prev => ({
       ...prev,
       wellnessTasks: prev.wellnessTasks.map(t => {
         if (t.id !== taskId) return t;
-        const isNowDone = !t.completed;
         return {
           ...t,
-          completed: isNowDone,
-          status: isNowDone ? 'completed' : 'pending',
-          completedAt: isNowDone ? (t.completedAt || new Date().toISOString()) : null
+          completed: nextCompleted,
+          status: nextStatus,
+          completedAt: nextCompleted ? (t.completedAt || new Date().toISOString()) : null,
         };
       }),
     }));
+
+    try {
+      const res = await apiFetch('/api/wellness-plan/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId, status: nextStatus }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.coinsEarned && data.coinsEarned > 0) {
+          updateCoinBalanceLocally(data.newBalance, data.coinsEarned);
+        }
+      }
+    } catch (err) {
+      console.error('Task toggle error', err);
+    }
+  }, [state.wellnessTasks, updateCoinBalanceLocally]);
+
+  const purchaseItem = useCallback(
+    async (itemType: string, itemId: string, cost: number, itemName: string): Promise<boolean> => {
+      try {
+        const res = await apiFetch('/api/coins/purchase', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ itemType, itemId, cost, itemName }),
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || data.message || 'Purchase failed');
+        }
+
+        setState(prev => ({
+          ...prev,
+          coinBalance: data.newBalance ?? prev.coinBalance,
+          unlockedItems: prev.unlockedItems.some(i => i.type === itemType && i.itemId === itemId)
+            ? prev.unlockedItems
+            : [...prev.unlockedItems, { type: itemType, itemId }],
+          activeTheme: itemType === 'theme' ? itemId : prev.activeTheme,
+          activeDashboardStyle: itemType === 'dashboard_style' ? itemId : prev.activeDashboardStyle,
+          activeCompanionStyle: itemType === 'companion_style' ? itemId : prev.activeCompanionStyle,
+        }));
+
+        return true;
+      } catch (err) {
+        throw err;
+      }
+    },
+    []
+  );
+
+  const setActiveCustomization = useCallback(async (itemType: string, itemId: string) => {
+    // Optimistic UI update
+    setState(prev => ({
+      ...prev,
+      activeTheme: itemType === 'theme' ? itemId : prev.activeTheme,
+      activeDashboardStyle: itemType === 'dashboard_style' ? itemId : prev.activeDashboardStyle,
+      activeCompanionStyle: itemType === 'companion_style' ? itemId : prev.activeCompanionStyle,
+    }));
+
+    try {
+      await apiFetch('/api/coins/active', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemType, itemId }),
+      });
+    } catch (err) {
+      console.error('Error updating active customization', err);
+    }
   }, []);
 
   useEffect(() => {
@@ -283,15 +479,13 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
     };
   }, [fetchAll]);
 
-  // Smart Background Syncing on Window Focus (Replaces heavy WebSockets)
+  // Smart Background Syncing on Window Focus
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
 
     const handleFocus = () => {
-      // Debounce the refresh to prevent spam if user switches tabs rapidly
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => {
-        // Only fetch if we haven't fetched in the last 15 seconds to avoid over-fetching
         if (Date.now() - state.lastRefreshed > 15000) {
           fetchAll();
         }
@@ -306,41 +500,49 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
     };
   }, [fetchAll, state.lastRefreshed]);
 
-
-
-  const wellnessMode: 'general' | 'pcos' | 'pregnancy' = (state.preferences?.theme as 'general' | 'pcos' | 'pregnancy') || 'general';
+  const wellnessMode: 'general' | 'pcos' | 'pregnancy' =
+    (state.preferences?.theme as 'general' | 'pcos' | 'pregnancy') || 'general';
   const userName = state.profile?.first_name || 'there';
   const aiName = state.profile?.ai_name || 'Luna';
 
-  const value: HerSyncContextValue = useMemo(() => ({
-    ...state,
-    refreshAll: fetchAll,
-    refreshCycleHistory,
-    refreshSkinLogs,
-    toggleTask,
-    setWellnessTasks,
-    setCycleHistory,
-    wellnessMode,
-    userName,
-    aiName,
-  }), [
-    state,
-    fetchAll,
-    refreshCycleHistory,
-    refreshSkinLogs,
-    toggleTask,
-    setWellnessTasks,
-    setCycleHistory,
-    wellnessMode,
-    userName,
-    aiName
-  ]);
-
-  return (
-    <HerSyncContext.Provider value={value}>
-      {children}
-    </HerSyncContext.Provider>
+  const value: HerSyncContextValue = useMemo(
+    () => ({
+      ...state,
+      refreshAll: fetchAll,
+      refreshCycleHistory,
+      refreshSkinLogs,
+      toggleTask,
+      setWellnessTasks,
+      setCycleHistory,
+      purchaseItem,
+      setActiveCustomization,
+      refreshCoins,
+      triggerCoinAnimation,
+      updateCoinBalanceLocally,
+      wellnessMode,
+      userName,
+      aiName,
+    }),
+    [
+      state,
+      fetchAll,
+      refreshCycleHistory,
+      refreshSkinLogs,
+      toggleTask,
+      setWellnessTasks,
+      setCycleHistory,
+      purchaseItem,
+      setActiveCustomization,
+      refreshCoins,
+      triggerCoinAnimation,
+      updateCoinBalanceLocally,
+      wellnessMode,
+      userName,
+      aiName,
+    ]
   );
+
+  return <HerSyncContext.Provider value={value}>{children}</HerSyncContext.Provider>;
 }
 
 // ============================================================

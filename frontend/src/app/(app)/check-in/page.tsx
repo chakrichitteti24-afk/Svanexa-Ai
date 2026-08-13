@@ -166,7 +166,7 @@ function useNextSlotCountdown(activeSlot: SlotType, isCompleted: boolean) {
 
 export default function CheckInPage() {
   const router = useRouter();
-  const { wellnessMode, refreshAll } = useHerSync();
+  const { wellnessMode, refreshAll, updateCoinBalanceLocally } = useHerSync();
   const activeSlot = getCurrentSlot();
 
   const [loading, setLoading] = useState(true);
@@ -265,7 +265,13 @@ export default function CheckInPage() {
         [activeSlot]: { completed: true, completedAt: now, data: payload.data },
       }));
       setIsEditing(false);
-      toast.success(`${activeSlot.charAt(0).toUpperCase() + activeSlot.slice(1)} check-in saved!`);
+
+      if (result.data?.coinsEarned && result.data.coinsEarned > 0) {
+        updateCoinBalanceLocally(result.data.newBalance, result.data.coinsEarned);
+        toast.success(`${activeSlot.charAt(0).toUpperCase() + activeSlot.slice(1)} check-in saved! Earned +${result.data.coinsEarned} 🪙`);
+      } else {
+        toast.success(`${activeSlot.charAt(0).toUpperCase() + activeSlot.slice(1)} check-in saved!`);
+      }
 
       // Trigger AI wellness plan generation in background
       apiFetch('/api/wellness-plan', { method: 'POST' }).catch(console.error);

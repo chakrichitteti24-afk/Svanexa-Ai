@@ -7,14 +7,14 @@ import {
   LayoutDashboard,
   CheckSquare,
   CalendarHeart,
-  Sparkles,
   Droplets,
   LineChart,
   Award,
   User,
-  BrainCircuit
+  ShoppingBag,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CoinBalanceBadge } from '@/components/ui/CoinBalanceBadge';
 
 const navItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -22,6 +22,7 @@ const navItems = [
   { name: 'Cycle Tracker', href: '/cycle', icon: CalendarHeart },
   { name: 'Skin Scanner', href: '/skin', icon: Droplets },
   { name: 'Wellness Plan', href: '/wellness-plan', icon: Award },
+  { name: 'Svanexa Store', href: '/store', icon: ShoppingBag },
   { name: 'Reports', href: '/reports', icon: LineChart },
   { name: 'Profile', href: '/profile', icon: User },
 ];
@@ -38,14 +39,15 @@ export function Sidebar({ className }: { className?: string }) {
         className
       )}
     >
-      {/* Logo */}
-      <div className="h-16 flex items-center px-6 border-b border-[rgba(168,85,247,0.1)] shrink-0">
-        <Link href="/" className="flex items-center gap-2.5 group">
+      {/* Logo + Coin Badge */}
+      <div className="h-16 flex items-center justify-between px-4 border-b border-[rgba(168,85,247,0.1)] shrink-0">
+        <Link href="/" className="flex items-center gap-2 group">
           <div className="w-8 h-8 rounded-xl overflow-hidden shadow-lg shadow-violet-500/30 relative">
             <Image src="/logo.jpg" alt="Svanexa" fill className="object-cover" />
           </div>
           <span className="text-xl font-bold gradient-text tracking-tight">Svanexa</span>
         </Link>
+        <CoinBalanceBadge />
       </div>
 
       {/* Navigation */}

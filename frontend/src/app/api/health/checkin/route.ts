@@ -111,6 +111,49 @@ export async function POST(req: Request) {
     );
     const allSlotsComplete = VALID_SLOTS.every((s) => completedSlots.includes(s));
 
+    // ── Award Coins (Idempotent via database reference_id) ───────────────────
+    let coinsEarned = 0;
+    let newBalance = 0;
+
+    try {
+      const slotRef = `checkin:${today}:${slot}`;
+      const slotCapName = slot.charAt(0).toUpperCase() + slot.slice(1);
+      
+      const { data: slotCoinRes } = await supabase.rpc('award_user_coins', {
+        p_user_id: userId,
+        p_amount: 10,
+        p_type: 'checkin_slot',
+        p_ref_id: slotRef,
+        p_description: `${slotCapName} check-in completed`,
+      });
+
+      if (slotCoinRes?.awarded) {
+        coinsEarned += slotCoinRes.amount;
+        newBalance = slotCoinRes.new_balance;
+      } else {
+        newBalance = slotCoinRes?.new_balance ?? 0;
+      }
+
+      // Bonus coins if all 3 slots completed today
+      if (allSlotsComplete) {
+        const bonusRef = `checkin:${today}:all_slots_bonus`;
+        const { data: bonusCoinRes } = await supabase.rpc('award_user_coins', {
+          p_user_id: userId,
+          p_amount: 10,
+          p_type: 'checkin_all_bonus',
+          p_ref_id: bonusRef,
+          p_description: 'Completed all 3 daily check-ins!',
+        });
+
+        if (bonusCoinRes?.awarded) {
+          coinsEarned += bonusCoinRes.amount;
+          newBalance = bonusCoinRes.new_balance;
+        }
+      }
+    } catch (coinErr) {
+      console.warn('Skipping coin RPC award:', coinErr);
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -118,7 +161,9 @@ export async function POST(req: Request) {
         completedAt,
         allSlotsComplete,
         completedSlots,
-        message: `${slot.charAt(0).toUpperCase() + slot.slice(1)} check-in saved successfully.`,
+        coinsEarned,
+        newBalance,
+        message: `${slot.charAt(0).toUpperCase() + slot.slice(1)} check-in saved successfully.${coinsEarned > 0 ? ` Earned +${coinsEarned} 🪙!` : ''}`,
       },
     }, { status: 201 });
 

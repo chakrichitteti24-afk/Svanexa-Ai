@@ -62,9 +62,11 @@ export default function AppLayout({
 }
 
 function ThemeSync() {
-  const { wellnessMode } = useHerSync();
+  const { wellnessMode, activeTheme, activeDashboardStyle } = useHerSync();
   useEffect(() => {
     document.body.setAttribute('data-mode', wellnessMode);
-  }, [wellnessMode]);
+    document.body.setAttribute('data-theme', activeTheme || 'default');
+    document.body.setAttribute('data-dashboard-style', activeDashboardStyle || 'minimal');
+  }, [wellnessMode, activeTheme, activeDashboardStyle]);
   return null;
 }

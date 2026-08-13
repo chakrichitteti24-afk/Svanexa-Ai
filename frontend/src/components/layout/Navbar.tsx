@@ -1,8 +1,9 @@
 'use client';
 
-import { Menu, Sparkles } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { Sidebar } from './Sidebar';
+import { CoinBalanceBadge } from '@/components/ui/CoinBalanceBadge';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -17,21 +18,26 @@ export function Navbar() {
         <span className="text-base font-bold gradient-text tracking-tight">Svanexa</span>
       </Link>
 
-      {/* Hamburger → Slide-in Sidebar */}
-      <Sheet>
-        <SheetTrigger className="inline-flex items-center justify-center w-9 h-9 rounded-xl hover:bg-white/5 text-[#9d91c4] transition-colors">
-          <Menu className="h-5 w-5" />
-        </SheetTrigger>
-        <SheetContent
-          side="left"
-          className="p-0 w-72 border-r-0 bg-transparent"
-        >
-          <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
-          <div className="h-full flex flex-col">
-            <Sidebar className="w-full flex" />
-          </div>
-        </SheetContent>
-      </Sheet>
+      <div className="flex items-center gap-3">
+        {/* Coin Badge */}
+        <CoinBalanceBadge />
+
+        {/* Hamburger → Slide-in Sidebar */}
+        <Sheet>
+          <SheetTrigger className="inline-flex items-center justify-center w-9 h-9 rounded-xl hover:bg-white/5 text-[#9d91c4] transition-colors">
+            <Menu className="h-5 w-5" />
+          </SheetTrigger>
+          <SheetContent
+            side="left"
+            className="p-0 w-72 border-r-0 bg-transparent"
+          >
+            <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+            <div className="h-full flex flex-col">
+              <Sidebar className="w-full flex" />
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
     </header>
   );
 }
