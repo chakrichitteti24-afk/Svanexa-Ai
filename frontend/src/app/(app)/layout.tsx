@@ -5,12 +5,13 @@ import { Navbar } from '@/components/layout/Navbar';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { FloatingCompanion } from '@/components/chat/FloatingCompanion';
 import { usePathname, useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { Plus } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 import { HerSyncProvider, useHerSync } from '@/context/HerSyncContext';
 import { PWAInstaller } from '@/components/ui/PWAInstaller';
+import { createClient } from '@/utils/supabase/client';
+import { DashboardSkeleton } from '@/components/ui/skeleton';
+
+const supabase = createClient();
 
 export default function AppLayout({
   children,
@@ -23,23 +24,37 @@ export default function AppLayout({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isSubscribed = true;
     const checkAuth = async () => {
-      const { createClient } = await import('@/utils/supabase/client');
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        router.replace('/login');
-        return;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session && isSubscribed) {
+          router.replace('/login');
+          return;
+        }
+      } catch (err) {
+        console.error('Auth check error', err);
+      } finally {
+        if (isSubscribed) {
+          setMounted(true);
+          setLoading(false);
+        }
       }
-      
-      setMounted(true);
-      setLoading(false);
     };
     checkAuth();
+
+    return () => {
+      isSubscribed = false;
+    };
   }, [router]);
 
-  if (!mounted || loading) return <div className="min-h-screen bg-background" />;
+  if (!mounted || loading) {
+    return (
+      <div className="min-h-screen bg-background p-4 sm:p-8 flex items-center justify-center">
+        <DashboardSkeleton />
+      </div>
+    );
+  }
 
   return (
     <HerSyncProvider>

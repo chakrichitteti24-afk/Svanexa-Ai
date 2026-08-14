@@ -224,13 +224,50 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const fetchAll = useCallback(async (options: { skipCycleHistory?: boolean } = {}) => {
-    setState(prev => ({ ...prev, isLoading: true }));
+  // Restore cache on mount for instant zero-latency UI
+  useEffect(() => {
     try {
-      // Fetch health summary & coins in parallel
-      const [healthRes, coinsRes] = await Promise.all([
+      const cached = localStorage.getItem('svanexa_app_cache_v1');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        setState(prev => ({
+          ...prev,
+          ...parsed,
+          isLoading: false,
+        }));
+      }
+    } catch (err) {
+      console.error('Cache restore error', err);
+    }
+  }, []);
+
+  const fetchAll = useCallback(async (options: { skipCycleHistory?: boolean } = {}) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        setState(prev => ({ ...prev, isLoading: false }));
+        return;
+      }
+      const userId = session.user.id;
+
+      // Execute ALL 4 health, coin, skin, and cycle requests in a single parallel pass!
+      const [healthRes, coinsRes, skinRes, cycleRes] = await Promise.all([
         apiFetch('/api/health/summary'),
         apiFetch('/api/coins/balance'),
+        supabase
+          .from('skin_logs')
+          .select('*')
+          .eq('user_id', userId)
+          .order('log_date', { ascending: false })
+          .limit(10),
+        options.skipCycleHistory
+          ? Promise.resolve({ data: null })
+          : supabase
+              .from('cycle_logs')
+              .select('*')
+              .eq('user_id', userId)
+              .order('start_date', { ascending: false })
+              .limit(12),
       ]);
 
       let profile: UserProfile | null = null;
@@ -282,30 +319,9 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         activeCompanionStyle = coinData.activeCompanionStyle || 'friendly';
       }
 
-      // Fetch cycle history and skin logs directly from Supabase client
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const cycleData = cycleRes.data ? (cycleRes.data as CycleLog[]) : undefined;
 
-      const skinRes = await supabase
-        .from('skin_logs')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('log_date', { ascending: false })
-        .limit(10);
-      
-      let cycleData: CycleLog[] | undefined = undefined;
-      if (!options.skipCycleHistory) {
-        const cycleRes = await supabase
-          .from('cycle_logs')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('start_date', { ascending: false })
-          .limit(12);
-        if (cycleRes.data) cycleData = cycleRes.data as CycleLog[];
-      }
-
-      setState(prev => ({
-        ...prev,
+      const newStatePartial = {
         profile,
         preferences,
         todayLog,
@@ -316,7 +332,6 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         currentStreak,
         cycleStatus,
         pregnancyDueDate,
-        cycleHistory: cycleData !== undefined ? cycleData : prev.cycleHistory,
         skinLogs: (skinRes.data as SkinLog[]) || [],
         wellnessTasks,
         coinBalance,
@@ -326,8 +341,33 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         activeCompanionStyle,
         isLoading: false,
         lastRefreshed: Date.now(),
+      };
+
+      setState(prev => ({
+        ...prev,
+        ...newStatePartial,
+        cycleHistory: cycleData !== undefined ? cycleData : prev.cycleHistory,
       }));
-    } catch {
+
+      // Cache snapshot for 0ms instant open on next launch
+      try {
+        localStorage.setItem(
+          'svanexa_app_cache_v1',
+          JSON.stringify({
+            profile,
+            preferences,
+            activeTheme,
+            activeDashboardStyle,
+            activeCompanionStyle,
+            coinBalance,
+            hasCheckedInToday,
+            currentStreak,
+            totalCheckIns,
+          })
+        );
+      } catch {}
+    } catch (err) {
+      console.error('fetchAll error', err);
       setState(prev => ({ ...prev, isLoading: false }));
     }
   }, [supabase]);
