@@ -54,23 +54,42 @@ export async function POST(req: Request) {
 
     const completedAt = new Date().toISOString();
 
-    // ── Save to dedicated log tables (safely) ──────────────────────────────────
+    // ── Save to dedicated granular log tables safely ───────────────────────────
     try {
-      if (data?.averageScore) {
-        const moodText = data.q1_feeling <= 2 ? 'relaxed' : data.q1_feeling === 3 ? 'neutral' : 'overwhelmed';
-        await safeUpsert(supabase, 'mood_logs',
+      // 1. Mood log
+      const moodState = data?.indicators?.mood?.state || (data?.moodState);
+      const moodText =
+        moodState === 'Positive'
+          ? 'uplifted'
+          : moodState === 'Low'
+          ? 'down'
+          : 'neutral';
+
+      const stressScore = data?.indicators?.stress?.score || data?.averageScore || 2.5;
+
+      await safeUpsert(
+        supabase,
+        'mood_logs',
+        { user_id: userId, date: today },
+        { mood: moodText, intensity: Math.round(Number(stressScore) * 2) }
+      );
+
+      // 2. Sleep log (if morning check-in or sleep rating provided)
+      const sleepScore = data?.indicators?.sleepRating || data?.sleep;
+      if (sleepScore) {
+        // Map 1..5 rating to approximate hours if numerical rating provided
+        const approxHours =
+          sleepScore === 5 ? 8.5 : sleepScore === 4 ? 7.5 : sleepScore === 3 ? 6.5 : sleepScore === 2 ? 5.0 : 4.0;
+
+        await safeUpsert(
+          supabase,
+          'sleep_logs',
           { user_id: userId, date: today },
-          { mood: moodText, intensity: Math.round(Number(data.averageScore) * 2) }
-        );
-      }
-      if (data?.sleep) {
-        await safeUpsert(supabase, 'sleep_logs',
-          { user_id: userId, date: today },
-          { duration_hours: Number(data.sleep) }
+          { duration_hours: approxHours }
         );
       }
     } catch (granularErr) {
-      console.warn('Skipping granular logs:', granularErr);
+      console.warn('Skipping granular logs sync:', granularErr);
     }
 
     // ── Save slot data into daily_checkins.summary (JSON blob per slot) ────────
@@ -87,7 +106,7 @@ export async function POST(req: Request) {
     }
     if (typeof slotMeta !== 'object' || slotMeta === null) slotMeta = {};
 
-    // Store slot data — preserve the existing claimed flag (important: do not reset it on re-save)
+    // Store slot data — preserve existing claimed flag
     slotMeta[slot] = {
       completed: true,
       completedAt,
@@ -121,7 +140,6 @@ export async function POST(req: Request) {
         completedAt,
         allSlotsComplete,
         completedSlots,
-        // Coins are NOT awarded here. Use POST /api/health/checkin/claim to claim rewards.
         message: `${slot.charAt(0).toUpperCase() + slot.slice(1)} check-in saved successfully.`,
       },
     }, { status: 201 });

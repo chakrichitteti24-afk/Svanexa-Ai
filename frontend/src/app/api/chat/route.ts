@@ -68,8 +68,9 @@ export async function POST(req: Request) {
       try { slotMeta = JSON.parse(todayCheckin.summary); } catch { slotMeta = {}; }
     }
 
-    // Extract most recent slot data
+    // Extract most recent slot data & 10-dimension assessment
     const latestSlotData = slotMeta.evening?.data || slotMeta.afternoon?.data || slotMeta.morning?.data || {};
+    const indicators = latestSlotData.indicators || {};
     const completedSlots = ['morning', 'afternoon', 'evening'].filter(s => slotMeta[s]?.completed);
 
     // Parse today's wellness plan tasks
@@ -83,18 +84,17 @@ export async function POST(req: Request) {
     // Build structured context for the AI (Priority 1-5 hierarchy)
     const aiContext = {
       // Priority 2: Conversation context is passed via `history` parameter
-      // Priority 3: Latest check-in
+      // Priority 3: Latest 10-dimension check-in assessment
       currentSlot,
       todayCheckIns: {
         completedSlots,
-        stressScore: latestSlotData.averageScore ?? null,
-        stressIndicator: latestSlotData.stressIndicator ?? null,
-        feeling: latestSlotData.q1_feeling ?? null,
-        focus: latestSlotData.q2_focus ?? null,
-        body: latestSlotData.q3_body ?? null,
-        thoughts: latestSlotData.q4_thoughts ?? null,
-        sleep: latestSlotData.sleep ?? sleepLog?.duration_hours ?? null,
-        support: latestSlotData.support ?? null,
+        stressIndicator: indicators.stress?.level || latestSlotData.stressIndicator || null,
+        stressScore: indicators.stress?.score || latestSlotData.averageScore || null,
+        moodTone: indicators.mood?.state || null,
+        energyLevel: indicators.energy?.level || null,
+        wellnessScore: indicators.wellnessScore || null,
+        supportFocus: indicators.supportChoice || latestSlotData.supportChoice || null,
+        sleep: sleepLog?.duration_hours ?? (indicators.sleepRating ? `${indicators.sleepRating}/5 rating` : null),
       },
       // Priority 4: Wellness plan
       wellnessPlan: {

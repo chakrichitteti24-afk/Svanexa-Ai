@@ -1,19 +1,32 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { CheckCircle2, Loader2, Sparkles, ArrowLeft, ArrowRight, HeartPulse, Info } from 'lucide-react';
+import {
+  CheckCircle2,
+  Loader2,
+  Sparkles,
+  ArrowLeft,
+  ArrowRight,
+  HeartPulse,
+  Info,
+  BatteryCharging,
+  Smile,
+  Activity,
+  Droplets,
+  Moon,
+} from 'lucide-react';
 import { format } from 'date-fns';
 import { useHerSync } from '@/context/HerSyncContext';
 import { apiFetch } from '@/utils/api-client';
 import {
   getCheckinQuestions,
-  calculateStressScore,
-  getStressInterpretation,
+  calculateCheckinIndicators,
   type CheckinSlot,
   type WellnessMode,
+  type CheckinIndicators,
 } from '@/lib/questions/checkin-questions';
 import { CheckinRewardBar } from '@/components/checkin/CheckinRewardBar';
 
@@ -83,12 +96,11 @@ export default function CheckInPage() {
   const router = useRouter();
   const { wellnessMode, refreshAll } = useHerSync();
   const activeSlot = getCurrentSlot();
-  const mode = wellnessMode as WellnessMode;
+  const mode = (wellnessMode as WellnessMode) || 'general';
 
-  // Dynamic question set from the engine
-  const questions = getCheckinQuestions(activeSlot, mode);
-  const stressQuestions = questions.filter(q => q.isStressDimension);
-  const totalQuestions = questions.length;
+  // 10 MCQs dynamic question set
+  const questions = useMemo(() => getCheckinQuestions(activeSlot, mode), [activeSlot, mode]);
+  const totalQuestions = questions.length; // Exactly 10
 
   const [loading, setLoading] = useState(true);
   const [completedSlots, setCompletedSlots] = useState<Record<CheckinSlot, { completed: boolean; completedAt: string | null; data: any }>>(
@@ -98,6 +110,7 @@ export default function CheckInPage() {
       evening:   { completed: false, completedAt: null, data: null },
     }
   );
+
   // Claim status — sourced from server (authoritative)
   const [claimedSlots, setClaimedSlots] = useState<Partial<Record<CheckinSlot, boolean>>>({});
   const [bonusClaimed, setBonusClaimed] = useState(false);
@@ -113,7 +126,6 @@ export default function CheckInPage() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      // Fetch both checkin status and claim status in parallel
       const [statusRes, claimStatusRes] = await Promise.all([
         apiFetch('/api/health/checkin-status'),
         apiFetch('/api/health/checkin/claim-status'),
@@ -123,7 +135,8 @@ export default function CheckInPage() {
         const { data } = await statusRes.json();
         setCompletedSlots(data.slots);
         if (data.slots[activeSlot]?.data) {
-          setAnswers(data.slots[activeSlot].data);
+          // Preload previous answers if available
+          setAnswers(data.slots[activeSlot].data.answers || data.slots[activeSlot].data);
         }
       }
 
@@ -143,7 +156,9 @@ export default function CheckInPage() {
     }
   }, [activeSlot]);
 
-  useEffect(() => { fetchStatus(); }, [fetchStatus]);
+  useEffect(() => {
+    fetchStatus();
+  }, [fetchStatus]);
 
   const handleSelectOption = (questionId: string, score: number) => {
     setAnswers(prev => ({ ...prev, [questionId]: score }));
@@ -151,28 +166,23 @@ export default function CheckInPage() {
     if (currentStep < totalQuestions - 1) {
       setTimeout(() => {
         setCurrentStep(prev => Math.min(totalQuestions - 1, prev + 1));
-      }, 180);
+      }, 160);
     }
   };
 
-  // Compute stress score from 4 stress-dimension answers
-  const stressAnswers: Record<string, number> = {
-    q1_feeling: answers.q1_feeling ? Number(answers.q1_feeling) : 0,
-    q2_focus:   answers.q2_focus   ? Number(answers.q2_focus)   : 0,
-    q3_body:    answers.q3_body    ? Number(answers.q3_body)    : 0,
-    q4_thoughts: answers.q4_thoughts ? Number(answers.q4_thoughts) : 0,
-  };
+  // Compute live 10-dimension indicators
+  const indicators: CheckinIndicators = useMemo(
+    () => calculateCheckinIndicators(answers, questions),
+    [answers, questions]
+  );
 
-  const allStressAnswered = stressQuestions.every(q => stressAnswers[q.id] > 0);
-  const averageScore = calculateStressScore(allStressAnswered ? stressAnswers : {});
-  const interpretation = getStressInterpretation(averageScore);
-
-  // All stress questions must be answered before submitting (support question is optional)
-  const canSubmit = allStressAnswered;
+  // Count answered questions
+  const answeredCount = questions.filter(q => answers[q.id] !== undefined).length;
+  const canSubmit = answeredCount === totalQuestions;
 
   const submitCheckin = async () => {
     if (!canSubmit) {
-      toast.error('Please answer the 4 wellness questions to continue.');
+      toast.error(`Please complete all 10 questions (${answeredCount}/${totalQuestions} answered).`);
       return;
     }
     if (isSavingRef.current) return;
@@ -180,27 +190,25 @@ export default function CheckInPage() {
     setSaving(true);
 
     try {
-      // Build payload — include question definitions so historical data stays meaningful
       const payload = {
         slot: activeSlot,
         data: {
-          // Stress dimensions
-          q1_feeling:   stressAnswers.q1_feeling,
-          q2_focus:     stressAnswers.q2_focus,
-          q3_body:      stressAnswers.q3_body,
-          q4_thoughts:  stressAnswers.q4_thoughts,
-          averageScore,
-          stressIndicator: interpretation.level,
-          stressLabel:     interpretation.label,
-          // Optional support choice
-          support: answers.support || null,
-          // Sleep (morning only)
-          sleep: answers.sleep || (activeSlot === 'morning' ? null : null),
-          // Metadata: store question text so history is understandable
+          answers,
+          indicators,
+          // Legacy direct fields for backward compatibility
+          averageScore: indicators.stress.score,
+          stressIndicator: indicators.stress.level,
+          stressLabel: indicators.stress.label,
+          moodState: indicators.mood.state,
+          energyLevel: indicators.energy.level,
+          wellnessScore: indicators.wellnessScore,
+          sleepRating: indicators.sleepRating,
+          hydrationRating: indicators.hydrationRating,
+          supportChoice: indicators.supportChoice,
           questionMeta: questions.map(q => ({
             id: q.id,
-            slot: activeSlot,
-            mode,
+            category: q.category,
+            title: q.title,
             question: q.question,
             selectedScore: answers[q.id] ?? null,
           })),
@@ -215,7 +223,9 @@ export default function CheckInPage() {
       const result = await res.json();
 
       if (!res.ok) {
-        toast.error('Failed to save check-in', { description: result.error || result.message || 'Unknown error' });
+        toast.error('Failed to save check-in', {
+          description: result.error || result.message || 'Unknown error occurred. Please try again.',
+        });
         return;
       }
 
@@ -226,20 +236,21 @@ export default function CheckInPage() {
       }));
       setIsEditing(false);
 
-      // Show simple save success — coins are now claimed via the Claim button
-      toast.success(`${activeSlot.charAt(0).toUpperCase() + activeSlot.slice(1)} check-in saved! Tap "Claim" to collect your reward. 🌸`);
+      toast.success(
+        `${activeSlot.charAt(0).toUpperCase() + activeSlot.slice(1)} check-in saved! Tap "Claim" below to collect your reward. 🌸`
+      );
 
       // Trigger AI wellness plan generation in background — non-blocking.
-      // Check-in is already saved. If AI fails, the check-in persists regardless.
       apiFetch('/api/wellness-plan', { method: 'POST' }).catch(() => {
-        console.warn('Wellness plan generation failed. Check-in remains saved.');
+        console.warn('Wellness plan generation failed in background. Check-in remains safely saved.');
       });
 
-      // Sync dashboard and global state
+      // Sync dashboard and global context state
       await refreshAll();
-
     } catch (err: any) {
-      toast.error('Network Error', { description: err.message || 'Could not connect to server' });
+      toast.error('Network Error', {
+        description: err.message || 'Could not connect to server. Please try again.',
+      });
     } finally {
       setSaving(false);
       isSavingRef.current = false;
@@ -254,55 +265,111 @@ export default function CheckInPage() {
     );
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // COMPLETION VIEW (Summary + Reward Claim)
+  // ─────────────────────────────────────────────────────────────────────────────
   if (isCurrentSlotCompleted && !isEditing) {
     const slotTitle = activeSlot.charAt(0).toUpperCase() + activeSlot.slice(1);
     const timeStr = completedSlots[activeSlot].completedAt
       ? format(new Date(completedSlots[activeSlot].completedAt!), 'hh:mm a')
       : '';
     const savedData = completedSlots[activeSlot].data;
-    const savedScore = savedData?.averageScore ?? null;
-    const savedInterpretation = getStressInterpretation(savedScore);
+    const savedIndicators: CheckinIndicators = savedData?.indicators || indicators;
 
     return (
-      <div className="max-w-2xl mx-auto w-full pt-8 px-4 pb-24">
+      <div className="max-w-2xl mx-auto w-full pt-6 md:pt-8 px-4 pb-24 animate-in fade-in duration-300">
         <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
+          initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
           className="flex flex-col items-center justify-start text-center p-6 md:p-8 bg-card/80 backdrop-blur-md border border-border/40 rounded-3xl shadow-xl shadow-emerald-500/5"
         >
-          <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center mb-5 relative overflow-hidden">
+          {/* Top Badge */}
+          <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-emerald-500/10 flex items-center justify-center mb-4 relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 animate-pulse" />
-            <CheckCircle2 className="w-10 h-10 text-emerald-500 relative z-10" />
+            <CheckCircle2 className="w-8 h-8 md:w-10 md:h-10 text-emerald-500 relative z-10" />
           </div>
 
-          <h2 className="text-2xl font-bold text-emerald-500 mb-1">
-            ✓ {slotTitle} Check-in Completed
+          <h2 className="text-2xl md:text-3xl font-extrabold text-foreground mb-1">
+            ✓ {slotTitle} Check-In Complete
           </h2>
           {timeStr && (
-            <p className="text-xs font-semibold text-foreground/80 mb-4">
-              Completed at: {timeStr}
+            <p className="text-xs font-semibold text-muted-foreground mb-6">
+              Completed at {timeStr}
             </p>
           )}
 
-          {savedScore !== null && (
-            <div className={`w-full max-w-md p-4 rounded-2xl border mb-5 bg-gradient-to-r ${savedInterpretation.bgStyle}`}>
-              <div className="flex items-center justify-between mb-1">
+          {/* 🌟 10-Dimension Wellness Assessment Summary Card */}
+          <div className="w-full max-w-md space-y-3 mb-6 text-left">
+            {/* Overall Daily Wellness Balance */}
+            <div className="p-4 rounded-2xl border border-violet-500/20 bg-gradient-to-r from-violet-500/10 to-pink-500/5">
+              <div className="flex items-center justify-between mb-1.5">
                 <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                  <HeartPulse className="w-3.5 h-3.5 text-pink-500" /> Wellness Indicator
+                  <Activity className="w-4 h-4 text-violet-400" /> Daily Wellness Balance
                 </span>
-                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${savedInterpretation.badgeColor}`}>
-                  Score {savedScore} / 5.0
+                <span className="text-xs font-black px-2.5 py-0.5 rounded-full border border-violet-500/30 text-violet-400 bg-violet-500/10">
+                  {savedIndicators.wellnessScore} / 100
                 </span>
               </div>
-              <p className="text-sm font-semibold text-foreground text-left mt-2">
-                {savedInterpretation.label}
+              <div className="w-full h-2 bg-secondary rounded-full overflow-hidden mt-2">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-pink-500 via-violet-500 to-indigo-500"
+                  style={{ width: `${savedIndicators.wellnessScore}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Inferred Non-Diagnostic Stress Indicator */}
+            <div className={`p-4 rounded-2xl border bg-gradient-to-r ${savedIndicators.stress.bgStyle}`}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <HeartPulse className="w-3.5 h-3.5 text-pink-500" /> Stress Signal Indicator
+                </span>
+                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${savedIndicators.stress.badgeColor}`}>
+                  {savedIndicators.stress.level}
+                </span>
+              </div>
+              <p className="text-xs text-foreground/90 font-medium mt-1.5 leading-relaxed">
+                {savedIndicators.stress.label}
               </p>
             </div>
-          )}
 
-          {/* ✨ Reward Claim Bar — appears only after successful save */}
-          <div className="w-full max-w-md mb-5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 text-left">
+            {/* Quick Indicators Grid: Mood & Energy */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3.5 rounded-2xl border border-border/40 bg-secondary/30">
+                <div className="flex items-center gap-1.5 mb-1 text-xs font-semibold text-muted-foreground">
+                  <Smile className="w-3.5 h-3.5 text-pink-400" /> Mood Tone
+                </div>
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-md border inline-block ${savedIndicators.mood.color}`}>
+                  {savedIndicators.mood.state}
+                </span>
+              </div>
+              <div className="p-3.5 rounded-2xl border border-border/40 bg-secondary/30">
+                <div className="flex items-center gap-1.5 mb-1 text-xs font-semibold text-muted-foreground">
+                  <BatteryCharging className="w-3.5 h-3.5 text-amber-400" /> Energy
+                </div>
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-md border inline-block ${savedIndicators.energy.color}`}>
+                  {savedIndicators.energy.level}
+                </span>
+              </div>
+            </div>
+
+            {/* Support choice note if present */}
+            {savedIndicators.supportChoice && (
+              <div className="px-4 py-2.5 rounded-xl bg-secondary/40 border border-border/30 text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground/80">Support focus: </span>
+                {savedIndicators.supportChoice}
+              </div>
+            )}
+
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground pt-1">
+              <Info className="w-3.5 h-3.5 flex-shrink-0 text-violet-400" />
+              <span>Non-diagnostic wellness indicator — used to personalize your daily AI plan.</span>
+            </div>
+          </div>
+
+          {/* 🪙 Reward Claim Section */}
+          <div className="w-full max-w-md mb-6">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2.5 text-left">
               🪙 Collect Your Rewards
             </p>
             <CheckinRewardBar
@@ -317,29 +384,27 @@ export default function CheckInPage() {
             />
           </div>
 
-          <p className="text-muted-foreground mb-5 text-sm max-w-md">
-            Your check-in responses have been saved. Your Svanexa AI Wellness Plan has been updated for this slot.
-          </p>
-
-          <div className="w-full bg-secondary/50 rounded-2xl p-5 border border-border/50 mb-6 flex flex-col items-center justify-center gap-1.5">
+          {/* Countdown to Next Check-In */}
+          <div className="w-full max-w-md bg-secondary/50 rounded-2xl p-5 border border-border/50 mb-6 flex flex-col items-center justify-center gap-1.5">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {nextSlotName} Check-in unlocks in
+              {nextSlotName} Check-In unlocks in
             </span>
-            <div className="text-3xl font-black tabular-nums tracking-tight text-foreground/90 font-mono">
+            <div className="text-3xl font-black tabular-nums tracking-tight text-foreground font-mono">
               {countdown || '...'}
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
             <button
               onClick={() => setIsEditing(true)}
-              className="px-6 py-3 rounded-full border border-violet-500/30 hover:bg-violet-500/10 text-violet-400 font-semibold transition-all text-sm min-h-[44px]"
+              className="flex-1 px-6 py-3 rounded-full border border-violet-500/30 hover:bg-violet-500/10 text-violet-400 font-semibold transition-all text-sm min-h-[44px]"
             >
-              Edit Check-in
+              Edit Check-In
             </button>
             <button
               onClick={() => router.push('/dashboard')}
-              className="px-8 py-3 rounded-full bg-foreground hover:bg-foreground/90 text-background font-semibold shadow-lg transition-all text-sm min-h-[44px]"
+              className="flex-1 px-8 py-3 rounded-full bg-foreground hover:bg-foreground/90 text-background font-semibold shadow-lg transition-all text-sm min-h-[44px]"
             >
               Return to Dashboard
             </button>
@@ -349,31 +414,52 @@ export default function CheckInPage() {
     );
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 10-QUESTION MCQ QUESTIONNAIRE VIEW
+  // ─────────────────────────────────────────────────────────────────────────────
   const activeQuestion = questions[currentStep];
-  const answeredCount = questions.filter(q => answers[q.id] !== undefined).length;
   const progressPct = Math.round(((currentStep + 1) / totalQuestions) * 100);
+  const slotLabel =
+    activeSlot === 'morning'
+      ? 'Morning 🌅'
+      : activeSlot === 'afternoon'
+      ? 'Afternoon ☀️'
+      : 'Evening 🌙';
 
-  const slotLabel = activeSlot === 'morning' ? 'Morning 🌅' : activeSlot === 'afternoon' ? 'Afternoon ☀️' : 'Evening 🌙';
+  const categoryIcons: Record<string, any> = {
+    sleep: Moon,
+    energy: BatteryCharging,
+    mood: Smile,
+    stress: HeartPulse,
+    focus: Sparkles,
+    physical_comfort: Activity,
+    hydration: Droplets,
+    activity: Activity,
+    general_wellness: Sparkles,
+    support: HeartPulse,
+  };
+
+  const CatIcon = categoryIcons[activeQuestion.category] || Sparkles;
 
   return (
     <div className="max-w-2xl mx-auto w-full pt-4 md:pt-8 px-4 pb-36">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-5 flex items-center justify-between">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight mb-1 capitalize bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-violet-500">
-            {slotLabel} Check-in
+            {slotLabel} Check-In
           </h1>
           <p className="text-xs md:text-sm text-muted-foreground flex items-center gap-1.5 font-medium">
-            <Sparkles className="w-4 h-4 text-violet-400" />
-            A quick moment for your daily wellness
+            <Sparkles className="w-4 h-4 text-violet-400 flex-shrink-0" />
+            10-Question Daily Wellness Assessment
           </p>
         </div>
       </div>
 
-      {/* Progress Indicator */}
+      {/* Progress Stepper Bar */}
       <div className="mb-6 bg-card/60 backdrop-blur-md border border-border/50 rounded-2xl p-4 shadow-sm">
         <div className="flex items-center justify-between text-xs font-bold mb-2">
-          <span className="text-foreground/90">
+          <span className="text-foreground">
             Question {currentStep + 1} of {totalQuestions}
           </span>
           <span className="text-pink-500">{progressPct}% Complete</span>
@@ -384,28 +470,25 @@ export default function CheckInPage() {
             className="h-full rounded-full bg-gradient-to-r from-pink-500 via-violet-500 to-indigo-500"
             initial={{ width: 0 }}
             animate={{ width: `${progressPct}%` }}
-            transition={{ duration: 0.3, ease: 'easeOut' }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
           />
         </div>
 
-        {/* Step navigation dots */}
-        <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
+        {/* 10-Dot Step Navigation */}
+        <div className="flex items-center justify-center gap-1.5 md:gap-2 mt-3 flex-wrap">
           {questions.map((q, idx) => {
             const isAnswered = answers[q.id] !== undefined;
             const isCurrent = idx === currentStep;
-            const isStress = q.isStressDimension;
             return (
               <button
                 key={q.id}
                 onClick={() => setCurrentStep(idx)}
                 aria-label={`Jump to Question ${idx + 1}: ${q.title}`}
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all min-h-[32px] ${
+                className={`w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all min-h-[28px] ${
                   isCurrent
                     ? 'bg-pink-500 text-white scale-110 shadow-md shadow-pink-500/20'
                     : isAnswered
-                    ? isStress
-                      ? 'bg-violet-500/20 text-violet-400 border border-violet-500/40'
-                      : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                    ? 'bg-violet-500/20 text-violet-400 border border-violet-500/40'
                     : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
                 }`}
               >
@@ -420,28 +503,23 @@ export default function CheckInPage() {
       <AnimatePresence mode="wait">
         <motion.div
           key={activeQuestion.id + currentStep}
-          initial={{ opacity: 0, x: 20 }}
+          initial={{ opacity: 0, x: 18 }}
           animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -20 }}
-          transition={{ duration: 0.25 }}
+          exit={{ opacity: 0, x: -18 }}
+          transition={{ duration: 0.2 }}
           className="bg-card/70 backdrop-blur-md border border-border/50 rounded-3xl p-6 shadow-md mb-6"
         >
-          <div className="flex items-center justify-between mb-2">
-            <span className={`text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full ${
-              activeQuestion.isStressDimension
-                ? 'text-violet-400 bg-violet-500/10'
-                : 'text-emerald-400 bg-emerald-500/10'
-            }`}>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full text-violet-400 bg-violet-500/10 flex items-center gap-1.5">
+              <CatIcon className="w-3.5 h-3.5" />
               {activeQuestion.title}
             </span>
-            {!activeQuestion.isStressDimension && (
-              <span className="text-[10px] font-semibold text-muted-foreground bg-secondary/60 px-2 py-0.5 rounded-full">
-                Optional
-              </span>
-            )}
+            <span className="text-[11px] font-semibold text-muted-foreground">
+              {currentStep + 1} / {totalQuestions}
+            </span>
           </div>
 
-          <h2 className="text-xl md:text-2xl font-bold mb-6 text-foreground/90">
+          <h2 className="text-xl md:text-2xl font-bold mb-6 text-foreground leading-snug">
             {activeQuestion.question}
           </h2>
 
@@ -458,9 +536,9 @@ export default function CheckInPage() {
                       : 'border-border/50 bg-secondary/40 text-foreground/80 hover:bg-secondary hover:border-pink-500/30'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3.5">
                     <span className="text-2xl drop-shadow-sm flex-shrink-0">{opt.emoji}</span>
-                    <span className="text-base">{opt.label}</span>
+                    <span className="text-sm md:text-base leading-snug">{opt.label}</span>
                   </div>
                   {isSelected && (
                     <CheckCircle2 className="w-5 h-5 text-pink-500 flex-shrink-0" />
@@ -472,63 +550,7 @@ export default function CheckInPage() {
         </motion.div>
       </AnimatePresence>
 
-      {/* Live Stress Wellness Indicator (shown once all 4 stress questions answered) */}
-      {allStressAnswered && (
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          className={`p-5 rounded-3xl border shadow-sm mb-6 bg-gradient-to-r ${interpretation.bgStyle}`}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <HeartPulse className="w-5 h-5 text-pink-500" />
-              <span className="text-sm font-bold text-foreground">Stress Wellness Indicator</span>
-            </div>
-            <span className={`text-xs font-bold px-3 py-1 rounded-full border ${interpretation.badgeColor}`}>
-              {interpretation.level}
-            </span>
-          </div>
-
-          <p className="text-sm text-foreground/90 font-medium mt-1">
-            {interpretation.label}
-          </p>
-
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-3 pt-3 border-t border-border/30">
-            <Info className="w-3.5 h-3.5 flex-shrink-0 text-violet-400" />
-            <span>Wellness indicator only — not a medical diagnosis.</span>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Sleep selector — Morning only */}
-      {activeSlot === 'morning' && (
-        <div className="bg-card/40 border border-border/40 rounded-3xl p-5 mb-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Sleep Last Night (Optional)</span>
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-foreground/80 block mb-2">Hours of Sleep</label>
-            <div className="flex flex-wrap gap-2">
-              {[4, 5, 6, 7, 7.5, 8, 9].map(val => (
-                <button
-                  key={val}
-                  type="button"
-                  onClick={() => setAnswers(prev => ({ ...prev, sleep: val }))}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${
-                    answers.sleep === val
-                      ? 'border-violet-500 bg-violet-500/10 text-violet-400'
-                      : 'border-border/50 bg-secondary/30 text-muted-foreground hover:bg-secondary'
-                  }`}
-                >
-                  {val} hrs
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Navigation */}
+      {/* Navigation Buttons */}
       <div className="flex items-center justify-between gap-3 mb-24">
         <button
           onClick={() => setCurrentStep(prev => Math.max(0, prev - 1))}
@@ -547,21 +569,23 @@ export default function CheckInPage() {
           </button>
         ) : (
           <span className="text-xs font-semibold text-emerald-500 flex items-center gap-1">
-            <CheckCircle2 className="w-4 h-4" /> All done
+            <CheckCircle2 className="w-4 h-4" /> All 10 Questions Answered
           </span>
         )}
       </div>
 
-      {/* Sticky Save Bar */}
+      {/* Sticky Bottom Save Bar */}
       <div className="fixed bottom-[72px] md:bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-xl border-t border-border/50 flex justify-center z-50">
         <div className="w-full max-w-2xl flex items-center justify-between gap-4">
           <div className="text-xs font-medium text-muted-foreground hidden sm:block">
             {canSubmit ? (
               <span className="text-emerald-500 flex items-center gap-1 font-semibold">
-                <CheckCircle2 className="w-4 h-4" /> Ready to save
+                <CheckCircle2 className="w-4 h-4" /> All 10 answered — Ready to save!
               </span>
             ) : (
-              `Answer the 4 wellness questions (${Object.keys(answers).filter(k => ['q1_feeling','q2_focus','q3_body','q4_thoughts'].includes(k) && answers[k] > 0).length}/4 done)`
+              <span>
+                {answeredCount} of {totalQuestions} answered
+              </span>
             )}
           </div>
           <button

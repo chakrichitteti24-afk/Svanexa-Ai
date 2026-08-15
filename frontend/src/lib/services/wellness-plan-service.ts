@@ -1,5 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { differenceInDays, addDays, format } from 'date-fns';
+import { differenceInDays } from 'date-fns';
 import { WellnessTask, WellnessPlan, PremiumStreak } from '../../types/wellness-plan';
 import Groq from 'groq-sdk';
 
@@ -105,48 +105,60 @@ export class WellnessPlanService {
       planData = data;
     }
 
-    if (!planData) {
-      const loaded = await this.getDailyWellnessPlan(userId, todayStr, 'general');
-      if (loaded.plan) {
-        const { data } = await this.supabase
-          .from('wellness_plans').select('*').eq('user_id', userId).eq('title', todayStr).maybeSingle();
-        planData = data;
-      }
+    if (!planData) throw new Error('Plan not found for toggle');
+
+    const tasks: WellnessTask[] = JSON.parse(planData.content);
+    const taskIndex = tasks.findIndex(t => t.id === taskId);
+    if (taskIndex === -1) throw new Error('Task not found');
+
+    const nowStatus = tasks[taskIndex].status;
+    let nextStatus: 'pending' | 'completed' | 'skipped' = 'completed';
+
+    if (targetStatus) {
+      nextStatus = targetStatus;
+    } else {
+      nextStatus = nowStatus === 'completed' ? 'pending' : 'completed';
     }
 
-    if (!planData) throw new Error('Plan not found for today');
+    tasks[taskIndex].status = nextStatus;
+    tasks[taskIndex].completed = nextStatus === 'completed';
+    tasks[taskIndex].completedAt = nextStatus === 'completed' ? new Date().toISOString() : null;
 
-    const tasks: WellnessTask[] = JSON.parse(planData.content).map((t: any) => {
-      if (t.id === taskId) {
-        let newStatus = targetStatus;
-        if (!newStatus) {
-          newStatus = t.completed || t.status === 'completed' ? 'pending' : 'completed';
-        }
-        const completed = newStatus === 'completed';
-        return { 
-          ...t, 
-          status: newStatus, 
-          completed, 
-          completedAt: completed ? (t.completedAt || new Date().toISOString()) : null 
-        };
-      }
-      return t;
-    });
+    const metrics = await this.loadMetrics(userId, todayStr);
+    const newScore = this.computeScore(metrics, tasks);
 
-    await this.supabase.from('wellness_plans')
+    await this.supabase
+      .from('wellness_plans')
       .update({ content: JSON.stringify(tasks), updated_at: new Date().toISOString() })
       .eq('id', planData.id);
 
-    if (tasks.every(t => t.completed || t.status === 'completed')) {
-      await this.updateStreak(userId, todayStr);
+    return { success: true, tasks, wellnessScore: newScore };
+  }
+
+  async generateFreshPlan(userId: string, todayStr: string, mode: string) {
+    const streak = await this.getOrCreateStreak(userId);
+    const metrics = await this.loadMetrics(userId, todayStr);
+
+    let tasks: WellnessTask[] = [];
+    const slotsToGen = metrics.completedSlots.length > 0 ? metrics.completedSlots : ['morning'];
+    for (const slot of slotsToGen) {
+      const newTasks = await this.generateTasksForSlot(metrics, mode, slot);
+      tasks = [...tasks, ...newTasks];
     }
 
-    const metrics = await this.loadMetrics(userId, todayStr);
-    const [streak, prefs] = await Promise.all([
-      this.getOrCreateStreak(userId),
-      this.supabase.from('user_preferences').select('theme').eq('user_id', userId).maybeSingle()
-    ]);
-    const mode = prefs.data?.theme || 'general';
+    const { data: existing } = await this.supabase
+      .from('wellness_plans')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('title', todayStr)
+      .maybeSingle();
+
+    if (existing) {
+      await this.supabase.from('wellness_plans').update({ content: JSON.stringify(tasks), updated_at: new Date().toISOString() }).eq('id', existing.id);
+    } else {
+      await this.supabase.from('wellness_plans').insert({ user_id: userId, title: todayStr, content: JSON.stringify(tasks), is_active: true });
+    }
+
     const score = this.computeScore(metrics, tasks);
     const insight = this.generateInsight(metrics, mode, tasks);
 
@@ -159,7 +171,6 @@ export class WellnessPlanService {
     const [checkinsRes, todayCheckinRes, cycleRes, skinRes, sleepRes, waterRes, moodRes, exerciseRes] =
       await Promise.all([
         this.supabase.from('daily_checkins').select('*').eq('user_id', userId).order('date', { ascending: false }).limit(14),
-        // Read slot completion state from daily_checkins.summary JSON
         this.supabase.from('daily_checkins').select('summary').eq('user_id', userId).eq('date', todayStr).maybeSingle(),
         this.supabase.from('cycle_logs').select('*').eq('user_id', userId).order('start_date', { ascending: false }).limit(3),
         this.supabase.from('skin_logs').select('*').eq('user_id', userId).order('date', { ascending: false }).limit(7),
@@ -190,14 +201,18 @@ export class WellnessPlanService {
     const completedSlots = ['morning', 'afternoon', 'evening'].filter(s => slotMeta[s]?.completed);
     const allSlotsComplete = completedSlots.length === 3;
 
-    // Extract latest check-in data from today's slots
+    // Extract latest 10-dimension check-in data from today's slots
     const latestSlotData = slotMeta.evening?.data || slotMeta.afternoon?.data || slotMeta.morning?.data || {};
+    const indicators = latestSlotData.indicators || {};
 
-    const todaySleep = sleepRes.data?.duration_hours ?? latestSlotData.sleep ?? null;
+    const todaySleep = sleepRes.data?.duration_hours ?? (indicators.sleepRating ? indicators.sleepRating * 1.6 : null);
     const todayWater = waterRes.data ? Number(waterRes.data.amount_ml) / 1000 : null;
-    const todayMood = latestSlotData.q1_feeling ? `Feeling ${latestSlotData.q1_feeling}/5` : (moodRes.data?.mood ?? null);
-    const todayStressScore = latestSlotData.averageScore ?? (moodRes.data?.intensity ? moodRes.data.intensity / 2 : null);
-    const todayStressIndicator = latestSlotData.stressIndicator ?? null;
+    const todayMood = indicators.mood?.state ? `Mood: ${indicators.mood.state}` : (moodRes.data?.mood ?? null);
+    const todayStressScore = indicators.stress?.score ?? latestSlotData.averageScore ?? null;
+    const todayStressIndicator = indicators.stress?.level ?? latestSlotData.stressIndicator ?? null;
+    const todayEnergy = indicators.energy?.level ?? null;
+    const todayWellnessScore = indicators.wellnessScore ?? null;
+    const todaySupport = indicators.supportChoice ?? latestSlotData.supportChoice ?? null;
     const todayExercise = exerciseRes.data?.duration_minutes ?? null;
 
     const skins = skinRes.data || [];
@@ -217,12 +232,13 @@ export class WellnessPlanService {
       totalLogs: checkins.length,
       sleepAvg, waterAvg, exerciseAvg, stressAvg,
       todaySleep, todayWater, todayMood, todayStress: todayStressScore, todayStressIndicator,
-      todayExercise, latestSlotData,
+      todayEnergy, todayWellnessScore, todaySupport,
+      todayExercise, latestSlotData, indicators,
       acneAvg, cycleStatus,
       hasCheckedInToday: completedSlots.length > 0,
       allSlotsComplete,
       completedSlotsCount: completedSlots.length,
-      completedSlots, // Expose actual slots
+      completedSlots,
     };
   }
 
@@ -258,28 +274,24 @@ export class WellnessPlanService {
     const remaining = total - completedCount;
 
     if (!m.hasCheckedInToday) {
-      return "Complete today's check-in so I can give you personalized wellness guidance based on your real data.";
+      return "Complete your 10-question daily check-in so I can tailor your personalized wellness tasks based on your real responses.";
     }
-    if (m.todayWater !== null && Number(m.todayWater) < 1.5) {
-      const needed = (2.5 - Number(m.todayWater)).toFixed(1);
-      return `You've had ${Number(m.todayWater).toFixed(1)}L of water today. Drinking ${needed}L more before evening will help you reach your hydration goal.`;
-    }
-    if (m.todaySleep !== null && Number(m.todaySleep) < 6.5) {
-      return `You slept ${Number(m.todaySleep).toFixed(1)} hours last night — a little below your goal. A short nap or early bedtime tonight can help you recover well.`;
+    if (m.todayEnergy === 'Low') {
+      return `Your check-in responses suggest lower energy today. I've shaped your daily wellness plan around gentle pacing and restorative hydration.`;
     }
     if (m.todayStress !== null && Number(m.todayStress) > 3.0) {
-      return `Your responses suggest you may be feeling more stressed today (${m.todayStressIndicator ?? 'Elevated'}). Try the mindfulness task in your plan — even 5 minutes of breathing can make a real difference.`;
+      return `Your check-in responses suggest you may be navigating higher pressure today (${m.todayStressIndicator ?? 'Elevated'}). Try the calming breath task in your plan — even 3 minutes helps ground your nervous system.`;
     }
     if (mode === 'pregnancy') {
-      return `You're doing wonderfully. Remember to rest when needed and keep sipping water throughout the day.`;
+      return `You're doing wonderfully. Remember to rest comfortably, elevate your feet when seated, and keep sipping water throughout the day.`;
     }
     if (mode === 'pcos') {
-      return `Consistent sleep and stress management are key for hormonal balance. You have ${remaining} wellness task${remaining !== 1 ? 's' : ''} remaining for today — keep going!`;
+      return `Consistent rest and low-impact movement support hormonal balance. You have ${remaining} wellness task${remaining !== 1 ? 's' : ''} left today.`;
     }
     if (completedCount === total && total > 0) {
-      return `Incredible! You've completed all ${total} wellness tasks today. You're building powerful healthy habits. 🌟`;
+      return `Incredible! You've completed all ${total} wellness tasks today. You're building healthy, sustainable momentum. 🌟`;
     }
-    return `Great progress today! You have ${remaining} task${remaining !== 1 ? 's' : ''} remaining. Each one you complete brings you closer to your wellness goals.`;
+    return `Great progress today! You have ${remaining} task${remaining !== 1 ? 's' : ''} remaining. Each completed task brings you closer to your wellness goals.`;
   }
 
   // ── TASK GENERATION ────────────────────────────────────────────────────────
@@ -320,7 +332,7 @@ export class WellnessPlanService {
       priority: (t.priority || 'recommended') as any,
       status: 'pending',
       estimatedTime: t.estimatedTime || '5 mins',
-      rationale: t.rationale || 'Tailored to your daily health check-in data and wellness goals.',
+      rationale: t.rationale || 'Tailored to your 10-question daily check-in assessment.',
       completed: false,
       completedAt: null,
     }));
@@ -333,30 +345,30 @@ export class WellnessPlanService {
       evening: 'The user is winding down. Tasks should promote relaxation, reflection, and preparation for restful sleep.',
     }[slot] || '';
 
-    return `You are a premium personal AI wellness coach. Generate exactly 3 to 5 personalized daily tasks for the ${slot.toUpperCase()} time slot.
+    return `You are a premium personal AI wellness coach. Generate exactly 3 to 5 personalized daily tasks for the ${slot.toUpperCase()} time slot based on the user's 10-question wellness assessment.
 
 SLOT CONTEXT: ${slotContext}
 
-USER DATA (use only this — never invent values):
+USER 10-DIMENSION WELLNESS ASSESSMENT:
 - Mode: ${mode} (general | pcos | pregnancy)
-- Avg Sleep: ${m.sleepAvg.toFixed(1)}h (today: ${m.todaySleep ?? 'not logged'}h)
-- Avg Water: ${m.waterAvg.toFixed(1)}L (today: ${m.todayWater ?? 'not logged'}L)
-- Avg Exercise: ${m.exerciseAvg.toFixed(0)}min (today: ${m.todayExercise ?? 'not logged'}min)
-- Stress Wellness Indicator: ${m.todayStress ? `${m.todayStress}/5.0 (${m.todayStressIndicator ?? 'Calculated'})` : 'not logged'}
-  IMPORTANT: never say "you have stress" — say "your responses suggest..."
-- Q1 Feeling/Mood Score: ${m.latestSlotData?.q1_feeling ?? 'N/A'} (1=relaxed, 5=overwhelmed)
-- Q2 Focus Score: ${m.latestSlotData?.q2_focus ?? 'N/A'} (1=easy, 5=difficult)
-- Q3 Body Comfort Score: ${m.latestSlotData?.q3_body ?? 'N/A'} (1=relaxed, 5=tense)
-- Q4 Mental Load Score: ${m.latestSlotData?.q4_thoughts ?? 'N/A'} (1=clear, 5=overwhelmed)
+- Stress Indicator: ${m.todayStress ? `${m.todayStress}/5.0 (${m.todayStressIndicator ?? 'Calculated'})` : 'not logged'} (non-diagnostic)
+- Mood Tone: ${m.todayMood ?? 'balanced'}
+- Energy Level: ${m.todayEnergy ?? 'Moderate'}
+- Sleep: ${m.todaySleep ? `${m.todaySleep}h` : 'not logged'}
+- Support Focus: ${m.todaySupport ?? 'general wellness'}
 - Cycle Phase: ${m.cycleStatus}
+- Skin / Acne Avg: ${m.acneAvg.toFixed(1)}/10
 
-RULES:
+SMART PERSONALIZATION RULES:
+- If energy is Low or sleep was poor: recommend a gentler, restorative plan (e.g. 5-min breathing, light stretch, warm hydration).
+- If hydration is needed: prioritize water intake.
+- If stress signals are elevated: include a calming nervous system reset task.
 - Only generate tasks for the '${slot}' slot — DO NOT mix slots.
-- Each task must include a 1-sentence 'rationale' tied to the user's actual data above.
-- NEVER recommend medicines, supplements, or diagnose anything.
-- PCOS mode: prioritize stress relief, cycle awareness, gentle exercise, low-GI nutrition.
-- PREGNANCY mode: gentle tasks only — hydration, rest, gentle movement, mother wellness.
-- estimatedTime must be realistic (e.g., "3 mins", "10 mins", "15 mins").
+- Provide a brief 1-sentence 'rationale' explaining WHY this task was assigned based on the user's check-in.
+- NEVER recommend medicines, medical drugs, or diagnose diseases.
+- PCOS mode: prioritize stress reduction, metabolic rhythm, gentle mobility.
+- PREGNANCY mode: gentle maternal wellness, hydration, posture rest.
+- Include realistic 'estimatedTime' (e.g. "3 mins", "5 mins", "10 mins").
 
 Return ONLY raw JSON — no markdown, no code blocks:
 {
@@ -366,7 +378,7 @@ Return ONLY raw JSON — no markdown, no code blocks:
       "category": "hydration|sleep|stress|mood|cycle|exercise|nutrition|mindfulness|pregnancy", 
       "priority": "high|recommended|optional",
       "estimatedTime": "5 mins",
-      "rationale": "Wellness rationale based on user data..."
+      "rationale": "Wellness rationale based on user assessment..."
     }
   ]
 }`;
@@ -374,186 +386,159 @@ Return ONLY raw JSON — no markdown, no code blocks:
 
   private ruleTasksForSlot(m: any, mode: string, slot: string): any[] {
     const tasks: any[] = [];
-    const skipWater = m.todayWater !== null && Number(m.todayWater) >= 2;
-    const skipExercise = m.todayExercise !== null && Number(m.todayExercise) >= 30;
-    const isElevatedStress = (m.todayStress !== null && m.todayStress > 3.0) || (m.latestSlotData?.q1_feeling >= 4);
+    const isElevatedStress = (m.todayStress !== null && m.todayStress > 3.0) || m.todayEnergy === 'Low';
 
     if (slot === 'morning') {
       tasks.push({ 
-        text: 'Drink a full glass of water (500ml) to hydrate.', 
+        text: 'Drink a full glass of water (500ml) upon waking.', 
         category: 'hydration', 
         priority: 'high',
         estimatedTime: '2 mins',
-        rationale: 'Rehydrating after sleep restores your cognitive function and metabolic momentum.'
+        rationale: 'Rehydrating upon waking jumpstarts your metabolism and supports mental focus.'
       });
       if (isElevatedStress) {
         tasks.push({ 
-          text: 'Practice 4-7-8 calming breath technique for 3 minutes.', 
+          text: 'Practice 4-7-8 calming breathing technique for 3 minutes.', 
           category: 'stress', 
           priority: 'high',
           estimatedTime: '3 mins',
-          rationale: 'Your check-in responses suggest feeling overwhelmed today. Controlled breathing calms the nervous system.'
-        });
-      } else if (m.sleepAvg < 6.5) {
-        tasks.push({ 
-          text: `Plan an earlier bedtime tonight to recover from your recent ${m.sleepAvg.toFixed(1)}h sleep average.`, 
-          category: 'sleep', 
-          priority: 'high',
-          estimatedTime: '5 mins',
-          rationale: `Your recent sleep average is ${m.sleepAvg.toFixed(1)}h. Consistent sleep cycles stabilize cortisol levels.`
+          rationale: 'Your check-in responses suggest a calmer pace today. Controlled breathing resets the nervous system.'
         });
       } else {
         tasks.push({ 
-          text: 'Start with 5 deep breath cycles to center your mind.', 
+          text: 'Start with 5 deep breath cycles to center your morning.', 
           category: 'mindfulness', 
           priority: 'recommended',
           estimatedTime: '3 mins',
-          rationale: 'Deep diaphragmatic breathing activates parasympathetic rest-and-digest pathways.'
+          rationale: 'Deep breathing oxygenates your brain and gently activates your morning energy.'
         });
       }
       if (mode === 'pregnancy') {
         tasks.push({ 
-          text: 'Enjoy a gentle, nutrient-dense breakfast for maternal wellness.', 
+          text: 'Enjoy a nourishing, nutrient-dense maternal breakfast.', 
           category: 'pregnancy', 
           priority: 'high',
           estimatedTime: '15 mins',
-          rationale: 'Balanced breakfast blood sugar helps reduce early pregnancy nausea and stabilizes energy.'
+          rationale: 'Balanced blood sugar in the morning stabilizes energy and minimizes pregnancy fatigue.'
         });
       } else {
         tasks.push({ 
-          text: 'Do a gentle 5-minute morning stretch routine.', 
+          text: 'Do a gentle 5-minute morning mobility stretch.', 
           category: 'exercise', 
           priority: 'recommended',
           estimatedTime: '5 mins',
-          rationale: 'Morning mobility lubricates joints and improves spinal posture for the workday.'
+          rationale: 'Gentle morning stretching lubricates joints and promotes full-body circulation.'
         });
       }
     } else if (slot === 'afternoon') {
-      if (!skipWater) {
-        tasks.push({ 
-          text: 'Drink 2 full glasses of water with your lunch.', 
-          category: 'hydration', 
-          priority: 'high',
-          estimatedTime: '2 mins',
-          rationale: `You logged ${m.todayWater ?? '0'}L of water so far. Hitting 2L maintains afternoon focus.`
-        });
-      } else {
-        tasks.push({ 
-          text: 'Take a 5-minute screen break to rest your eyes.', 
-          category: 'stress', 
-          priority: 'recommended',
-          estimatedTime: '5 mins',
-          rationale: 'Visual distance breaks relieve ocular strain and mitigate mental fatigue.'
-        });
-      }
+      tasks.push({ 
+        text: 'Drink 2 full glasses of water to maintain midday hydration.', 
+        category: 'hydration', 
+        priority: 'high',
+        estimatedTime: '2 mins',
+        rationale: 'Sustained hydration prevents the common afternoon energy slump.'
+      });
       if (isElevatedStress) {
         tasks.push({ 
-          text: 'Practice 3 minutes of box breathing to ease stress.', 
+          text: 'Take a 5-minute quiet pause and step away from screens.', 
           category: 'stress', 
           priority: 'high',
-          estimatedTime: '3 mins',
-          rationale: 'Your responses suggest you may be feeling more stressed today. Box breathing rapidly lowers tension.'
+          estimatedTime: '5 mins',
+          rationale: 'A screen break reduces ocular strain and resets mental fatigue.'
         });
       } else {
         tasks.push({ 
-          text: 'Eat a fresh piece of fruit or healthy snack.', 
-          category: 'nutrition', 
-          priority: 'recommended',
-          estimatedTime: '5 mins',
-          rationale: 'Complex carbohydrates prevent the mid-afternoon energy slump.'
-        });
-      }
-      if (!skipExercise) {
-        tasks.push({ 
-          text: mode === 'pregnancy' ? 'Take a gentle 10-minute walk for circulation.' : 'Take a 15-minute brisk walk to recharge.', 
+          text: 'Stand up and do a quick 3-minute posture and shoulder roll.', 
           category: 'exercise', 
           priority: 'recommended',
-          estimatedTime: mode === 'pregnancy' ? '10 mins' : '15 mins',
-          rationale: 'Light physical movement boosts peripheral circulation and endorphin release.'
-        });
-      }
-    } else if (slot === 'evening') {
-      if (m.acneAvg > 4) {
-        tasks.push({ 
-          text: 'Complete a gentle double-cleansing skin routine.', 
-          category: 'skin', 
-          priority: 'high',
-          estimatedTime: '10 mins',
-          rationale: 'Cleansing removes environmental pollutants and excess sebum accumulated during the day.'
-        });
-      }
-      if (mode === 'pcos' && m.cycleStatus === 'menstrual') {
-        tasks.push({ 
-          text: 'Sip warm chamomile or peppermint tea for pelvic relaxation.', 
-          category: 'cycle', 
-          priority: 'high',
-          estimatedTime: '10 mins',
-          rationale: 'Warm herbal tea relaxes smooth abdominal muscle tissues during your cycle.'
-        });
-      } else {
-        tasks.push({ 
-          text: 'Reflect on 1 positive highlight from your day.', 
-          category: 'mindfulness', 
-          priority: 'recommended',
-          estimatedTime: '5 mins',
-          rationale: 'Gratitude exercises promote dopamine release prior to sleep.'
+          estimatedTime: '3 mins',
+          rationale: 'Releasing neck and shoulder tension improves posture and focus.'
         });
       }
       tasks.push({ 
-        text: 'Dim screens and wind down 30 minutes before sleep.', 
+        text: 'Enjoy a healthy, protein or fiber-rich midday snack.', 
+        category: 'nutrition', 
+        priority: 'recommended',
+        estimatedTime: '5 mins',
+        rationale: 'Nourishing fuel stabilizes afternoon blood sugar.'
+      });
+    } else {
+      // Evening
+      tasks.push({ 
+        text: 'Dim bright screens and switch to warmer evening lighting.', 
         category: 'sleep', 
         priority: 'high',
-        estimatedTime: '30 mins',
-        rationale: 'Avoiding blue light exposure enables natural melatonin synthesis for deep sleep.'
+        estimatedTime: '2 mins',
+        rationale: 'Lower light levels stimulate natural melatonin production for deeper sleep.'
+      });
+      if (isElevatedStress) {
+        tasks.push({ 
+          text: 'Write down 3 lingering thoughts on paper to release them before bed.', 
+          category: 'stress', 
+          priority: 'high',
+          estimatedTime: '5 mins',
+          rationale: 'Externalizing active thoughts prevents nighttime rumination.'
+        });
+      } else {
+        tasks.push({ 
+          text: 'Reflect on one positive moment from today with gratitude.', 
+          category: 'mindfulness', 
+          priority: 'recommended',
+          estimatedTime: '3 mins',
+          rationale: 'Positive evening reflection cultivates emotional peace before sleep.'
+        });
+      }
+      tasks.push({ 
+        text: 'Do 5 minutes of gentle lying-down restorative stretches.', 
+        category: 'exercise', 
+        priority: 'optional',
+        estimatedTime: '5 mins',
+        rationale: 'Restorative stretching relaxes spinal muscles and prepares the body for deep rest.'
       });
     }
 
     return tasks;
   }
 
-
   // ── STREAK ─────────────────────────────────────────────────────────────────
 
-  async getOrCreateStreak(userId: string): Promise<PremiumStreak> {
-    const { data } = await this.supabase.from('wellness_streaks').select('*').eq('user_id', userId).maybeSingle();
-    if (data) {
+  private async getOrCreateStreak(userId: string): Promise<PremiumStreak> {
+    const { data: existing } = await this.supabase
+      .from('user_streaks')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (existing) {
       return {
-        userId, currentStreak: data.current_streak, longestStreak: data.longest_streak,
-        lastActiveDate: data.last_active_date, weeklyConsistency: data.weekly_consistency || 0,
-        createdAt: data.created_at, updatedAt: data.updated_at,
+        userId,
+        currentStreak: existing.current_streak || 1,
+        longestStreak: existing.longest_streak || 1,
+        lastActiveDate: existing.last_checkin_date || new Date().toISOString().split('T')[0],
+        weeklyConsistency: 100,
+        createdAt: existing.created_at || new Date().toISOString(),
+        updatedAt: existing.updated_at || new Date().toISOString(),
       };
     }
-    const { data: ns } = await this.supabase.from('wellness_streaks')
-      .insert({ user_id: userId, current_streak: 0, longest_streak: 0, weekly_consistency: 0, last_active_date: null })
-      .select('*').single();
-    return {
-      userId, currentStreak: 0, longestStreak: 0,
-      lastActiveDate: null, weeklyConsistency: 0,
-      createdAt: ns?.created_at || new Date().toISOString(),
-      updatedAt: ns?.updated_at || new Date().toISOString(),
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const newStreak: PremiumStreak = {
+      userId,
+      currentStreak: 1,
+      longestStreak: 1,
+      lastActiveDate: todayStr,
+      weeklyConsistency: 100,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
-  }
 
-  private async updateStreak(userId: string, todayStr: string) {
-    const { data: s } = await this.supabase.from('wellness_streaks').select('*').eq('user_id', userId).maybeSingle();
-    if (!s) return;
-    if (s.last_active_date === todayStr) return;
+    await this.supabase.from('user_streaks').upsert({
+      user_id: userId,
+      current_streak: 1,
+      longest_streak: 1,
+      last_checkin_date: todayStr,
+    }, { onConflict: 'user_id' });
 
-    const yest = format(addDays(new Date(), -1), 'yyyy-MM-dd');
-    const next = (s.last_active_date === yest || s.current_streak === 0) ? s.current_streak + 1 : 1;
-    const longest = Math.max(s.longest_streak, next);
-
-    // Weekly consistency: count days in last 7 with completed plans
-    const { data: recentPlans } = await this.supabase
-      .from('wellness_plans').select('title, content').eq('user_id', userId)
-      .gte('title', format(addDays(new Date(), -6), 'yyyy-MM-dd'));
-    const completedDays = (recentPlans || []).filter(p => {
-      try { const tasks = JSON.parse(p.content); return tasks.every((t: any) => t.completed); }
-      catch { return false; }
-    }).length;
-    const weekly = Math.round((completedDays / 7) * 100);
-
-    await this.supabase.from('wellness_streaks')
-      .upsert({ user_id: userId, current_streak: next, longest_streak: longest, last_active_date: todayStr, weekly_consistency: weekly }, { onConflict: 'user_id' });
+    return newStreak;
   }
 }
