@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -8,108 +8,23 @@ import { CheckCircle2, Loader2, Sparkles, ArrowLeft, ArrowRight, HeartPulse, Inf
 import { format } from 'date-fns';
 import { useHerSync } from '@/context/HerSyncContext';
 import { apiFetch } from '@/utils/api-client';
+import {
+  getCheckinQuestions,
+  calculateStressScore,
+  getStressInterpretation,
+  type CheckinSlot,
+  type WellnessMode,
+} from '@/lib/questions/checkin-questions';
+import { CheckinRewardBar } from '@/components/checkin/CheckinRewardBar';
 
-type SlotType = 'morning' | 'afternoon' | 'evening';
-
-interface StressQuestion {
-  id: 'q1_feeling' | 'q2_focus' | 'q3_body' | 'q4_thoughts';
-  title: string;
-  question: string;
-  options: { score: number; label: string; emoji: string }[];
-}
-
-const STRESS_QUESTIONS: StressQuestion[] = [
-  {
-    id: 'q1_feeling',
-    title: 'Feeling',
-    question: 'How relaxed or overwhelmed do you feel right now?',
-    options: [
-      { score: 1, label: 'Very relaxed', emoji: '😌' },
-      { score: 2, label: 'Mostly relaxed', emoji: '🙂' },
-      { score: 3, label: 'Neutral', emoji: '😐' },
-      { score: 4, label: 'Somewhat overwhelmed', emoji: '😰' },
-      { score: 5, label: 'Very overwhelmed', emoji: '😫' },
-    ],
-  },
-  {
-    id: 'q2_focus',
-    title: 'Focus',
-    question: 'How easy is it for you to focus today?',
-    options: [
-      { score: 1, label: 'Very easy', emoji: '🎯' },
-      { score: 2, label: 'Easy', emoji: '✨' },
-      { score: 3, label: 'Okay', emoji: '👌' },
-      { score: 4, label: 'Difficult', emoji: '🧠' },
-      { score: 5, label: 'Very difficult', emoji: '🌀' },
-    ],
-  },
-  {
-    id: 'q3_body',
-    title: 'Body',
-    question: 'How has your body been feeling today?',
-    options: [
-      { score: 1, label: 'Very relaxed', emoji: '🧘‍♀️' },
-      { score: 2, label: 'Mostly relaxed', emoji: '😊' },
-      { score: 3, label: 'Normal', emoji: '👍' },
-      { score: 4, label: 'Tense or restless', emoji: '😬' },
-      { score: 5, label: 'Very tense or restless', emoji: '😣' },
-    ],
-  },
-  {
-    id: 'q4_thoughts',
-    title: 'Thoughts',
-    question: 'How much have your thoughts been bothering you today?',
-    options: [
-      { score: 1, label: 'Not at all', emoji: '🍃' },
-      { score: 2, label: 'A little', emoji: '🌤️' },
-      { score: 3, label: 'Sometimes', emoji: '💭' },
-      { score: 4, label: 'Quite a lot', emoji: '🌪️' },
-      { score: 5, label: 'A lot', emoji: '⛈️' },
-    ],
-  },
-];
-
-function getCurrentSlot(): SlotType {
+function getCurrentSlot(): CheckinSlot {
   const h = new Date().getHours();
   if (h >= 5 && h < 12) return 'morning';
   if (h >= 12 && h < 18) return 'afternoon';
   return 'evening';
 }
 
-function getStressInterpretation(score: number | null): { level: string; label: string; badgeColor: string; bgStyle: string } {
-  if (score === null) return { level: 'Pending', label: '', badgeColor: 'text-muted-foreground', bgStyle: 'bg-secondary/40' };
-  if (score <= 2.0) {
-    return {
-      level: 'Low stress indicator',
-      label: 'Your responses suggest you are feeling relaxed and balanced right now.',
-      badgeColor: 'text-emerald-500 border-emerald-500/30 bg-emerald-500/10',
-      bgStyle: 'from-emerald-500/10 to-teal-500/5',
-    };
-  } else if (score <= 3.0) {
-    return {
-      level: 'Mild stress indicator',
-      label: 'Your responses suggest mild stress levels today.',
-      badgeColor: 'text-blue-500 border-blue-500/30 bg-blue-500/10',
-      bgStyle: 'from-blue-500/10 to-cyan-500/5',
-    };
-  } else if (score <= 4.0) {
-    return {
-      level: 'Moderate stress indicator',
-      label: 'Your responses suggest you may be feeling more stressed today.',
-      badgeColor: 'text-amber-500 border-amber-500/30 bg-amber-500/10',
-      bgStyle: 'from-amber-500/10 to-orange-500/5',
-    };
-  } else {
-    return {
-      level: 'Higher stress indicator',
-      label: 'Your responses suggest higher stress levels right now.',
-      badgeColor: 'text-rose-500 border-rose-500/30 bg-rose-500/10',
-      bgStyle: 'from-rose-500/10 to-pink-500/5',
-    };
-  }
-}
-
-function useNextSlotCountdown(activeSlot: SlotType, isCompleted: boolean) {
+function useNextSlotCountdown(activeSlot: CheckinSlot, isCompleted: boolean) {
   const [countdown, setCountdown] = useState('');
   const [nextSlotName, setNextSlotName] = useState('');
 
@@ -166,33 +81,60 @@ function useNextSlotCountdown(activeSlot: SlotType, isCompleted: boolean) {
 
 export default function CheckInPage() {
   const router = useRouter();
-  const { wellnessMode, refreshAll, updateCoinBalanceLocally } = useHerSync();
+  const { wellnessMode, refreshAll } = useHerSync();
   const activeSlot = getCurrentSlot();
+  const mode = wellnessMode as WellnessMode;
+
+  // Dynamic question set from the engine
+  const questions = getCheckinQuestions(activeSlot, mode);
+  const stressQuestions = questions.filter(q => q.isStressDimension);
+  const totalQuestions = questions.length;
 
   const [loading, setLoading] = useState(true);
-  const [completedSlots, setCompletedSlots] = useState<Record<SlotType, { completed: boolean; completedAt: string | null; data: any }>>({
-    morning:   { completed: false, completedAt: null, data: null },
-    afternoon: { completed: false, completedAt: null, data: null },
-    evening:   { completed: false, completedAt: null, data: null },
-  });
+  const [completedSlots, setCompletedSlots] = useState<Record<CheckinSlot, { completed: boolean; completedAt: string | null; data: any }>>(
+    {
+      morning:   { completed: false, completedAt: null, data: null },
+      afternoon: { completed: false, completedAt: null, data: null },
+      evening:   { completed: false, completedAt: null, data: null },
+    }
+  );
+  // Claim status — sourced from server (authoritative)
+  const [claimedSlots, setClaimedSlots] = useState<Partial<Record<CheckinSlot, boolean>>>({});
+  const [bonusClaimed, setBonusClaimed] = useState(false);
 
   const [currentStep, setCurrentStep] = useState<number>(0);
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const isSavingRef = useRef(false);
 
   const isCurrentSlotCompleted = completedSlots[activeSlot]?.completed;
   const { countdown, nextSlotName } = useNextSlotCountdown(activeSlot, isCurrentSlotCompleted);
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await apiFetch('/api/v1/health/checkin-status');
-      if (res.ok) {
-        const { data } = await res.json();
+      // Fetch both checkin status and claim status in parallel
+      const [statusRes, claimStatusRes] = await Promise.all([
+        apiFetch('/api/health/checkin-status'),
+        apiFetch('/api/health/checkin/claim-status'),
+      ]);
+
+      if (statusRes.ok) {
+        const { data } = await statusRes.json();
         setCompletedSlots(data.slots);
         if (data.slots[activeSlot]?.data) {
           setAnswers(data.slots[activeSlot].data);
         }
+      }
+
+      if (claimStatusRes.ok) {
+        const { data } = await claimStatusRes.json();
+        setClaimedSlots({
+          morning:   data.claimed.morning,
+          afternoon: data.claimed.afternoon,
+          evening:   data.claimed.evening,
+        });
+        setBonusClaimed(data.claimed.bonus);
       }
     } catch (err) {
       console.error('Error fetching checkin status', err);
@@ -205,57 +147,75 @@ export default function CheckInPage() {
 
   const handleSelectOption = (questionId: string, score: number) => {
     setAnswers(prev => ({ ...prev, [questionId]: score }));
-    if (currentStep < 3) {
+    // Auto-advance if not on the last question
+    if (currentStep < totalQuestions - 1) {
       setTimeout(() => {
-        setCurrentStep(prev => Math.min(3, prev + 1));
+        setCurrentStep(prev => Math.min(totalQuestions - 1, prev + 1));
       }, 180);
     }
   };
 
-  const q1 = answers.q1_feeling ? Number(answers.q1_feeling) : 0;
-  const q2 = answers.q2_focus ? Number(answers.q2_focus) : 0;
-  const q3 = answers.q3_body ? Number(answers.q3_body) : 0;
-  const q4 = answers.q4_thoughts ? Number(answers.q4_thoughts) : 0;
+  // Compute stress score from 4 stress-dimension answers
+  const stressAnswers: Record<string, number> = {
+    q1_feeling: answers.q1_feeling ? Number(answers.q1_feeling) : 0,
+    q2_focus:   answers.q2_focus   ? Number(answers.q2_focus)   : 0,
+    q3_body:    answers.q3_body    ? Number(answers.q3_body)    : 0,
+    q4_thoughts: answers.q4_thoughts ? Number(answers.q4_thoughts) : 0,
+  };
 
-  const allQuestionsAnswered = q1 > 0 && q2 > 0 && q3 > 0 && q4 > 0;
-  const averageScore = allQuestionsAnswered ? Number(((q1 + q2 + q3 + q4) / 4).toFixed(2)) : null;
+  const allStressAnswered = stressQuestions.every(q => stressAnswers[q.id] > 0);
+  const averageScore = calculateStressScore(allStressAnswered ? stressAnswers : {});
   const interpretation = getStressInterpretation(averageScore);
 
+  // All stress questions must be answered before submitting (support question is optional)
+  const canSubmit = allStressAnswered;
+
   const submitCheckin = async () => {
-    if (!allQuestionsAnswered) {
-      toast.error('Please answer all 4 questions.');
+    if (!canSubmit) {
+      toast.error('Please answer the 4 wellness questions to continue.');
       return;
     }
-
-    if (saving) return; // Prevent duplicate submissions
-
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
     setSaving(true);
+
     try {
+      // Build payload — include question definitions so historical data stays meaningful
       const payload = {
         slot: activeSlot,
         data: {
-          q1_feeling: q1,
-          q2_focus: q2,
-          q3_body: q3,
-          q4_thoughts: q4,
+          // Stress dimensions
+          q1_feeling:   stressAnswers.q1_feeling,
+          q2_focus:     stressAnswers.q2_focus,
+          q3_body:      stressAnswers.q3_body,
+          q4_thoughts:  stressAnswers.q4_thoughts,
           averageScore,
           stressIndicator: interpretation.level,
-          stressLabel: interpretation.label,
-          sleep: answers.sleep || (activeSlot === 'morning' ? 7.5 : null),
-          water: answers.water || null,
-          notes: answers.notes || '',
+          stressLabel:     interpretation.label,
+          // Optional support choice
+          support: answers.support || null,
+          // Sleep (morning only)
+          sleep: answers.sleep || (activeSlot === 'morning' ? null : null),
+          // Metadata: store question text so history is understandable
+          questionMeta: questions.map(q => ({
+            id: q.id,
+            slot: activeSlot,
+            mode,
+            question: q.question,
+            selectedScore: answers[q.id] ?? null,
+          })),
         },
       };
 
-      const res = await apiFetch('/api/v1/health/checkin', {
+      const res = await apiFetch('/api/health/checkin', {
         method: 'POST',
         body: JSON.stringify(payload),
       });
 
       const result = await res.json();
+
       if (!res.ok) {
         toast.error('Failed to save check-in', { description: result.error || result.message || 'Unknown error' });
-        setSaving(false);
         return;
       }
 
@@ -266,22 +226,23 @@ export default function CheckInPage() {
       }));
       setIsEditing(false);
 
-      if (result.data?.coinsEarned && result.data.coinsEarned > 0) {
-        updateCoinBalanceLocally(result.data.newBalance, result.data.coinsEarned);
-        toast.success(`${activeSlot.charAt(0).toUpperCase() + activeSlot.slice(1)} check-in saved! Earned +${result.data.coinsEarned} 🪙`);
-      } else {
-        toast.success(`${activeSlot.charAt(0).toUpperCase() + activeSlot.slice(1)} check-in saved!`);
-      }
+      // Show simple save success — coins are now claimed via the Claim button
+      toast.success(`${activeSlot.charAt(0).toUpperCase() + activeSlot.slice(1)} check-in saved! Tap "Claim" to collect your reward. 🌸`);
 
-      // Trigger AI wellness plan generation in background
-      apiFetch('/api/wellness-plan', { method: 'POST' }).catch(console.error);
+      // Trigger AI wellness plan generation in background — non-blocking.
+      // Check-in is already saved. If AI fails, the check-in persists regardless.
+      apiFetch('/api/wellness-plan', { method: 'POST' }).catch(() => {
+        console.warn('Wellness plan generation failed. Check-in remains saved.');
+      });
 
-      // Instantly sync dashboard and global state
+      // Sync dashboard and global state
       await refreshAll();
+
     } catch (err: any) {
       toast.error('Network Error', { description: err.message || 'Could not connect to server' });
     } finally {
       setSaving(false);
+      isSavingRef.current = false;
     }
   };
 
@@ -307,7 +268,7 @@ export default function CheckInPage() {
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="flex flex-col items-center justify-center text-center p-8 md:p-10 bg-card/80 backdrop-blur-md border border-border/40 rounded-3xl shadow-xl shadow-emerald-500/5"
+          className="flex flex-col items-center justify-start text-center p-6 md:p-8 bg-card/80 backdrop-blur-md border border-border/40 rounded-3xl shadow-xl shadow-emerald-500/5"
         >
           <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center mb-5 relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 animate-pulse" />
@@ -324,7 +285,7 @@ export default function CheckInPage() {
           )}
 
           {savedScore !== null && (
-            <div className={`w-full max-w-md p-4 rounded-2xl border mb-6 bg-gradient-to-r ${savedInterpretation.bgStyle}`}>
+            <div className={`w-full max-w-md p-4 rounded-2xl border mb-5 bg-gradient-to-r ${savedInterpretation.bgStyle}`}>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                   <HeartPulse className="w-3.5 h-3.5 text-pink-500" /> Wellness Indicator
@@ -339,7 +300,24 @@ export default function CheckInPage() {
             </div>
           )}
 
-          <p className="text-muted-foreground mb-6 text-sm max-w-md">
+          {/* ✨ Reward Claim Bar — appears only after successful save */}
+          <div className="w-full max-w-md mb-5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 text-left">
+              🪙 Collect Your Rewards
+            </p>
+            <CheckinRewardBar
+              completedSlots={{
+                morning:   completedSlots.morning.completed,
+                afternoon: completedSlots.afternoon.completed,
+                evening:   completedSlots.evening.completed,
+              }}
+              initialClaimedSlots={claimedSlots}
+              initialBonusClaimed={bonusClaimed}
+              activeSlot={activeSlot}
+            />
+          </div>
+
+          <p className="text-muted-foreground mb-5 text-sm max-w-md">
             Your check-in responses have been saved. Your Svanexa AI Wellness Plan has been updated for this slot.
           </p>
 
@@ -348,7 +326,7 @@ export default function CheckInPage() {
               {nextSlotName} Check-in unlocks in
             </span>
             <div className="text-3xl font-black tabular-nums tracking-tight text-foreground/90 font-mono">
-              {countdown || "..."}
+              {countdown || '...'}
             </div>
           </div>
 
@@ -371,7 +349,11 @@ export default function CheckInPage() {
     );
   }
 
-  const activeQuestion = STRESS_QUESTIONS[currentStep];
+  const activeQuestion = questions[currentStep];
+  const answeredCount = questions.filter(q => answers[q.id] !== undefined).length;
+  const progressPct = Math.round(((currentStep + 1) / totalQuestions) * 100);
+
+  const slotLabel = activeSlot === 'morning' ? 'Morning 🌅' : activeSlot === 'afternoon' ? 'Afternoon ☀️' : 'Evening 🌙';
 
   return (
     <div className="max-w-2xl mx-auto w-full pt-4 md:pt-8 px-4 pb-36">
@@ -379,11 +361,11 @@ export default function CheckInPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight mb-1 capitalize bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-violet-500">
-            {activeSlot} Check-in
+            {slotLabel} Check-in
           </h1>
           <p className="text-xs md:text-sm text-muted-foreground flex items-center gap-1.5 font-medium">
             <Sparkles className="w-4 h-4 text-violet-400" />
-            Taking a quick moment for your daily wellness
+            A quick moment for your daily wellness
           </p>
         </div>
       </div>
@@ -392,37 +374,38 @@ export default function CheckInPage() {
       <div className="mb-6 bg-card/60 backdrop-blur-md border border-border/50 rounded-2xl p-4 shadow-sm">
         <div className="flex items-center justify-between text-xs font-bold mb-2">
           <span className="text-foreground/90">
-            Question {currentStep + 1} of 4
+            Question {currentStep + 1} of {totalQuestions}
           </span>
-          <span className="text-pink-500">
-            {Math.round(((currentStep + 1) / 4) * 100)}% Complete
-          </span>
+          <span className="text-pink-500">{progressPct}% Complete</span>
         </div>
-        
+
         <div className="w-full h-2.5 bg-secondary rounded-full overflow-hidden p-0.5 border border-border/30">
           <motion.div
             className="h-full rounded-full bg-gradient-to-r from-pink-500 via-violet-500 to-indigo-500"
             initial={{ width: 0 }}
-            animate={{ width: `${((currentStep + 1) / 4) * 100}%` }}
+            animate={{ width: `${progressPct}%` }}
             transition={{ duration: 0.3, ease: 'easeOut' }}
           />
         </div>
 
         {/* Step navigation dots */}
-        <div className="flex items-center justify-center gap-3 mt-3">
-          {STRESS_QUESTIONS.map((q, idx) => {
+        <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
+          {questions.map((q, idx) => {
             const isAnswered = answers[q.id] !== undefined;
             const isCurrent = idx === currentStep;
+            const isStress = q.isStressDimension;
             return (
               <button
                 key={q.id}
                 onClick={() => setCurrentStep(idx)}
-                aria-label={`Jump to Question ${idx + 1}`}
+                aria-label={`Jump to Question ${idx + 1}: ${q.title}`}
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all min-h-[32px] ${
                   isCurrent
                     ? 'bg-pink-500 text-white scale-110 shadow-md shadow-pink-500/20'
                     : isAnswered
-                    ? 'bg-violet-500/20 text-violet-400 border border-violet-500/40'
+                    ? isStress
+                      ? 'bg-violet-500/20 text-violet-400 border border-violet-500/40'
+                      : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
                     : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
                 }`}
               >
@@ -436,7 +419,7 @@ export default function CheckInPage() {
       {/* Question Card */}
       <AnimatePresence mode="wait">
         <motion.div
-          key={activeQuestion.id}
+          key={activeQuestion.id + currentStep}
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -20 }}
@@ -444,9 +427,18 @@ export default function CheckInPage() {
           className="bg-card/70 backdrop-blur-md border border-border/50 rounded-3xl p-6 shadow-md mb-6"
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-violet-400 bg-violet-500/10 px-3 py-1 rounded-full">
+            <span className={`text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full ${
+              activeQuestion.isStressDimension
+                ? 'text-violet-400 bg-violet-500/10'
+                : 'text-emerald-400 bg-emerald-500/10'
+            }`}>
               {activeQuestion.title}
             </span>
+            {!activeQuestion.isStressDimension && (
+              <span className="text-[10px] font-semibold text-muted-foreground bg-secondary/60 px-2 py-0.5 rounded-full">
+                Optional
+              </span>
+            )}
           </div>
 
           <h2 className="text-xl md:text-2xl font-bold mb-6 text-foreground/90">
@@ -458,7 +450,7 @@ export default function CheckInPage() {
               const isSelected = answers[activeQuestion.id] === opt.score;
               return (
                 <button
-                  key={opt.score}
+                  key={`${opt.score}-${opt.label}`}
                   onClick={() => handleSelectOption(activeQuestion.id, opt.score)}
                   className={`flex items-center justify-between w-full px-5 py-4 rounded-2xl border-2 font-semibold transition-all duration-200 min-h-[56px] text-left ${
                     isSelected
@@ -480,8 +472,8 @@ export default function CheckInPage() {
         </motion.div>
       </AnimatePresence>
 
-      {/* Wellness Indicator Live Card (Shown when all 4 questions are answered) */}
-      {allQuestionsAnswered && (
+      {/* Live Stress Wellness Indicator (shown once all 4 stress questions answered) */}
+      {allStressAnswered && (
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
@@ -508,16 +500,16 @@ export default function CheckInPage() {
         </motion.div>
       )}
 
-      {/* Optional Vitals Selector for Morning Slot */}
+      {/* Sleep selector — Morning only */}
       {activeSlot === 'morning' && (
         <div className="bg-card/40 border border-border/40 rounded-3xl p-5 mb-6 space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Morning Sleep & Vitals (Optional)</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Sleep Last Night (Optional)</span>
           </div>
           <div>
-            <label className="text-xs font-semibold text-foreground/80 block mb-2">Hours of Sleep Last Night</label>
+            <label className="text-xs font-semibold text-foreground/80 block mb-2">Hours of Sleep</label>
             <div className="flex flex-wrap gap-2">
-              {[5, 6, 7, 7.5, 8, 9].map(val => (
+              {[4, 5, 6, 7, 7.5, 8, 9].map(val => (
                 <button
                   key={val}
                   type="button"
@@ -528,7 +520,7 @@ export default function CheckInPage() {
                       : 'border-border/50 bg-secondary/30 text-muted-foreground hover:bg-secondary'
                   }`}
                 >
-                  {val} hours
+                  {val} hrs
                 </button>
               ))}
             </div>
@@ -536,7 +528,7 @@ export default function CheckInPage() {
         </div>
       )}
 
-      {/* Wizard Navigation Bar */}
+      {/* Navigation */}
       <div className="flex items-center justify-between gap-3 mb-24">
         <button
           onClick={() => setCurrentStep(prev => Math.max(0, prev - 1))}
@@ -546,35 +538,35 @@ export default function CheckInPage() {
           <ArrowLeft className="w-4 h-4" /> Previous
         </button>
 
-        {currentStep < 3 ? (
+        {currentStep < totalQuestions - 1 ? (
           <button
-            onClick={() => setCurrentStep(prev => Math.min(3, prev + 1))}
+            onClick={() => setCurrentStep(prev => Math.min(totalQuestions - 1, prev + 1))}
             className="flex items-center gap-1.5 px-6 py-3 rounded-full bg-secondary hover:bg-secondary/80 text-foreground text-sm font-semibold transition-all min-h-[44px]"
           >
-            Next Question <ArrowRight className="w-4 h-4" />
+            Next <ArrowRight className="w-4 h-4" />
           </button>
         ) : (
           <span className="text-xs font-semibold text-emerald-500 flex items-center gap-1">
-            <CheckCircle2 className="w-4 h-4" /> All questions answered
+            <CheckCircle2 className="w-4 h-4" /> All done
           </span>
         )}
       </div>
 
-      {/* Sticky Save Action Bar */}
+      {/* Sticky Save Bar */}
       <div className="fixed bottom-[72px] md:bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-xl border-t border-border/50 flex justify-center z-50">
         <div className="w-full max-w-2xl flex items-center justify-between gap-4">
           <div className="text-xs font-medium text-muted-foreground hidden sm:block">
-            {allQuestionsAnswered ? (
+            {canSubmit ? (
               <span className="text-emerald-500 flex items-center gap-1 font-semibold">
                 <CheckCircle2 className="w-4 h-4" /> Ready to save
               </span>
             ) : (
-              `Complete all 4 questions (${[q1, q2, q3, q4].filter(x => x > 0).length}/4 answered)`
+              `Answer the 4 wellness questions (${Object.keys(answers).filter(k => ['q1_feeling','q2_focus','q3_body','q4_thoughts'].includes(k) && answers[k] > 0).length}/4 done)`
             )}
           </div>
           <button
             onClick={submitCheckin}
-            disabled={saving || !allQuestionsAnswered}
+            disabled={saving || !canSubmit}
             className="flex-1 sm:flex-none w-full sm:w-auto px-8 py-3.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold shadow-lg shadow-pink-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 text-base md:text-lg min-h-[50px]"
           >
             {saving ? (
@@ -594,4 +586,3 @@ export default function CheckInPage() {
     </div>
   );
 }
-

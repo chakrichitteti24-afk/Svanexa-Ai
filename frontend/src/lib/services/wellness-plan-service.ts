@@ -299,7 +299,7 @@ export class WellnessPlanService {
         });
 
         const timeout = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Groq timeout')), 1200)
+          setTimeout(() => reject(new Error('Groq timeout')), 8000)
         );
 
         const resp: any = await Promise.race([groqCall, timeout]);
@@ -327,38 +327,46 @@ export class WellnessPlanService {
   }
 
   private buildPromptForSlot(m: any, mode: string, slot: string): string {
-    return `You are Luna AI, a premium personal wellness coach. Generate 3-5 personalized daily tasks ONLY for the ${slot.toUpperCase()} time slot.
+    const slotContext = {
+      morning: 'The user is starting their day. Tasks should be energizing, grounding, and practical for the morning.',
+      afternoon: 'The user is in the middle of their day. Tasks should help maintain energy, reduce midday fatigue, and support focus.',
+      evening: 'The user is winding down. Tasks should promote relaxation, reflection, and preparation for restful sleep.',
+    }[slot] || '';
 
-USER DATA (USE ONLY THIS — NO FAKE VALUES):
+    return `You are a premium personal AI wellness coach. Generate exactly 3 to 5 personalized daily tasks for the ${slot.toUpperCase()} time slot.
+
+SLOT CONTEXT: ${slotContext}
+
+USER DATA (use only this — never invent values):
 - Mode: ${mode} (general | pcos | pregnancy)
-- Avg Sleep: ${m.sleepAvg.toFixed(1)}h (today: ${m.todaySleep ?? 'not logged'})
+- Avg Sleep: ${m.sleepAvg.toFixed(1)}h (today: ${m.todaySleep ?? 'not logged'}h)
 - Avg Water: ${m.waterAvg.toFixed(1)}L (today: ${m.todayWater ?? 'not logged'}L)
-- Avg Exercise: ${m.exerciseAvg.toFixed(0)}min (today: ${m.todayExercise ?? 'not logged'})
+- Avg Exercise: ${m.exerciseAvg.toFixed(0)}min (today: ${m.todayExercise ?? 'not logged'}min)
 - Stress Wellness Indicator: ${m.todayStress ? `${m.todayStress}/5.0 (${m.todayStressIndicator ?? 'Calculated'})` : 'not logged'}
-- Q1 Feeling Score: ${m.latestSlotData?.q1_feeling ?? 'N/A'} (1=relaxed, 5=overwhelmed)
+  IMPORTANT: never say "you have stress" — say "your responses suggest..."
+- Q1 Feeling/Mood Score: ${m.latestSlotData?.q1_feeling ?? 'N/A'} (1=relaxed, 5=overwhelmed)
 - Q2 Focus Score: ${m.latestSlotData?.q2_focus ?? 'N/A'} (1=easy, 5=difficult)
-- Q3 Body Score: ${m.latestSlotData?.q3_body ?? 'N/A'} (1=relaxed, 5=tense)
-- Q4 Thoughts Score: ${m.latestSlotData?.q4_thoughts ?? 'N/A'} (1=not at all, 5=a lot)
+- Q3 Body Comfort Score: ${m.latestSlotData?.q3_body ?? 'N/A'} (1=relaxed, 5=tense)
+- Q4 Mental Load Score: ${m.latestSlotData?.q4_thoughts ?? 'N/A'} (1=clear, 5=overwhelmed)
 - Cycle Phase: ${m.cycleStatus}
-- Skin Acne Avg: ${m.acneAvg.toFixed(1)}/10
 
-SMART RULES:
-- Only generate tasks for the '${slot}' slot.
-- Provide a brief 1-sentence 'rationale' explaining WHY Luna assigned each task based on their specific vitals (e.g. "Your responses suggest moderate stress, so...").
-- NEVER recommend medicines, medical drugs, or diagnose diseases.
-- PCOS: prioritize stress relief, cycle care, gentle exercise, low GI nutrition.
-- PREGNANCY: gentle tasks only, hydration, rest, baby & mother wellness.
-- Include 'estimatedTime' for each task (e.g. "5 mins", "10 mins", "15 mins").
+RULES:
+- Only generate tasks for the '${slot}' slot — DO NOT mix slots.
+- Each task must include a 1-sentence 'rationale' tied to the user's actual data above.
+- NEVER recommend medicines, supplements, or diagnose anything.
+- PCOS mode: prioritize stress relief, cycle awareness, gentle exercise, low-GI nutrition.
+- PREGNANCY mode: gentle tasks only — hydration, rest, gentle movement, mother wellness.
+- estimatedTime must be realistic (e.g., "3 mins", "10 mins", "15 mins").
 
-Return ONLY raw JSON (no markdown):
+Return ONLY raw JSON — no markdown, no code blocks:
 {
   "tasks": [
     { 
-      "text": "...", 
-      "category": "hydration|sleep|stress|mood|cycle|skin|exercise|nutrition|mindfulness|pregnancy", 
+      "text": "Task instruction here", 
+      "category": "hydration|sleep|stress|mood|cycle|exercise|nutrition|mindfulness|pregnancy", 
       "priority": "high|recommended|optional",
       "estimatedTime": "5 mins",
-      "rationale": "Luna AI Explanation based on user vitals..."
+      "rationale": "Wellness rationale based on user data..."
     }
   ]
 }`;

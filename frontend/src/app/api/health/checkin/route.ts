@@ -70,11 +70,11 @@ export async function POST(req: Request) {
         );
       }
     } catch (granularErr) {
-      console.warn("Skipping granular logs:", granularErr);
+      console.warn('Skipping granular logs:', granularErr);
     }
 
-    // We use the daily_checkins summary field to store slot completion state as JSON
-    const { data: existing, error: fetchErr } = await supabase
+    // ── Save slot data into daily_checkins.summary (JSON blob per slot) ────────
+    const { data: existing } = await supabase
       .from('daily_checkins')
       .select('id, summary')
       .eq('user_id', userId)
@@ -87,8 +87,13 @@ export async function POST(req: Request) {
     }
     if (typeof slotMeta !== 'object' || slotMeta === null) slotMeta = {};
 
-    // Store slot data inside slotMeta
-    slotMeta[slot] = { completed: true, completedAt, data };
+    // Store slot data — preserve the existing claimed flag (important: do not reset it on re-save)
+    slotMeta[slot] = {
+      completed: true,
+      completedAt,
+      data,
+      claimed: slotMeta[slot]?.claimed ?? false,
+    };
 
     const newSummary = JSON.stringify(slotMeta);
 
@@ -106,53 +111,8 @@ export async function POST(req: Request) {
     }
 
     // ── Determine completed slots ─────────────────────────────────────────────
-    const completedSlots = Object.keys({ ...slotMeta }).filter(
-      (k) => slotMeta[k]?.completed
-    );
+    const completedSlots = Object.keys(slotMeta).filter((k) => slotMeta[k]?.completed);
     const allSlotsComplete = VALID_SLOTS.every((s) => completedSlots.includes(s));
-
-    // ── Award Coins (Idempotent via database reference_id) ───────────────────
-    let coinsEarned = 0;
-    let newBalance = 0;
-
-    try {
-      const slotRef = `checkin:${today}:${slot}`;
-      const slotCapName = slot.charAt(0).toUpperCase() + slot.slice(1);
-      
-      const { data: slotCoinRes } = await supabase.rpc('award_user_coins', {
-        p_user_id: userId,
-        p_amount: 10,
-        p_type: 'checkin_slot',
-        p_ref_id: slotRef,
-        p_description: `${slotCapName} check-in completed`,
-      });
-
-      if (slotCoinRes?.awarded) {
-        coinsEarned += slotCoinRes.amount;
-        newBalance = slotCoinRes.new_balance;
-      } else {
-        newBalance = slotCoinRes?.new_balance ?? 0;
-      }
-
-      // Bonus coins if all 3 slots completed today
-      if (allSlotsComplete) {
-        const bonusRef = `checkin:${today}:all_slots_bonus`;
-        const { data: bonusCoinRes } = await supabase.rpc('award_user_coins', {
-          p_user_id: userId,
-          p_amount: 10,
-          p_type: 'checkin_all_bonus',
-          p_ref_id: bonusRef,
-          p_description: 'Completed all 3 daily check-ins!',
-        });
-
-        if (bonusCoinRes?.awarded) {
-          coinsEarned += bonusCoinRes.amount;
-          newBalance = bonusCoinRes.new_balance;
-        }
-      }
-    } catch (coinErr) {
-      console.warn('Skipping coin RPC award:', coinErr);
-    }
 
     return NextResponse.json({
       success: true,
@@ -161,9 +121,8 @@ export async function POST(req: Request) {
         completedAt,
         allSlotsComplete,
         completedSlots,
-        coinsEarned,
-        newBalance,
-        message: `${slot.charAt(0).toUpperCase() + slot.slice(1)} check-in saved successfully.${coinsEarned > 0 ? ` Earned +${coinsEarned} 🪙!` : ''}`,
+        // Coins are NOT awarded here. Use POST /api/health/checkin/claim to claim rewards.
+        message: `${slot.charAt(0).toUpperCase() + slot.slice(1)} check-in saved successfully.`,
       },
     }, { status: 201 });
 
