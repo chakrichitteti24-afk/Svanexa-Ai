@@ -213,6 +213,41 @@ export default function DashboardPage() {
     return <DashboardSkeleton />;
   }
 
+  const handleQuickLogWater = async (amountLiters: number) => {
+    try {
+      if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate?.([15, 30, 15]);
+      }
+      const newWater = Number(((l?.water ? Number(l.water) : 0) + amountLiters).toFixed(2));
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+
+      toast.success(`+${Math.round(amountLiters * 1000)}ml water logged 💧`);
+
+      await apiFetch('/api/health/checkin', {
+        method: 'POST',
+        body: JSON.stringify({
+          slot: activeSlot,
+          date: todayStr,
+          data: {
+            water: newWater,
+            note: `Quick hydration log (+${Math.round(amountLiters * 1000)}ml)`,
+          },
+        }),
+      });
+
+      await refreshAll();
+    } catch (err) {
+      console.warn('Quick water log error:', err);
+    }
+  };
+
+  const topPriorityTask = useMemo(() => {
+    const slotPending = wellnessTasks.filter(t => t.timeSlot === activeSlot && !t.completed && t.status !== 'completed');
+    if (slotPending.length > 0) return slotPending[0];
+    const anyPending = wellnessTasks.filter(t => !t.completed && t.status !== 'completed');
+    return anyPending.length > 0 ? anyPending[0] : null;
+  }, [wellnessTasks, activeSlot]);
+
   return (
     <div className={styles.dashboardContainer}>
       <AnimatePresence>
@@ -252,6 +287,7 @@ export default function DashboardPage() {
         )}
       </AnimatePresence>
 
+      {/* Header */}
       <motion.header
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -264,6 +300,7 @@ export default function DashboardPage() {
         </div>
         <Link
           href="/check-in"
+          prefetch={true}
           className="flex items-center justify-center gap-1.5 text-xs font-bold px-4 py-2.5 min-h-[44px] rounded-full transition-all active:scale-95 shadow-md shadow-pink-500/20 text-white"
           style={{ 
             background: allSlotsComplete 
@@ -278,6 +315,92 @@ export default function DashboardPage() {
           )}
         </Link>
       </motion.header>
+
+      {/* 🌟 APPLE HEALTH-INSPIRED DYNAMIC "NOW CARD" HERO 🌟 */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15, duration: 0.4 }}
+        className="w-full p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-violet-950/40 via-card to-pink-950/30 border border-violet-500/20 shadow-xl shadow-purple-500/5 relative overflow-hidden backdrop-blur-xl"
+      >
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] sm:text-xs font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-300">
+                {isMorning ? '🌅 Morning Focus' : isEvening ? '🌙 Evening Wind-Down' : '☀️ Midday Vitality'}
+              </span>
+              {!isCheckinCompleted && (
+                <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                  🪙 +10 Coins
+                </span>
+              )}
+            </div>
+
+            {!isCheckinCompleted ? (
+              <div>
+                <h2 className="text-base sm:text-lg font-bold text-foreground truncate">
+                  Your {activeSlotTitle} Check-In is Ready
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Log your vitals & sleep to personalize today&apos;s AI recommendations. (~2 min)
+                </p>
+              </div>
+            ) : topPriorityTask ? (
+              <div>
+                <h2 className="text-sm sm:text-base font-bold text-foreground flex items-center gap-1.5 truncate">
+                  <Sparkles className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+                  Focus: {topPriorityTask.text}
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  {completedTasks}/{totalTasks} daily goals completed • Keep your streak growing!
+                </p>
+              </div>
+            ) : (
+              <div>
+                <h2 className="text-base sm:text-lg font-bold text-emerald-400 flex items-center gap-1.5">
+                  <Check className="w-4 h-4" /> All Check-Ins & Goals Complete!
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Outstanding consistency today! Active streak: {currentStreak} days 🔥
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Action Area */}
+          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+            {!isCheckinCompleted ? (
+              <Link
+                href="/check-in"
+                prefetch={true}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 hover:opacity-95 text-white font-bold text-xs shadow-md shadow-pink-500/20 flex items-center justify-center gap-1.5 transition-all active:scale-95 min-h-[40px]"
+              >
+                <span>Start Check-In</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            ) : (
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                {topPriorityTask && (
+                  <button
+                    type="button"
+                    onClick={() => handleToggleTask(topPriorityTask.id)}
+                    className="flex-1 sm:flex-initial px-3.5 py-2 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 min-h-[38px]"
+                  >
+                    <Check className="w-3.5 h-3.5" /> Done
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleQuickLogWater(0.25)}
+                  className="flex-1 sm:flex-initial px-3.5 py-2 rounded-full bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 font-bold text-xs flex items-center justify-center gap-1 transition-all active:scale-95 min-h-[38px]"
+                >
+                  <Droplets className="w-3.5 h-3.5" /> +250ml
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </motion.div>
       
       <div className={styles.dashboardGrid}>
         <div className="flex flex-col gap-8">
