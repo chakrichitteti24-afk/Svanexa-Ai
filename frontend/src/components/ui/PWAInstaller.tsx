@@ -13,20 +13,21 @@ export function PWAInstaller() {
   const [isOffline, setIsOffline] = useState(false);
 
   useEffect(() => {
-    // 1. Register Service Worker only in production (avoids interfering with Next.js Fast Refresh & local dev reloads)
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      if (process.env.NODE_ENV === 'production' && window.location.hostname !== 'localhost') {
-        navigator.serviceWorker
-          .register('/sw.js')
-          .then(() => {})
-          .catch((err) => console.log('SW Registration error:', err));
-      } else {
-        // Unregister existing service workers in dev environment to ensure instant clean reloads
+    // Purge any stale service workers and clear CacheStorage across all mobile, tablet, and desktop clients
+    if (typeof window !== 'undefined') {
+      if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then((registrations) => {
           for (const registration of registrations) {
-            registration.unregister();
+            registration.unregister().catch(() => {});
           }
-        });
+        }).catch(() => {});
+      }
+      if ('caches' in window) {
+        caches.keys().then((keys) => {
+          for (const key of keys) {
+            caches.delete(key).catch(() => {});
+          }
+        }).catch(() => {});
       }
     }
 
