@@ -15,14 +15,19 @@ export async function GET(req: Request) {
     const today = extractDateFromRequest(req);
 
     // ── Query the coin transactions table for today's reference IDs ─────────
+    const expectedRefs = [
+      `checkin:${today}:morning`,
+      `checkin:${today}:afternoon`,
+      `checkin:${today}:evening`,
+      `checkin:${today}:all_slots_bonus`,
+    ];
     const { data: txRows } = await supabase
       .from('user_coin_transactions')
-      .select('reference_id, amount')
+      .select('reference_id')
       .eq('user_id', userId)
-      .gte('created_at', `${today}T00:00:00.000Z`)
-      .lt('created_at', `${today}T23:59:59.999Z`);
+      .in('reference_id', expectedRefs);
 
-    const claimedRefs = new Set((txRows || []).map((t: any) => t.reference_id));
+    const claimedRefs = new Set((txRows || []).map((r: any) => r.reference_id));
 
     const morningClaimed   = claimedRefs.has(`checkin:${today}:morning`);
     const afternoonClaimed = claimedRefs.has(`checkin:${today}:afternoon`);

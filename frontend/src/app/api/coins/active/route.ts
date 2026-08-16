@@ -20,10 +20,23 @@ export async function POST(req: Request) {
       );
     }
 
+    const VALID_ITEM_TYPES = ['theme', 'dashboard_style', 'companion_style'];
+    if (!VALID_ITEM_TYPES.includes(itemType)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid item type' },
+        { status: 400 }
+      );
+    }
+
     const userId = user.id;
 
     // Check if default (free) or unlocked
-    if (itemId !== 'default' && itemId !== 'minimal' && itemId !== 'friendly') {
+    const isDefaultItem = 
+      (itemType === 'theme' && itemId === 'default') ||
+      (itemType === 'dashboard_style' && itemId === 'minimal') ||
+      (itemType === 'companion_style' && itemId === 'friendly');
+
+    if (!isDefaultItem) {
       const { data: unlocked } = await supabase
         .from('user_unlocked_items')
         .select('id')

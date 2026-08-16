@@ -208,8 +208,12 @@ export function SvanexaStore() {
     if (active) return;
 
     if (unlocked) {
-      await setActiveCustomization(item.type, item.id);
-      toast.success(`${item.name} applied!`);
+      try {
+        await setActiveCustomization(item.type, item.id);
+        toast.success(`${item.name} applied!`);
+      } catch (err: any) {
+        toast.error(err?.message || 'Failed to apply style');
+      }
       return;
     }
 

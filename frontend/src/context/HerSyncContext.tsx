@@ -253,6 +253,7 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
           activeDashboardStyle: parsed.activeDashboardStyle || prev.activeDashboardStyle,
           activeCompanionStyle: parsed.activeCompanionStyle || prev.activeCompanionStyle,
           coinBalance: parsed.coinBalance ?? prev.coinBalance,
+          unlockedItems: parsed.unlockedItems || prev.unlockedItems,
           currentStreak: parsed.currentStreak ?? prev.currentStreak,
           totalCheckIns: parsed.totalCheckIns ?? prev.totalCheckIns,
           hasCheckedInToday: isSameDate ? (parsed.hasCheckedInToday ?? false) : false,
@@ -392,6 +393,7 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
             activeDashboardStyle,
             activeCompanionStyle,
             coinBalance,
+            unlockedItems,
             hasCheckedInToday,
             currentStreak,
             totalCheckIns,
@@ -518,22 +520,45 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
   );
 
   const setActiveCustomization = useCallback(async (itemType: string, itemId: string) => {
+    let previousStyle = {
+      activeTheme: 'default',
+      activeDashboardStyle: 'minimal',
+      activeCompanionStyle: 'friendly',
+    };
+
     // Optimistic UI update
-    setState(prev => ({
-      ...prev,
-      activeTheme: itemType === 'theme' ? itemId : prev.activeTheme,
-      activeDashboardStyle: itemType === 'dashboard_style' ? itemId : prev.activeDashboardStyle,
-      activeCompanionStyle: itemType === 'companion_style' ? itemId : prev.activeCompanionStyle,
-    }));
+    setState(prev => {
+      previousStyle = {
+        activeTheme: prev.activeTheme,
+        activeDashboardStyle: prev.activeDashboardStyle,
+        activeCompanionStyle: prev.activeCompanionStyle,
+      };
+      return {
+        ...prev,
+        activeTheme: itemType === 'theme' ? itemId : prev.activeTheme,
+        activeDashboardStyle: itemType === 'dashboard_style' ? itemId : prev.activeDashboardStyle,
+        activeCompanionStyle: itemType === 'companion_style' ? itemId : prev.activeCompanionStyle,
+      };
+    });
 
     try {
-      await apiFetch('/api/coins/active', {
+      const res = await apiFetch('/api/coins/active', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ itemType, itemId }),
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Failed to update customization');
+      }
     } catch (err) {
       console.error('Error updating active customization', err);
+      // Revert on error
+      setState(prev => ({
+        ...prev,
+        ...previousStyle,
+      }));
+      throw err;
     }
   }, []);
 

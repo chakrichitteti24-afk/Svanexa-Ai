@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, Coins, Loader2, AlertCircle, Star } from 'lucide-react';
 import { apiFetch } from '@/utils/api-client';
@@ -73,6 +73,20 @@ export function CheckinRewardBar({
     error: null,
     justClaimed: false,
   });
+
+  useEffect(() => {
+    setSlotStates(prev => ({
+      morning:   { ...prev.morning,   claimed: prev.morning.claimed   || !!initialClaimedSlots.morning },
+      afternoon: { ...prev.afternoon, claimed: prev.afternoon.claimed || !!initialClaimedSlots.afternoon },
+      evening:   { ...prev.evening,   claimed: prev.evening.claimed   || !!initialClaimedSlots.evening },
+    }));
+  }, [initialClaimedSlots]);
+
+  useEffect(() => {
+    if (initialBonusClaimed) {
+      setBonusState(prev => ({ ...prev, claimed: true }));
+    }
+  }, [initialBonusClaimed]);
 
   const claimingRef = useRef<Record<string, boolean>>({});
 

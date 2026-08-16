@@ -20,6 +20,9 @@ const STORE_ITEM_PRICES: Record<string, number> = {
   'dashboard_style:midnight': 40,
   // Companion Styles
   'companion_style:friendly': 0,
+  'companion_style:calm': 30,
+  'companion_style:focus': 30,
+  'companion_style:joy': 30,
   'companion_style:poetic': 60,
   'companion_style:energizing': 60,
   'companion_style:mindful': 60,
