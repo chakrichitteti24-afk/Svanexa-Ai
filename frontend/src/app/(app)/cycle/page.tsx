@@ -16,6 +16,7 @@ import {
 import { createClient } from '@/utils/supabase/client';
 import { useHerSync } from '@/context/HerSyncContext';
 import { toast } from 'sonner';
+import { safeFormat } from '@/utils/date-utils';
 
 // Helper to parse daily checkin json
 const parseSummary = (str: string | null) => {
@@ -797,7 +798,7 @@ const parseLocalDate = (dateStr: string | null) => {
                       </div>
                       <h4 className="text-lg font-bold text-foreground">Completed Cycle</h4>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {format(new Date(targetLockedCycle.start_date), 'MMM d, yyyy')} → {format(new Date(targetLockedCycle.end_date!), 'MMM d, yyyy')}
+                        {safeFormat(targetLockedCycle.start_date, 'MMM d, yyyy')} → {safeFormat(targetLockedCycle.end_date, 'MMM d, yyyy')}
                       </p>
                       <p className="text-xs font-semibold text-pink-600 dark:text-pink-400 mt-2">
                         Duration: {differenceInDays(new Date(targetLockedCycle.end_date!), new Date(targetLockedCycle.start_date)) + 1} Days
@@ -834,11 +835,11 @@ const parseLocalDate = (dateStr: string | null) => {
                       <h4 className="font-bold text-sm text-foreground mb-2">Cycle Log Details</h4>
                       <div className="flex justify-between text-xs py-1 border-b border-border/20">
                         <span className="text-muted-foreground">Start Date:</span>
-                        <span className="font-bold">{format(new Date(targetLockedCycle.start_date), 'MMMM d, yyyy')}</span>
+                        <span className="font-bold">{safeFormat(targetLockedCycle.start_date, 'MMMM d, yyyy')}</span>
                       </div>
                       <div className="flex justify-between text-xs py-1 border-b border-border/20">
                         <span className="text-muted-foreground">End Date:</span>
-                        <span className="font-bold">{format(new Date(targetLockedCycle.end_date!), 'MMMM d, yyyy')}</span>
+                        <span className="font-bold">{safeFormat(targetLockedCycle.end_date, 'MMMM d, yyyy')}</span>
                       </div>
                       <div className="flex justify-between text-xs py-1">
                         <span className="text-muted-foreground">Cycle Duration:</span>

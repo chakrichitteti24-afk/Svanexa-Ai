@@ -24,6 +24,7 @@ import {
   Edit3,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { safeFormat } from '@/utils/date-utils';
 import { useHerSync } from '@/context/HerSyncContext';
 import { apiFetch } from '@/utils/api-client';
 import {
@@ -371,7 +372,7 @@ export default function CheckInPage() {
   if (isCurrentSlotCompleted && !isEditing) {
     const slotTitle = activeSlot.charAt(0).toUpperCase() + activeSlot.slice(1);
     const timeStr = completedSlots[activeSlot]?.completedAt
-      ? format(new Date(completedSlots[activeSlot].completedAt!), 'hh:mm a')
+      ? safeFormat(completedSlots[activeSlot]?.completedAt, 'hh:mm a')
       : '';
     const savedData = completedSlots[activeSlot]?.data;
     const rawIndicators: CheckinIndicators = savedData?.indicators || indicators;

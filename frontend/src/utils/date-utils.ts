@@ -49,3 +49,40 @@ export function extractDateFromRequest(req: Request, fallbackDate?: string): str
 
   return getNormalizedDate(fallbackDate);
 }
+
+/**
+ * Safely parses any date input (handles ISO, timestamps, space-separated SQL strings) safely on all browsers including iOS Safari.
+ */
+export function safeParseDate(input: string | number | Date | null | undefined): Date | null {
+  if (!input) return null;
+  if (input instanceof Date) return isValid(input) ? input : null;
+  if (typeof input === 'number') {
+    const d = new Date(input);
+    return isValid(d) ? d : null;
+  }
+  if (typeof input === 'string') {
+    const normalized = input.includes(' ') ? input.replace(' ', 'T') : input;
+    const d = new Date(normalized);
+    if (isValid(d)) return d;
+    const parsed = parseISO(normalized);
+    if (isValid(parsed)) return parsed;
+  }
+  return null;
+}
+
+/**
+ * Safely formats any date or timestamp string without throwing RangeError.
+ */
+export function safeFormat(
+  input: string | number | Date | null | undefined,
+  formatStr: string,
+  fallback: string = ''
+): string {
+  const d = safeParseDate(input);
+  if (!d) return fallback;
+  try {
+    return format(d, formatStr);
+  } catch {
+    return fallback;
+  }
+}

@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { apiFetch } from '@/utils/api-client';
 import { useHerSync } from '@/context/HerSyncContext';
 import { format } from 'date-fns';
+import { safeFormat } from '@/utils/date-utils';
 import styles from './wellness.module.css';
 
 class WellnessErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
@@ -44,8 +45,14 @@ class WellnessErrorBoundary extends Component<{ children: ReactNode }, { hasErro
                 Go to Daily Check-in <ArrowRight className="w-4 h-4" />
               </Link>
               <button
-                onClick={() => this.setState({ hasError: false })}
-                className="w-full py-3 bg-secondary/60 hover:bg-secondary text-muted-foreground font-semibold rounded-full border border-border/50 text-xs transition-all"
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    window.location.reload();
+                  } else {
+                    this.setState({ hasError: false });
+                  }
+                }}
+                className="w-full py-3 bg-secondary/60 hover:bg-secondary text-muted-foreground font-semibold rounded-full border border-border/50 text-xs transition-all cursor-pointer active:scale-95"
               >
                 Reload Page
               </button>
@@ -855,7 +862,7 @@ function WellnessPlanContent() {
                             </button>
                             {task.completedAt && (
                               <span className="text-[10px] sm:text-xs text-emerald-400 font-semibold ml-auto truncate">
-                                Completed {format(new Date(task.completedAt), 'h:mm a')}
+                                Completed {safeFormat(task.completedAt, 'h:mm a')}
                               </span>
                             )}
                           </div>
