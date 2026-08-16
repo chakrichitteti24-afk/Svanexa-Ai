@@ -87,7 +87,7 @@ export default function DashboardPage() {
   const hasDataToday = !!l && (l.sleep !== null || l.water !== null || l.mood !== null || l.stress !== null || l.exercise !== null);
 
   const observation = useMemo(() => {
-    if (!hasDataToday) {
+    if (!hasDataToday || !l) {
       return "Complete your daily check-ins so I can provide personalized wellness insights just for you today.";
     }
     let obs = '';
@@ -99,7 +99,7 @@ export default function DashboardPage() {
       if (Number(l.water) < 2.0) obs += `Hydration is at ${l.water}L — a bit below target. Try to finish another glass before your next meal. `;
       else obs += `Excellent hydration today (${l.water}L)! `;
     }
-    if (l.mood) {
+    if (l.mood && typeof l.mood === 'string') {
       if (['anxious', 'sad', 'angry'].includes(l.mood)) obs += `It looks like your mood is a bit low today. Take it slow and be gentle with yourself. `;
       else obs += `It's wonderful to see you're feeling ${l.mood} today. `;
     }
@@ -113,16 +113,23 @@ export default function DashboardPage() {
 
   const pregDetails = useMemo(() => {
     if (!pregnancyDueDate) return null;
-    const due = new Date(pregnancyDueDate);
-    const start = new Date(due);
-    start.setDate(due.getDate() - 280);
-    const today = new Date();
-    const diffDays = Math.floor((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-    const week = Math.floor(diffDays / 7) + 1;
-    if (week < 1 || week > 42) return null;
-    const trimester = week <= 12 ? '1st Trimester' : week <= 27 ? '2nd Trimester' : '3rd Trimester';
-    return { week, trimester, dueDateStr: due.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) };
+    try {
+      const due = new Date(pregnancyDueDate);
+      if (isNaN(due.getTime())) return null;
+      const start = new Date(due);
+      start.setDate(due.getDate() - 280);
+      const today = new Date();
+      const diffDays = Math.floor((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+      const week = Math.floor(diffDays / 7) + 1;
+      if (week < 1 || week > 42) return null;
+      const trimester = week <= 12 ? '1st Trimester' : week <= 27 ? '2nd Trimester' : '3rd Trimester';
+      return { week, trimester, dueDateStr: due.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) };
+    } catch {
+      return null;
+    }
   }, [pregnancyDueDate]);
+
+  const tasksList = Array.isArray(wellnessTasks) ? wellnessTasks : [];
 
   const waterTarget = wellnessMode === 'pcos' ? 2.5 : wellnessMode === 'pregnancy' ? 3.0 : 2.0;
   const waterLogged = l?.water ? Number(l.water) : 0;
@@ -132,8 +139,8 @@ export default function DashboardPage() {
   const exerciseLogged = l?.exercise ? Number(l.exercise) : 0;
   const exercisePct = Math.min(100, (exerciseLogged / exerciseTarget) * 100);
 
-  const completedTasks = wellnessTasks.filter(t => t.completed || t.status === 'completed').length;
-  const totalTasks = wellnessTasks.length;
+  const completedTasks = tasksList.filter(t => t.completed || t.status === 'completed').length;
+  const totalTasks = tasksList.length;
 
   const getActiveTimeSlot = (): 'morning' | 'afternoon' | 'evening' => {
     const hour = new Date().getHours();
@@ -145,14 +152,15 @@ export default function DashboardPage() {
   const activeSlotTitle = activeSlot === 'morning' ? 'Morning 🌅' : activeSlot === 'afternoon' ? 'Afternoon ☀️' : 'Evening 🌙';
   const isCheckinCompleted = checkinSlots?.[activeSlot]?.completed;
   
-  const slotTasks = wellnessTasks.filter(t => t.timeSlot === activeSlot);
+  const slotTasks = tasksList.filter(t => t.timeSlot === activeSlot);
   const areTasksCompleted = slotTasks.length > 0 && slotTasks.every(t => t.completed || t.status === 'completed');
 
   const handleToggleTask = async (taskId: string, planId?: string) => {
     if (togglingTask) return;
     setTogglingTask(taskId);
 
-    const targetTask = wellnessTasks.find(t => t.id === taskId);
+    const targetTask = tasksList.find(t => t.id === taskId);
+
     const isCompleting = !targetTask?.completed && targetTask?.status !== 'completed';
 
     if (isCompleting) {
@@ -246,11 +254,12 @@ export default function DashboardPage() {
   };
 
   const topPriorityTask = useMemo(() => {
-    const slotPending = wellnessTasks.filter(t => t.timeSlot === activeSlot && !t.completed && t.status !== 'completed');
+    const slotPending = tasksList.filter(t => t.timeSlot === activeSlot && !t.completed && t.status !== 'completed');
     if (slotPending.length > 0) return slotPending[0];
-    const anyPending = wellnessTasks.filter(t => !t.completed && t.status !== 'completed');
+    const anyPending = tasksList.filter(t => !t.completed && t.status !== 'completed');
     return anyPending.length > 0 ? anyPending[0] : null;
-  }, [wellnessTasks, activeSlot]);
+  }, [tasksList, activeSlot]);
+
 
   return (
     <div className={styles.dashboardContainer}>
@@ -466,7 +475,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
               )}
-              {cycleStatus && wellnessMode !== 'pregnancy' && (
+              {cycleStatus && typeof cycleStatus === 'string' && wellnessMode !== 'pregnancy' && (
                 <div className={styles.snapshotItem}>
                   <div className={styles.snapshotIcon}><Calendar className="w-4 h-4 text-rose-400" /></div>
                   <div className={styles.snapshotData}>
@@ -477,6 +486,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
               )}
+
               {wellnessMode === 'pregnancy' && pregDetails && (
                 <div className={styles.snapshotItem}>
                   <div className={styles.snapshotIcon}><Heart className="w-4 h-4 text-pink-400" /></div>

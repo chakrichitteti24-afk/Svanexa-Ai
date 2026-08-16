@@ -243,32 +243,32 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       const cached = localStorage.getItem('svanexa_app_cache_v1');
       if (cached) {
         const parsed = JSON.parse(cached);
-        const isSameDate = parsed.cacheDate === todayStr;
+        const isSameDate = parsed?.cacheDate === todayStr;
 
         setState(prev => ({
           ...prev,
-          profile: parsed.profile || prev.profile,
-          preferences: parsed.preferences || prev.preferences,
-          activeTheme: parsed.activeTheme || prev.activeTheme,
-          activeDashboardStyle: parsed.activeDashboardStyle || prev.activeDashboardStyle,
-          activeCompanionStyle: parsed.activeCompanionStyle || prev.activeCompanionStyle,
-          coinBalance: parsed.coinBalance ?? prev.coinBalance,
-          unlockedItems: parsed.unlockedItems || prev.unlockedItems,
-          currentStreak: parsed.currentStreak ?? prev.currentStreak,
-          totalCheckIns: parsed.totalCheckIns ?? prev.totalCheckIns,
-          hasCheckedInToday: isSameDate ? (parsed.hasCheckedInToday ?? false) : false,
-          checkinSlots: isSameDate ? (parsed.checkinSlots || prev.checkinSlots) : {
+          profile: parsed?.profile || prev.profile,
+          preferences: parsed?.preferences || prev.preferences,
+          activeTheme: parsed?.activeTheme || prev.activeTheme,
+          activeDashboardStyle: parsed?.activeDashboardStyle || prev.activeDashboardStyle,
+          activeCompanionStyle: parsed?.activeCompanionStyle || prev.activeCompanionStyle,
+          coinBalance: typeof parsed?.coinBalance === 'number' ? parsed.coinBalance : prev.coinBalance,
+          unlockedItems: Array.isArray(parsed?.unlockedItems) ? parsed.unlockedItems : prev.unlockedItems,
+          currentStreak: typeof parsed?.currentStreak === 'number' ? parsed.currentStreak : prev.currentStreak,
+          totalCheckIns: typeof parsed?.totalCheckIns === 'number' ? parsed.totalCheckIns : prev.totalCheckIns,
+          hasCheckedInToday: isSameDate ? (parsed?.hasCheckedInToday ?? false) : false,
+          checkinSlots: isSameDate && parsed?.checkinSlots ? parsed.checkinSlots : {
             morning: { completed: false, completedAt: null },
             afternoon: { completed: false, completedAt: null },
             evening: { completed: false, completedAt: null },
           },
-          todayLog: isSameDate ? (parsed.todayLog || prev.todayLog) : { sleep: null, water: null, mood: null, stress: null, exercise: null },
-          wellnessTasks: isSameDate ? (parsed.wellnessTasks || []) : [],
+          todayLog: isSameDate && parsed?.todayLog ? parsed.todayLog : { sleep: null, water: null, mood: null, stress: null, exercise: null },
+          wellnessTasks: isSameDate && Array.isArray(parsed?.wellnessTasks) ? parsed.wellnessTasks : [],
           isLoading: false,
         }));
       }
     } catch (err) {
-      console.error('Cache restore error', err);
+      console.warn('Cache restore warning:', err);
     }
   }, []);
 
@@ -282,10 +282,16 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       const userId = session.user.id;
       const todayStr = format(new Date(), 'yyyy-MM-dd');
 
-      // Execute ALL health, coin, skin, and cycle requests in parallel with todayStr
+      // Execute ALL health, coin, skin, and cycle requests safely in parallel
       const [healthRes, coinsRes, skinRes, cycleRes] = await Promise.all([
-        apiFetch(`/api/health/summary?date=${todayStr}`),
-        apiFetch('/api/coins/balance'),
+        apiFetch(`/api/health/summary?date=${todayStr}`).catch(err => {
+          console.warn('Health summary fetch error:', err);
+          return new Response(JSON.stringify({ success: false }), { status: 500 });
+        }),
+        apiFetch('/api/coins/balance').catch(err => {
+          console.warn('Coins balance fetch error:', err);
+          return new Response(JSON.stringify({ success: false }), { status: 500 });
+        }),
         supabase
           .from('skin_logs')
           .select('*')
@@ -319,18 +325,24 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       let wellnessTasks: WellnessTask[] = [];
 
       if (healthRes.ok) {
-        const { data } = await healthRes.json();
-        profile = data.profile;
-        preferences = data.preferences;
-        hasCheckedInToday = data.has_checked_in_today;
-        checkinSlots = data.checkin_slots || checkinSlots;
-        allSlotsComplete = data.all_slots_complete || false;
-        totalCheckIns = data.total_logs_count;
-        currentStreak = data.current_streak;
-        cycleStatus = data.cycle_status;
-        pregnancyDueDate = data.pregnancy?.due_date || null;
-        todayLog = data.today_log || todayLog;
-        wellnessTasks = data.wellness_tasks || [];
+        try {
+          const { data } = await healthRes.json();
+          if (data) {
+            profile = data.profile || null;
+            preferences = data.preferences || null;
+            hasCheckedInToday = !!data.has_checked_in_today;
+            checkinSlots = data.checkin_slots || checkinSlots;
+            allSlotsComplete = !!data.all_slots_complete;
+            totalCheckIns = typeof data.total_logs_count === 'number' ? data.total_logs_count : 0;
+            currentStreak = typeof data.current_streak === 'number' ? data.current_streak : 0;
+            cycleStatus = typeof data.cycle_status === 'string' ? data.cycle_status : 'insufficient_data';
+            pregnancyDueDate = data.pregnancy?.due_date || null;
+            todayLog = data.today_log || todayLog;
+            wellnessTasks = Array.isArray(data.wellness_tasks) ? data.wellness_tasks : [];
+          }
+        } catch (jsonErr) {
+          console.warn('Health summary json parse warning:', jsonErr);
+        }
       }
 
       let coinBalance = 0;
@@ -340,18 +352,26 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       let activeCompanionStyle = 'friendly';
 
       if (coinsRes.ok) {
-        const { data: coinData } = await coinsRes.json();
-        coinBalance = coinData.balance ?? 0;
-        unlockedItems = (coinData.unlockedItems || []).map((u: any) => ({
-          type: u.item_type,
-          itemId: u.item_id,
-        }));
-        activeTheme = coinData.activeTheme || 'default';
-        activeDashboardStyle = coinData.activeDashboardStyle || 'minimal';
-        activeCompanionStyle = coinData.activeCompanionStyle || 'friendly';
+        try {
+          const { data: coinData } = await coinsRes.json();
+          if (coinData) {
+            coinBalance = typeof coinData.balance === 'number' ? coinData.balance : 0;
+            unlockedItems = Array.isArray(coinData.unlockedItems)
+              ? coinData.unlockedItems.map((u: any) => ({
+                  type: u.item_type,
+                  itemId: u.item_id,
+                }))
+              : [];
+            activeTheme = coinData.activeTheme || 'default';
+            activeDashboardStyle = coinData.activeDashboardStyle || 'minimal';
+            activeCompanionStyle = coinData.activeCompanionStyle || 'friendly';
+          }
+        } catch (coinJsonErr) {
+          console.warn('Coin json parse warning:', coinJsonErr);
+        }
       }
 
-      const cycleData = cycleRes.data ? (cycleRes.data as CycleLog[]) : undefined;
+      const cycleData = Array.isArray(cycleRes.data) ? (cycleRes.data as CycleLog[]) : undefined;
 
       const newStatePartial = {
         profile,
@@ -364,7 +384,7 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         currentStreak,
         cycleStatus,
         pregnancyDueDate,
-        skinLogs: (skinRes.data as SkinLog[]) || [],
+        skinLogs: Array.isArray(skinRes.data) ? (skinRes.data as SkinLog[]) : [],
         wellnessTasks,
         coinBalance,
         unlockedItems,
@@ -408,6 +428,7 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       setState(prev => ({ ...prev, isLoading: false }));
     }
   }, [supabase]);
+
 
   const refreshCycleHistory = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();

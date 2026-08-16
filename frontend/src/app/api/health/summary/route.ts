@@ -53,31 +53,45 @@ export async function GET(req: Request) {
     const todayPlan = todayPlanRows && todayPlanRows.length > 0 ? todayPlanRows[0] : null;
 
     let userProfile = profile;
-    if (!userProfile && user.user_metadata) {
-      const meta = user.user_metadata;
-      const { data: newProfile } = await supabase.from('profiles').upsert({
-        id: userId,
-        first_name: meta.first_name || meta.username || 'User',
-        last_name: meta.last_name || '',
-        email: user.email,
-        ai_name: meta.ai_name || 'Luna',
-        active_theme: 'general',
-        active_dashboard_style: 'minimal',
-        active_companion_style: 'friendly',
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'id' }).select('id, first_name, last_name, username, ai_name, active_theme, active_dashboard_style, active_companion_style').maybeSingle();
+    if (!userProfile) {
+      const meta = user.user_metadata || {};
+      try {
+        const { data: newProfile } = await supabase.from('profiles').upsert({
+          id: userId,
+          first_name: meta.first_name || meta.username || 'User',
+          last_name: meta.last_name || '',
+          email: user.email,
+          ai_name: meta.ai_name || 'Luna',
+          active_theme: 'general',
+          active_dashboard_style: 'minimal',
+          active_companion_style: 'friendly',
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'id' }).select('id, first_name, last_name, username, ai_name, active_theme, active_dashboard_style, active_companion_style').maybeSingle();
 
-      userProfile = newProfile || {
-        id: userId,
-        first_name: meta.first_name || meta.username || 'User',
-        last_name: meta.last_name || '',
-        username: meta.username || 'User',
-        ai_name: meta.ai_name || 'Luna',
-        active_theme: 'general',
-        active_dashboard_style: 'minimal',
-        active_companion_style: 'friendly',
-      };
+        userProfile = newProfile || {
+          id: userId,
+          first_name: meta.first_name || meta.username || 'there',
+          last_name: meta.last_name || '',
+          username: meta.username || 'User',
+          ai_name: meta.ai_name || 'Luna',
+          active_theme: 'general',
+          active_dashboard_style: 'minimal',
+          active_companion_style: 'friendly',
+        };
+      } catch {
+        userProfile = {
+          id: userId,
+          first_name: meta.first_name || meta.username || 'there',
+          last_name: meta.last_name || '',
+          username: meta.username || 'User',
+          ai_name: meta.ai_name || 'Luna',
+          active_theme: 'general',
+          active_dashboard_style: 'minimal',
+          active_companion_style: 'friendly',
+        };
+      }
     }
+
 
     let wellness_tasks: any[] = [];
     if (todayPlan?.content) {

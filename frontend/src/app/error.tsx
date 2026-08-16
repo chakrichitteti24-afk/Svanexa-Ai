@@ -12,7 +12,11 @@ export default function RootError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('App Root Error caught:', error);
+    console.error('App Root Error caught:', {
+      message: error?.message,
+      stack: error?.stack,
+      digest: error?.digest,
+    });
   }, [error]);
 
   return (
@@ -28,6 +32,14 @@ export default function RootError({
             We encountered a temporary hiccup loading this screen. Please try again.
           </p>
         </div>
+
+        {process.env.NODE_ENV === 'development' && error?.message && (
+          <div className="text-left p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs font-mono break-all max-h-32 overflow-y-auto">
+            <p className="font-bold mb-1">Dev Diagnostic:</p>
+            <p>{error.message}</p>
+            {error.digest && <p className="text-[10px] text-muted-foreground mt-1">Digest: {error.digest}</p>}
+          </div>
+        )}
 
         <div className="flex flex-col gap-2.5 pt-2">
           <button
@@ -49,3 +61,4 @@ export default function RootError({
     </div>
   );
 }
+

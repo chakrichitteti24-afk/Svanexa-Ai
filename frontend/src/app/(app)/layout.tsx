@@ -17,45 +17,84 @@ export default function AppLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const [authState, setAuthState] = useState<'INITIALIZING' | 'AUTHENTICATED' | 'UNAUTHENTICATED'>('INITIALIZING');
+  const [authState, setAuthState] = useState<'INITIALIZING' | 'AUTHENTICATED' | 'UNAUTHENTICATED' | 'ERROR'>('INITIALIZING');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let isSubscribed = true;
-    const checkAuth = async () => {
+    const supabase = createClient();
+
+    const verifySession = async () => {
       try {
-        const supabase = createClient();
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabase.auth.getSession();
         if (!isSubscribed) return;
 
-        if (!session?.user) {
-          setAuthState('UNAUTHENTICATED');
-          router.replace('/login');
-          return;
+        if (error) {
+          console.warn('Session retrieval warning:', error.message);
         }
 
-        setAuthState('AUTHENTICATED');
-      } catch (err) {
-        console.error('Auth check error in AppLayout:', err);
+        if (session?.user) {
+          setAuthState('AUTHENTICATED');
+          setErrorMessage(null);
+        } else {
+          setAuthState('UNAUTHENTICATED');
+          router.replace('/login');
+        }
+      } catch (err: any) {
+        console.error('Auth verification error in AppLayout:', err);
         if (isSubscribed) {
+          // If session cannot be read (network or unauthenticated), guide to login gracefully
           setAuthState('UNAUTHENTICATED');
           router.replace('/login');
         }
       }
     };
-    checkAuth();
+
+    verifySession();
+
+    // Listen to live auth changes (e.g. sign in, sign out, token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!isSubscribed) return;
+      if (session?.user) {
+        setAuthState('AUTHENTICATED');
+        setErrorMessage(null);
+      } else if (event === 'SIGNED_OUT' || !session) {
+        setAuthState('UNAUTHENTICATED');
+        router.replace('/login');
+      }
+    });
 
     return () => {
       isSubscribed = false;
+      subscription.unsubscribe();
     };
   }, [router]);
 
-  if (authState !== 'AUTHENTICATED') {
+  if (authState === 'INITIALIZING' || authState === 'UNAUTHENTICATED') {
     return (
       <div className="min-h-screen bg-background p-4 sm:p-8 flex items-center justify-center">
         <DashboardSkeleton />
       </div>
     );
   }
+
+  if (authState === 'ERROR') {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 bg-background text-foreground">
+        <div className="max-w-md w-full text-center bg-card/90 border border-border/50 p-8 rounded-3xl shadow-xl space-y-4">
+          <p className="text-sm text-muted-foreground">{errorMessage || 'Unable to verify your session.'}</p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="w-full py-3 px-6 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 text-white font-bold text-xs shadow-md"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
     <HerSyncProvider>

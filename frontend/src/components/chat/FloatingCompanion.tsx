@@ -71,7 +71,7 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
 
   const getDynamicAvatar = () => {
     if (allSlotsComplete) return '/ai-companion-happy.jpg';
-    if (!todayLog || !todayLog.mood) return '/ai-companion-sitting.jpg';
+    if (!todayLog || typeof todayLog.mood !== 'string') return '/ai-companion-sitting.jpg';
     const mood = todayLog.mood.toLowerCase();
     if (['sad', 'depressed', 'gloomy'].includes(mood)) return '/ai-companion-sad.jpg';
     if (['anxious', 'stress', 'overwhelmed', 'mood_swings', 'nervous'].includes(mood)) return '/ai-companion-anxious.jpg';
@@ -137,14 +137,28 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
     setStartY(null);
   };
 
+  const generateUUID = () => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      try {
+        return crypto.randomUUID();
+      } catch {}
+    }
+    return 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+  };
+
   const startNewChat = () => {
     const now = new Date().getTime();
     const newSession: ChatSession = {
-      id: crypto.randomUUID(), title: 'New Chat', messages: [], created_at: now, updated_at: now,
+      id: generateUUID(),
+      title: 'New Chat',
+      messages: [],
+      created_at: now,
+      updated_at: now,
     };
-    setSessions(prev => [newSession, ...prev]);
+    setSessions(prev => [newSession, ...(Array.isArray(prev) ? prev : [])]);
     setActiveSessionId(newSession.id);
   };
+
 
   const isUserScrolledUpRef = useRef(false);
 
@@ -210,20 +224,22 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
 
   useEffect(() => {
     if (profileLoading || !isOpen) return;
-    if (sessions.length === 0 || !activeSessionId) {
+    const sessionList = Array.isArray(sessions) ? sessions : [];
+    if (sessionList.length === 0 || !activeSessionId) {
       startNewChat();
     } else {
-      const current = sessions.find(s => s.id === activeSessionId);
-      if (current && current.messages.length === 0 && !isLoading) {
+      const current = sessionList.find(s => s.id === activeSessionId);
+      if (current && Array.isArray(current.messages) && current.messages.length === 0 && !isLoading) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
         fetchGreeting(current.id);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, profileLoading, sessions.length, activeSessionId]);
+  }, [isOpen, profileLoading, sessions?.length, activeSessionId]);
 
-  const activeSession = sessions.find(s => s.id === activeSessionId);
-  const messages = activeSession?.messages || [];
+  const activeSession = (Array.isArray(sessions) ? sessions : []).find(s => s.id === activeSessionId);
+  const messages = Array.isArray(activeSession?.messages) ? activeSession.messages : [];
+
 
   useEffect(() => {
     if (isOpen) {
