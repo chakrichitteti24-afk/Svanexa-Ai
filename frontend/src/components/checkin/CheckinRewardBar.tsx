@@ -203,14 +203,14 @@ export function CheckinRewardBar({
           return (
             <div
               key={slot}
-              className={`flex items-center justify-between gap-3 p-4 rounded-2xl border ${cfg.bgColor} transition-all`}
+              className={`flex items-center justify-between gap-2 sm:gap-3 p-3 sm:p-4 rounded-2xl border ${cfg.bgColor} transition-all`}
             >
               {/* Left: slot label */}
               <div className="flex items-center gap-2 min-w-0">
-                <span className="text-xl flex-shrink-0">{cfg.icon}</span>
+                <span className="text-lg sm:text-xl flex-shrink-0">{cfg.icon}</span>
                 <div className="min-w-0">
-                  <p className={`text-sm font-bold ${cfg.color}`}>{cfg.label} Check-in</p>
-                  <p className="text-xs text-muted-foreground font-medium">
+                  <p className={`text-xs sm:text-sm font-bold ${cfg.color} truncate`}>{cfg.label} Check-in</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground font-medium truncate">
                     {st.claimed ? 'Reward collected' : 'Reward available'}
                   </p>
                 </div>
@@ -223,7 +223,7 @@ export function CheckinRewardBar({
                 )}
 
                 {st.claimed ? (
-                  <div className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-xs font-bold">
+                  <div className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-xs font-bold">
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     <span>Claimed</span>
                   </div>
@@ -232,7 +232,7 @@ export function CheckinRewardBar({
                     <button
                       onClick={() => claimSlot(slot)}
                       disabled={st.claiming}
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-amber-500 hover:bg-amber-400 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-xs shadow-md shadow-amber-500/20 transition-all min-h-[36px] min-w-[110px] justify-center"
+                      className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full bg-amber-500 hover:bg-amber-400 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-xs shadow-md shadow-amber-500/20 transition-all min-h-[36px] min-w-[95px] sm:min-w-[110px] justify-center"
                     >
                       {st.claiming ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
