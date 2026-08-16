@@ -282,25 +282,30 @@ export default function ProfilePage() {
 
       // 2. If pregnancy mode, save due date
       if (userMode === 'pregnancy' && dueDate) {
-        const { data: existingPreg } = await supabase
-          .from('pregnancy_logs')
-          .select('id')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        try {
+          const { data: existingPreg } = await supabase
+            .from('pregnancy_logs')
+            .select('id')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
 
-        if (existingPreg?.id) {
-          await supabase
-            .from('pregnancy_logs')
-            .update({ due_date: dueDate })
-            .eq('id', existingPreg.id);
-        } else {
-          await supabase
-            .from('pregnancy_logs')
-            .insert({ user_id: userId, due_date: dueDate });
+          if (existingPreg?.id) {
+            await supabase
+              .from('pregnancy_logs')
+              .update({ due_date: dueDate })
+              .eq('id', existingPreg.id);
+          } else {
+            await supabase
+              .from('pregnancy_logs')
+              .insert({ user_id: userId, due_date: dueDate });
+          }
+        } catch (pregErr) {
+          console.warn('Optional pregnancy log save notice:', pregErr);
         }
       }
+
 
       // 3. Update saved source-of-truth
       const updatedData: ProfileData = {
