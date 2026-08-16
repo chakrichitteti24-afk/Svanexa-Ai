@@ -38,8 +38,8 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   // Only handle GET requests
   if (event.request.method !== 'GET') return;
-  // Skip API requests from offline cache
-  if (event.request.url.includes('/api/')) return;
+  // Skip API requests and Next.js internal build/HMR chunks from offline cache
+  if (event.request.url.includes('/api/') || event.request.url.includes('/_next/')) return;
 
   event.respondWith(
     fetch(event.request)

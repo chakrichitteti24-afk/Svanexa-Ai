@@ -13,12 +13,21 @@ export function PWAInstaller() {
   const [isOffline, setIsOffline] = useState(false);
 
   useEffect(() => {
-    // 1. Register Service Worker
+    // 1. Register Service Worker only in production (avoids interfering with Next.js Fast Refresh & local dev reloads)
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker
-        .register('/sw.js')
-        .then(() => {})
-        .catch((err) => console.log('SW Registration error:', err));
+      if (process.env.NODE_ENV === 'production' && window.location.hostname !== 'localhost') {
+        navigator.serviceWorker
+          .register('/sw.js')
+          .then(() => {})
+          .catch((err) => console.log('SW Registration error:', err));
+      } else {
+        // Unregister existing service workers in dev environment to ensure instant clean reloads
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          for (const registration of registrations) {
+            registration.unregister();
+          }
+        });
+      }
     }
 
     // 2. Listen for install prompt
