@@ -133,6 +133,13 @@ const scoreLabel = (s: number) => {
 
 // ─── Page Component ──────────────────────────────────────────────────────────
 
+function getCurrentSlot(): TimeSlot {
+  const h = new Date().getHours();
+  if (h >= 6 && h < 12) return 'morning';
+  if (h >= 12 && h < 18) return 'afternoon';
+  return 'evening';
+}
+
 function WellnessPlanContent() {
   const { aiName, setWellnessTasks, refreshAll, checkinSlots } = useHerSync();
 
@@ -145,6 +152,7 @@ function WellnessPlanContent() {
   const [toggling, setToggling]     = useState<string | null>(null);
   const [animScore, setAnimScore]   = useState(0);
   const [activeFilter, setActiveFilter] = useState<TaskCategory | 'all'>('all');
+  const [activePlanSlot, setActivePlanSlot] = useState<TimeSlot>(getCurrentSlot());
 
   // ── Load Plan ──
   const loadPlan = useCallback(async () => {
@@ -162,6 +170,14 @@ function WellnessPlanContent() {
       const body = await res.json();
 
       if (!body || (!body.hasData && !body.plan)) {
+        setHasData(false);
+        setPlan(null);
+        setLoading(false);
+        return;
+      }
+
+      const planDate = body.plan?.date || body.plan?.planDate;
+      if (planDate && planDate !== todayStr) {
         setHasData(false);
         setPlan(null);
         setLoading(false);
@@ -628,6 +644,31 @@ function WellnessPlanContent() {
             </motion.div>
           )}
 
+          {/* Period Slot Switcher (Shows current period plan by default) */}
+          <div className="flex items-center justify-center gap-2 mb-4 p-1.5 rounded-2xl bg-secondary/50 border border-border/40">
+            {(['morning', 'afternoon', 'evening'] as const).map(slot => {
+              const cfg = SLOT_CONFIG[slot];
+              const isTabActive = slot === activePlanSlot;
+              const isTabUnlocked = isSlotUnlocked(slot);
+              return (
+                <button
+                  key={slot}
+                  type="button"
+                  onClick={() => setActivePlanSlot(slot)}
+                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    isTabActive
+                      ? 'bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-md shadow-pink-500/20'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary/80'
+                  }`}
+                >
+                  <span>{cfg.emoji}</span>
+                  <span>{cfg.label} Plan</span>
+                  {isTabUnlocked && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300 ml-0.5" />}
+                </button>
+              );
+            })}
+          </div>
+
           {/* Category Filter Pills */}
           <div className={styles.filterRow}>
             <button
@@ -650,8 +691,8 @@ function WellnessPlanContent() {
             })}
           </div>
 
-          {/* Time-Slotted Tasks */}
-          {slots.map((slot, slotIdx) => {
+          {/* Time-Slotted Tasks (Render active period plan) */}
+          {[activePlanSlot].map((slot, slotIdx) => {
             const slotTasks = filteredTasksBySlot(slot);
             const slotDone = slotTasks.filter(t => t.completed || t.status === 'completed').length;
             const cfg = SLOT_CONFIG[slot] || { label: slot, emoji: '✨', cssClass: 'morning' };
@@ -778,20 +819,23 @@ function WellnessPlanContent() {
                           )}
 
                           {/* Status Actions */}
-                          <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                          <div className={styles.taskActions}>
                             <button
+                              type="button"
                               onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'completed'); }}
                               style={{ padding: '0.3rem 0.75rem', minHeight: '32px', borderRadius: '99px', fontSize: '0.7rem', fontWeight: 700, border: 'none', cursor: 'pointer', background: isDone ? '#10B981' : 'rgba(16,185,129,0.15)', color: isDone ? '#fff' : '#34D399', transition: 'all 0.2s' }}
                             >
                               ✓ Done
                             </button>
                             <button
+                              type="button"
                               onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'pending'); }}
                               style={{ padding: '0.3rem 0.75rem', minHeight: '32px', borderRadius: '99px', fontSize: '0.7rem', fontWeight: 700, border: 'none', cursor: 'pointer', background: (!isDone && !isSkipped) ? 'var(--hs-violet)' : 'rgba(255,255,255,0.08)', color: (!isDone && !isSkipped) ? '#fff' : 'var(--muted-foreground)', transition: 'all 0.2s' }}
                             >
                               ⏳ Pending
                             </button>
                             <button
+                              type="button"
                               onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'skipped'); }}
                               style={{ padding: '0.3rem 0.75rem', minHeight: '32px', borderRadius: '99px', fontSize: '0.7rem', fontWeight: 700, border: 'none', cursor: 'pointer', background: isSkipped ? '#EF4444' : 'rgba(239,68,68,0.15)', color: isSkipped ? '#fff' : '#F87171', transition: 'all 0.2s' }}
                             >

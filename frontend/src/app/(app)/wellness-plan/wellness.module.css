@@ -377,9 +377,10 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 1.25rem;
   padding: 1.15rem;
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: 28px 1fr;
   gap: 1rem;
+  align-items: start;
   cursor: pointer;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   position: relative;
@@ -431,7 +432,7 @@
 }
 .taskCheck.loading { border-color: #A78BFA; animation: spin 0.8s linear infinite; }
 
-.taskBody { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.45rem; }
+.taskBody { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.5rem; overflow: hidden; }
 .taskMeta { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
 .taskBadge {
   font-size: 0.55rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;
@@ -444,9 +445,17 @@
 
 .taskText {
   font-size: 0.9rem; font-weight: 600; line-height: 1.5; color: #F1F5F9;
-  word-break: break-word; overflow-wrap: anywhere;
+  word-break: break-word; overflow-wrap: anywhere; margin: 0;
 }
 .taskText.done { text-decoration: line-through; color: rgba(255,255,255,0.4); }
+
+.taskActions {
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
 
 .completedAt { font-size: 0.65rem; color: #34D399; font-weight: 700; letter-spacing: 0.04em; }
 

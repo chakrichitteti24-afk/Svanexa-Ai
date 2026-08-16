@@ -17,30 +17,40 @@ export async function GET(req: Request) {
     const today = extractDateFromRequest(req);
 
     const [
-      { data: profile },
-      { data: todayCheckin },
+      { data: profileRows },
+      { data: todayCheckinRows },
       { count: checkinsCount },
-      { data: streakData },
+      { data: streakDataRows },
       { data: cycles },
-      { data: preg },
-      { data: sleep },
-      { data: water },
-      { data: mood },
-      { data: exercise },
-      { data: todayPlan }
+      { data: pregRows },
+      { data: sleepRows },
+      { data: waterRows },
+      { data: moodRows },
+      { data: exerciseRows },
+      { data: todayPlanRows }
     ] = await Promise.all([
-      supabase.from('profiles').select('id, first_name, last_name, username, ai_name, active_theme, active_dashboard_style, active_companion_style').eq('id', userId).maybeSingle(),
-      supabase.from('daily_checkins').select('summary').eq('user_id', userId).eq('date', today).maybeSingle(),
+      supabase.from('profiles').select('id, first_name, last_name, username, ai_name, active_theme, active_dashboard_style, active_companion_style').eq('id', userId).limit(1),
+      supabase.from('daily_checkins').select('summary').eq('user_id', userId).eq('date', today).limit(1),
       supabase.from('daily_checkins').select('id', { count: 'exact', head: true }).eq('user_id', userId),
-      supabase.from('wellness_streaks').select('current_streak, longest_streak, last_active_date, weekly_consistency').eq('user_id', userId).maybeSingle(),
+      supabase.from('wellness_streaks').select('current_streak, longest_streak, last_active_date, weekly_consistency').eq('user_id', userId).limit(1),
       supabase.from('cycle_logs').select('start_date').eq('user_id', userId).order('start_date', { ascending: false }).limit(1),
-      supabase.from('pregnancy_logs').select('due_date, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-      supabase.from('sleep_logs').select('duration_hours').eq('user_id', userId).eq('date', today).maybeSingle(),
-      supabase.from('water_logs').select('amount_ml').eq('user_id', userId).eq('date', today).maybeSingle(),
-      supabase.from('mood_logs').select('mood, intensity').eq('user_id', userId).eq('date', today).maybeSingle(),
-      supabase.from('exercise_logs').select('duration_minutes').eq('user_id', userId).eq('date', today).maybeSingle(),
-      supabase.from('wellness_plans').select('content').eq('user_id', userId).eq('title', today).maybeSingle(),
+      supabase.from('pregnancy_logs').select('due_date, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(1),
+      supabase.from('sleep_logs').select('duration_hours').eq('user_id', userId).eq('date', today).limit(1),
+      supabase.from('water_logs').select('amount_ml').eq('user_id', userId).eq('date', today).limit(1),
+      supabase.from('mood_logs').select('mood, intensity').eq('user_id', userId).eq('date', today).limit(1),
+      supabase.from('exercise_logs').select('duration_minutes').eq('user_id', userId).eq('date', today).limit(1),
+      supabase.from('wellness_plans').select('content').eq('user_id', userId).eq('title', today).limit(1),
     ]);
+
+    const profile = profileRows && profileRows.length > 0 ? profileRows[0] : null;
+    const todayCheckin = todayCheckinRows && todayCheckinRows.length > 0 ? todayCheckinRows[0] : null;
+    const streakData = streakDataRows && streakDataRows.length > 0 ? streakDataRows[0] : null;
+    const preg = pregRows && pregRows.length > 0 ? pregRows[0] : null;
+    const sleep = sleepRows && sleepRows.length > 0 ? sleepRows[0] : null;
+    const water = waterRows && waterRows.length > 0 ? waterRows[0] : null;
+    const mood = moodRows && moodRows.length > 0 ? moodRows[0] : null;
+    const exercise = exerciseRows && exerciseRows.length > 0 ? exerciseRows[0] : null;
+    const todayPlan = todayPlanRows && todayPlanRows.length > 0 ? todayPlanRows[0] : null;
 
     let userProfile = profile;
     if (!userProfile && user.user_metadata) {

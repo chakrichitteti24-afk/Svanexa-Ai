@@ -37,12 +37,14 @@ export class WellnessPlanService {
     const metrics = await this.loadMetrics(userId, todayStr);
 
     // 1. Check existing plan in database
-    const { data: existing, error: planFetchErr } = await this.supabase
+    const { data: existingRows, error: planFetchErr } = await this.supabase
       .from('wellness_plans')
       .select('*')
       .eq('user_id', userId)
       .eq('title', todayStr)
-      .maybeSingle();
+      .limit(1);
+
+    const existing = existingRows && existingRows.length > 0 ? existingRows[0] : null;
 
     if (planFetchErr) {
       console.warn('[WellnessPlanService] Plan fetch error:', planFetchErr.message);
@@ -82,16 +84,13 @@ export class WellnessPlanService {
     let slotsToGenerate: TaskTimeSlot[] = [];
 
     if (targetSlot) {
-      // If a specific slot is requested
+      // Always generate/update tasks for the targeted check-in slot using fresh check-in metrics
       const isSlotCompleted = metrics.completedSlots.includes(targetSlot);
       if (isSlotCompleted) {
-        if (forceRegenerate) {
-          // Remove existing tasks for this slot and regenerate
-          tasks = tasks.filter(t => t.timeSlot !== targetSlot);
-          slotsToGenerate = [targetSlot];
-        } else if (!existingSlots.has(targetSlot)) {
-          slotsToGenerate = [targetSlot];
-        }
+        tasks = tasks.filter(t => t.timeSlot !== targetSlot);
+        slotsToGenerate = [targetSlot];
+      } else if (!existingSlots.has(targetSlot)) {
+        slotsToGenerate = [targetSlot];
       }
     } else {
       // General check: generate for all completed slots that don't have tasks yet
@@ -260,14 +259,14 @@ export class WellnessPlanService {
     const [checkinsRes, todayCheckinRes, cycleRes, skinRes, sleepRes, waterRes, moodRes, exerciseRes] =
       await Promise.all([
         this.supabase.from('daily_checkins').select('*').eq('user_id', userId).order('date', { ascending: false }).limit(14),
-        this.supabase.from('daily_checkins').select('summary').eq('user_id', userId).eq('date', todayStr).maybeSingle(),
+        this.supabase.from('daily_checkins').select('summary').eq('user_id', userId).eq('date', todayStr).limit(1),
         this.supabase.from('cycle_logs').select('*').eq('user_id', userId).order('start_date', { ascending: false }).limit(3),
         // NOTE: skin_logs column is log_date, not date
         this.supabase.from('skin_logs').select('*').eq('user_id', userId).order('log_date', { ascending: false }).limit(7),
-        this.supabase.from('sleep_logs').select('*').eq('user_id', userId).eq('date', todayStr).maybeSingle(),
-        this.supabase.from('water_logs').select('*').eq('user_id', userId).eq('date', todayStr).maybeSingle(),
-        this.supabase.from('mood_logs').select('*').eq('user_id', userId).eq('date', todayStr).maybeSingle(),
-        this.supabase.from('exercise_logs').select('*').eq('user_id', userId).eq('date', todayStr).maybeSingle(),
+        this.supabase.from('sleep_logs').select('*').eq('user_id', userId).eq('date', todayStr).limit(1),
+        this.supabase.from('water_logs').select('*').eq('user_id', userId).eq('date', todayStr).limit(1),
+        this.supabase.from('mood_logs').select('*').eq('user_id', userId).eq('date', todayStr).limit(1),
+        this.supabase.from('exercise_logs').select('*').eq('user_id', userId).eq('date', todayStr).limit(1),
       ]);
 
     const checkins = checkinsRes.data || [];
@@ -284,9 +283,14 @@ export class WellnessPlanService {
 
     // Parse slot completion from daily_checkins.summary
     let slotMeta: Record<string, any> = {};
-    if (todayCheckinRes.data?.summary) {
+    const summaryRows = todayCheckinRes.data;
+    const summaryStr = Array.isArray(summaryRows) && summaryRows.length > 0
+      ? summaryRows[0].summary
+      : (summaryRows as any)?.summary;
+
+    if (summaryStr) {
       try {
-        slotMeta = JSON.parse(todayCheckinRes.data.summary);
+        slotMeta = JSON.parse(summaryStr);
       } catch {
         slotMeta = {};
       }
@@ -303,15 +307,20 @@ export class WellnessPlanService {
     const latestSlotData = slotMeta.evening?.data || slotMeta.afternoon?.data || slotMeta.morning?.data || {};
     const indicators = latestSlotData.indicators || {};
 
-    const todaySleep = sleepRes.data?.duration_hours ?? (indicators.sleepRating ? indicators.sleepRating * 1.6 : null);
-    const todayWater = waterRes.data ? Number(waterRes.data.amount_ml) / 1000 : (indicators.hydrationRating ? indicators.hydrationRating * 0.5 : null);
-    const todayMood = indicators.mood?.state ? `Mood: ${indicators.mood.state}` : (moodRes.data?.mood ?? null);
+    const sleepRow = Array.isArray(sleepRes.data) && sleepRes.data.length > 0 ? sleepRes.data[0] : (sleepRes.data as any);
+    const waterRow = Array.isArray(waterRes.data) && waterRes.data.length > 0 ? waterRes.data[0] : (waterRes.data as any);
+    const moodRow = Array.isArray(moodRes.data) && moodRes.data.length > 0 ? moodRes.data[0] : (moodRes.data as any);
+    const exerciseRow = Array.isArray(exerciseRes.data) && exerciseRes.data.length > 0 ? exerciseRes.data[0] : (exerciseRes.data as any);
+
+    const todaySleep = sleepRow?.duration_hours ?? (indicators.sleepRating ? indicators.sleepRating * 1.6 : null);
+    const todayWater = waterRow ? Number(waterRow.amount_ml) / 1000 : (indicators.hydrationRating ? indicators.hydrationRating * 0.5 : null);
+    const todayMood = indicators.mood?.state ? `Mood: ${indicators.mood.state}` : (moodRow?.mood ?? null);
     const todayStressScore = indicators.stress?.score ?? latestSlotData.averageScore ?? null;
     const todayStressIndicator = indicators.stress?.level ?? latestSlotData.stressIndicator ?? null;
     const todayEnergy = indicators.energy?.level ?? null;
     const todayWellnessScore = indicators.wellnessScore ?? null;
     const todaySupport = indicators.supportChoice ?? latestSlotData.supportChoice ?? null;
-    const todayExercise = exerciseRes.data?.duration_minutes ?? null;
+    const todayExercise = exerciseRow?.duration_minutes ?? null;
 
     const skins = skinRes.data || [];
     const acneAvg = skins.length ? skins.reduce((s, sk) => s + Number(sk.acne ?? sk.condition ?? 3), 0) / skins.length : 3;

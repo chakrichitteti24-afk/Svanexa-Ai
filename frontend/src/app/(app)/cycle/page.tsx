@@ -587,7 +587,7 @@ const parseLocalDate = (dateStr: string | null) => {
     }
   };
 
-  // Save Note / Event
+  // Save Note / Event / Symptoms
   const saveCheckinMeta = async (updates: any) => {
     if (!selectedDate) return;
     try {
@@ -595,11 +595,32 @@ const parseLocalDate = (dateStr: string | null) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const existing = monthData[dateStr]?.meta || {};
-      await supabase.from('daily_checkins').upsert({ 
-        user_id: user.id, 
-        date: dateStr, 
-        summary: JSON.stringify({ ...existing, ...updates }) 
-      }, { onConflict: 'user_id,date' });
+      const existingId = monthData[dateStr]?.checkin?.id;
+      const newSummary = JSON.stringify({ ...existing, ...updates });
+
+      if (existingId) {
+        await supabase
+          .from('daily_checkins')
+          .update({ summary: newSummary, updated_at: new Date().toISOString() })
+          .eq('id', existingId);
+      } else {
+        const { error: insertErr } = await supabase
+          .from('daily_checkins')
+          .insert({ 
+            user_id: user.id, 
+            date: dateStr, 
+            summary: newSummary,
+            updated_at: new Date().toISOString(),
+          });
+
+        if (insertErr) {
+          await supabase
+            .from('daily_checkins')
+            .update({ summary: newSummary, updated_at: new Date().toISOString() })
+            .eq('user_id', user.id)
+            .eq('date', dateStr);
+        }
+      }
       
       toast.success('Saved successfully.');
       await fetchMonth();

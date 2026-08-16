@@ -9,20 +9,34 @@ export async function GET(req: Request) {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (authError || !user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const userId = user.id;
+    const userId = user?.id || null;
     const today = extractDateFromRequest(req);
 
+    if (!userId) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          date: today,
+          slots: {
+            morning:   { completed: false, completedAt: null, data: null },
+            afternoon: { completed: false, completedAt: null, data: null },
+            evening:   { completed: false, completedAt: null, data: null },
+          },
+          allSlotsComplete: false,
+          isGuest: true,
+        },
+      });
+    }
+
     // Read daily_checkins.summary which stores slot meta as JSON
-    const { data: checkin } = await supabase
+    const { data: checkinRows } = await supabase
       .from('daily_checkins')
       .select('summary')
       .eq('user_id', userId)
       .eq('date', today)
-      .maybeSingle();
+      .limit(1);
+
+    const checkin = checkinRows && checkinRows.length > 0 ? checkinRows[0] : null;
 
     let slotMeta: Record<string, any> = {};
     if (checkin?.summary) {

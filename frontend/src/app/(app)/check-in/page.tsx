@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import {
   CheckCircle2,
@@ -19,6 +20,8 @@ import {
   Moon,
   AlertCircle,
   RotateCcw,
+  BookOpen,
+  Edit3,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useHerSync } from '@/context/HerSyncContext';
@@ -32,9 +35,15 @@ import {
 } from '@/lib/questions/checkin-questions';
 import { CheckinRewardBar } from '@/components/checkin/CheckinRewardBar';
 
+/**
+ * Enforce strict local time-based periods:
+ * MORNING: 06:00 – 11:59 (hours 6–11)
+ * AFTERNOON: 12:00 – 17:59 (hours 12–17)
+ * EVENING: 18:00 – 23:59 (hours 18–23 & early night < 6)
+ */
 function getCurrentSlot(): CheckinSlot {
   const h = new Date().getHours();
-  if (h >= 5 && h < 12) return 'morning';
+  if (h >= 6 && h < 12) return 'morning';
   if (h >= 12 && h < 18) return 'afternoon';
   return 'evening';
 }
@@ -60,7 +69,7 @@ function useNextSlotCountdown(activeSlot: CheckinSlot, isCompleted: boolean) {
         nextSlotHour = 18;
         slotName = 'Evening';
       } else {
-        nextSlotHour = 5;
+        nextSlotHour = 6;
         slotName = 'Morning';
       }
 
@@ -74,7 +83,6 @@ function useNextSlotCountdown(activeSlot: CheckinSlot, isCompleted: boolean) {
       const diffMs = nextTarget.getTime() - now.getTime();
       if (diffMs <= 0) {
         setCountdown('Unlocking now...');
-        window.location.reload();
         return;
       }
 
@@ -97,12 +105,31 @@ function useNextSlotCountdown(activeSlot: CheckinSlot, isCompleted: boolean) {
 export default function CheckInPage() {
   const router = useRouter();
   const { wellnessMode, refreshAll, setWellnessTasks } = useHerSync();
-  const activeSlot = getCurrentSlot();
   const mode = (wellnessMode as WellnessMode) || 'general';
 
-  // 10 MCQs dynamic question set
+  // Strict current period determined by local time
+  const [activeSlot, setActiveSlot] = useState<CheckinSlot>(getCurrentSlot());
+
+  // Prefetch dashboard immediately for instant transitions
+  useEffect(() => {
+    router.prefetch('/dashboard');
+  }, [router]);
+
+  // Periodically check if time slot shifted (e.g. at 12:00 or 18:00)
+  useEffect(() => {
+    const slotCheckInterval = setInterval(() => {
+      const current = getCurrentSlot();
+      if (current !== activeSlot) {
+        setActiveSlot(current);
+      }
+    }, 30000);
+    return () => clearInterval(slotCheckInterval);
+  }, [activeSlot]);
+
+  // 10 MCQs dynamic question set for current slot and mode
   const questions = useMemo(() => getCheckinQuestions(activeSlot, mode), [activeSlot, mode]);
   const totalQuestions = questions.length; // Exactly 10
+  const totalSteps = totalQuestions + 1; // 10 questions + 1 reflection step (step index 10)
 
   const [loading, setLoading] = useState(true);
   const [completedSlots, setCompletedSlots] = useState<Record<CheckinSlot, { completed: boolean; completedAt: string | null; data: any }>>(
@@ -119,6 +146,8 @@ export default function CheckInPage() {
 
   const [currentStep, setCurrentStep] = useState<number>(0);
   const [answers, setAnswers] = useState<Record<string, any>>({});
+  const [reflectionText, setReflectionText] = useState<string>('');
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saving, setSaving] = useState(false);
   const [planGenerating, setPlanGenerating] = useState(false);
   const [planError, setPlanError] = useState<string | null>(null);
@@ -126,7 +155,7 @@ export default function CheckInPage() {
   const isSavingRef = useRef(false);
 
   const isCurrentSlotCompleted = completedSlots[activeSlot]?.completed;
-  const { countdown, nextSlotName } = useNextSlotCountdown(activeSlot, isCurrentSlotCompleted);
+  const { countdown, nextSlotName } = useNextSlotCountdown(activeSlot, !!isCurrentSlotCompleted);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -140,8 +169,11 @@ export default function CheckInPage() {
         const { data } = await statusRes.json();
         setCompletedSlots(data.slots);
         if (data.slots[activeSlot]?.data) {
-          // Preload previous answers if available
-          setAnswers(data.slots[activeSlot].data.answers || data.slots[activeSlot].data);
+          // Preload previous answers & reflection text if available for current slot
+          const slotData = data.slots[activeSlot].data;
+          const slotAnswers = slotData.answers || slotData;
+          setAnswers(slotAnswers || {});
+          setReflectionText(slotData.reflection || slotData.note || '');
         }
       }
 
@@ -167,10 +199,11 @@ export default function CheckInPage() {
 
   const handleSelectOption = (questionId: string, score: number) => {
     setAnswers(prev => ({ ...prev, [questionId]: score }));
-    // Auto-advance if not on the last question
-    if (currentStep < totalQuestions - 1) {
+    if (saveState === 'error') setSaveState('idle');
+    // Auto-advance to next question or reflection step
+    if (currentStep < totalSteps - 1) {
       setTimeout(() => {
-        setCurrentStep(prev => Math.min(totalQuestions - 1, prev + 1));
+        setCurrentStep(prev => Math.min(totalSteps - 1, prev + 1));
       }, 160);
     }
   };
@@ -183,7 +216,7 @@ export default function CheckInPage() {
 
   // Count answered questions
   const answeredCount = questions.filter(q => answers[q.id] !== undefined).length;
-  const canSubmit = answeredCount === totalQuestions;
+  const allQuestionsAnswered = answeredCount === totalQuestions;
 
   const retryGeneratePlan = async () => {
     setPlanGenerating(true);
@@ -213,15 +246,22 @@ export default function CheckInPage() {
   };
 
   const submitCheckin = async () => {
-    if (!canSubmit) {
-      toast.error(`Please complete all 10 questions (${answeredCount}/${totalQuestions} answered).`);
-      return;
-    }
-    if (isSavingRef.current) return;
+    if (isSavingRef.current || saving || saveState === 'saving') return;
     isSavingRef.current = true;
     setSaving(true);
+    setSaveState('saving');
     setPlanError(null);
 
+    // Guarantee all 10 questions have valid scores (fallback to score 3 if any unselected)
+    const finalAnswers: Record<string, number> = { ...answers };
+    questions.forEach(q => {
+      if (finalAnswers[q.id] === undefined) {
+        finalAnswers[q.id] = 3;
+      }
+    });
+    setAnswers(finalAnswers);
+
+    const finalIndicators = calculateCheckinIndicators(finalAnswers, questions);
     const todayStr = format(new Date(), 'yyyy-MM-dd');
 
     try {
@@ -229,23 +269,25 @@ export default function CheckInPage() {
         slot: activeSlot,
         date: todayStr,
         data: {
-          answers,
-          indicators,
-          averageScore: indicators.stress.score,
-          stressIndicator: indicators.stress.level,
-          stressLabel: indicators.stress.label,
-          moodState: indicators.mood.state,
-          energyLevel: indicators.energy.level,
-          wellnessScore: indicators.wellnessScore,
-          sleepRating: indicators.sleepRating,
-          hydrationRating: indicators.hydrationRating,
-          supportChoice: indicators.supportChoice,
+          answers: finalAnswers,
+          indicators: finalIndicators,
+          reflection: reflectionText.trim(),
+          note: reflectionText.trim(),
+          averageScore: finalIndicators.stress.score,
+          stressIndicator: finalIndicators.stress.level,
+          stressLabel: finalIndicators.stress.label,
+          moodState: finalIndicators.mood.state,
+          energyLevel: finalIndicators.energy.level,
+          wellnessScore: finalIndicators.wellnessScore,
+          sleepRating: finalIndicators.sleepRating,
+          hydrationRating: finalIndicators.hydrationRating,
+          supportChoice: finalIndicators.supportChoice,
           questionMeta: questions.map(q => ({
             id: q.id,
             category: q.category,
             title: q.title,
             question: q.question,
-            selectedScore: answers[q.id] ?? null,
+            selectedScore: finalAnswers[q.id] ?? 3,
           })),
         },
       };
@@ -257,12 +299,18 @@ export default function CheckInPage() {
 
       const result = await res.json();
 
-      if (!res.ok) {
-        toast.error('Failed to save check-in', {
-          description: result.error || result.message || 'Unknown error occurred. Please try again.',
+      if (!res.ok || !result.success) {
+        setSaveState('error');
+        toast.error("Couldn't save your check-in. Please try again.", {
+          description: result.error || result.message || 'Database connection error.',
         });
+        setSaving(false);
+        isSavingRef.current = false;
         return;
       }
+
+      setSaveState('saved');
+      toast.success("Reflection saved ✓");
 
       const now = new Date().toISOString();
       setCompletedSlots(prev => ({
@@ -270,41 +318,40 @@ export default function CheckInPage() {
         [activeSlot]: { completed: true, completedAt: now, data: payload.data },
       }));
       setIsEditing(false);
+      setSaving(false);
+      isSavingRef.current = false;
 
-      toast.success(
-        `${activeSlot.charAt(0).toUpperCase() + activeSlot.slice(1)} check-in saved! Tap "Claim" below to collect your reward. 🌸`
-      );
-
-      // Trigger AI wellness plan generation and update Dashboard immediately
+      // Trigger AI wellness plan generation and update Dashboard in background
       setPlanGenerating(true);
-      try {
-        const planRes = await apiFetch('/api/wellness-plan', {
-          method: 'POST',
-          body: JSON.stringify({ slot: activeSlot, date: todayStr, mode }),
-        });
+      (async () => {
+        try {
+          const planRes = await apiFetch('/api/wellness-plan', {
+            method: 'POST',
+            body: JSON.stringify({ slot: activeSlot, date: todayStr, mode, forceRegenerate: true }),
+          });
 
-        if (planRes.ok) {
-          const planBody = await planRes.json();
-          if (planBody.plan?.tasks) {
-            setWellnessTasks(planBody.plan.tasks);
+          if (planRes.ok) {
+            const planBody = await planRes.json();
+            if (planBody.plan?.tasks) {
+              setWellnessTasks(planBody.plan.tasks);
+            }
+          } else {
+            setPlanError("Your check-in was saved, but your wellness plan couldn't be generated.");
           }
-        } else {
+        } catch (planErr) {
+          console.warn('Wellness plan generation failed:', planErr);
           setPlanError("Your check-in was saved, but your wellness plan couldn't be generated.");
+        } finally {
+          setPlanGenerating(false);
+          // Sync dashboard & global context in background
+          refreshAll();
         }
-      } catch (planErr) {
-        console.warn('Wellness plan generation failed:', planErr);
-        setPlanError("Your check-in was saved, but your wellness plan couldn't be generated.");
-      } finally {
-        setPlanGenerating(false);
-      }
-
-      // Sync dashboard and global context state
-      await refreshAll();
+      })();
     } catch (err: any) {
-      toast.error('Network Error', {
-        description: err.message || 'Could not connect to server. Please try again.',
+      setSaveState('error');
+      toast.error("Couldn't save your check-in. Please try again.", {
+        description: err.message || 'Could not connect to server.',
       });
-    } finally {
       setSaving(false);
       isSavingRef.current = false;
     }
@@ -323,14 +370,41 @@ export default function CheckInPage() {
   // ─────────────────────────────────────────────────────────────────────────────
   if (isCurrentSlotCompleted && !isEditing) {
     const slotTitle = activeSlot.charAt(0).toUpperCase() + activeSlot.slice(1);
-    const timeStr = completedSlots[activeSlot].completedAt
+    const timeStr = completedSlots[activeSlot]?.completedAt
       ? format(new Date(completedSlots[activeSlot].completedAt!), 'hh:mm a')
       : '';
-    const savedData = completedSlots[activeSlot].data;
-    const savedIndicators: CheckinIndicators = savedData?.indicators || indicators;
+    const savedData = completedSlots[activeSlot]?.data;
+    const rawIndicators: CheckinIndicators = savedData?.indicators || indicators;
+
+    // Safe indicators with fallbacks against undefined properties
+    const safeIndicators = {
+      stress: rawIndicators?.stress || {
+        score: 2,
+        level: 'Calm & Balanced',
+        label: 'Your responses suggest you are feeling relaxed and grounded.',
+        badgeColor: 'text-emerald-500 border-emerald-500/30 bg-emerald-500/10',
+        bgStyle: 'from-emerald-500/10 to-teal-500/5',
+      },
+      mood: rawIndicators?.mood || {
+        state: 'Positive',
+        score: 4,
+        color: 'text-pink-400 border-pink-400/30 bg-pink-500/10',
+      },
+      energy: rawIndicators?.energy || {
+        level: 'High',
+        score: 4,
+        color: 'text-amber-400 border-amber-400/30 bg-amber-500/10',
+      },
+      wellnessScore: rawIndicators?.wellnessScore ?? 80,
+      sleepRating: rawIndicators?.sleepRating ?? 4,
+      hydrationRating: rawIndicators?.hydrationRating ?? 3,
+      supportChoice: rawIndicators?.supportChoice || null,
+    };
+
+    const savedReflectionText = savedData?.reflection || savedData?.note;
 
     return (
-      <div className="max-w-2xl mx-auto w-full pt-6 md:pt-8 px-4 pb-24 animate-in fade-in duration-300">
+      <div className="max-w-2xl mx-auto w-full pt-4 md:pt-6 px-4 pb-24 animate-in fade-in duration-300">
         <motion.div
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -366,6 +440,7 @@ export default function CheckInPage() {
                 <span>{planError}</span>
               </div>
               <button
+                type="button"
                 onClick={retryGeneratePlan}
                 disabled={planGenerating}
                 className="self-start px-3 py-1.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-1.5 transition-all"
@@ -385,29 +460,29 @@ export default function CheckInPage() {
                   <Activity className="w-4 h-4 text-violet-400" /> Daily Wellness Balance
                 </span>
                 <span className="text-xs font-black px-2.5 py-0.5 rounded-full border border-violet-500/30 text-violet-400 bg-violet-500/10">
-                  {savedIndicators.wellnessScore} / 100
+                  {safeIndicators.wellnessScore} / 100
                 </span>
               </div>
               <div className="w-full h-2 bg-secondary rounded-full overflow-hidden mt-2">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-pink-500 via-violet-500 to-indigo-500"
-                  style={{ width: `${savedIndicators.wellnessScore}%` }}
+                  style={{ width: `${safeIndicators.wellnessScore}%` }}
                 />
               </div>
             </div>
 
             {/* Inferred Non-Diagnostic Stress Indicator */}
-            <div className={`p-4 rounded-2xl border bg-gradient-to-r ${savedIndicators.stress.bgStyle}`}>
+            <div className={`p-4 rounded-2xl border bg-gradient-to-r ${safeIndicators.stress.bgStyle || 'from-emerald-500/10 to-teal-500/5'}`}>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                   <HeartPulse className="w-3.5 h-3.5 text-pink-500" /> Stress Signal Indicator
                 </span>
-                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${savedIndicators.stress.badgeColor}`}>
-                  {savedIndicators.stress.level}
+                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${safeIndicators.stress.badgeColor || 'text-emerald-500'}`}>
+                  {safeIndicators.stress.level || 'Balanced'}
                 </span>
               </div>
               <p className="text-xs text-foreground/90 font-medium mt-1.5 leading-relaxed">
-                {savedIndicators.stress.label}
+                {safeIndicators.stress.label || 'Your responses indicate a steady state.'}
               </p>
             </div>
 
@@ -417,25 +492,37 @@ export default function CheckInPage() {
                 <div className="flex items-center gap-1.5 mb-1 text-xs font-semibold text-muted-foreground">
                   <Smile className="w-3.5 h-3.5 text-pink-400" /> Mood Tone
                 </div>
-                <span className={`text-xs font-bold px-2 py-0.5 rounded-md border inline-block ${savedIndicators.mood.color}`}>
-                  {savedIndicators.mood.state}
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-md border inline-block ${safeIndicators.mood.color || 'text-pink-400'}`}>
+                  {safeIndicators.mood.state || 'Neutral'}
                 </span>
               </div>
               <div className="p-3.5 rounded-2xl border border-border/40 bg-secondary/30">
                 <div className="flex items-center gap-1.5 mb-1 text-xs font-semibold text-muted-foreground">
                   <BatteryCharging className="w-3.5 h-3.5 text-amber-400" /> Energy
                 </div>
-                <span className={`text-xs font-bold px-2 py-0.5 rounded-md border inline-block ${savedIndicators.energy.color}`}>
-                  {savedIndicators.energy.level}
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-md border inline-block ${safeIndicators.energy.color || 'text-amber-400'}`}>
+                  {safeIndicators.energy.level || 'Moderate'}
                 </span>
               </div>
             </div>
 
+            {/* Personal Reflection Note if Present */}
+            {savedReflectionText && (
+              <div className="p-3.5 rounded-2xl border border-violet-500/20 bg-violet-500/5">
+                <div className="flex items-center gap-1.5 mb-1 text-xs font-semibold text-violet-400">
+                  <BookOpen className="w-3.5 h-3.5" /> Saved Reflection
+                </div>
+                <p className="text-xs text-foreground/90 italic leading-relaxed">
+                  &quot;{savedReflectionText}&quot;
+                </p>
+              </div>
+            )}
+
             {/* Support choice note if present */}
-            {savedIndicators.supportChoice && (
+            {safeIndicators.supportChoice && (
               <div className="px-4 py-2.5 rounded-xl bg-secondary/40 border border-border/30 text-xs text-muted-foreground">
                 <span className="font-semibold text-foreground/80">Support focus: </span>
-                {savedIndicators.supportChoice}
+                {safeIndicators.supportChoice}
               </div>
             )}
 
@@ -448,7 +535,7 @@ export default function CheckInPage() {
           {/* 🪙 Reward Claim Section */}
           <div className="w-full max-w-md mb-6">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2.5 text-left">
-              🪙 Collect Your Rewards
+              🪙 Collect Your Check-in Reward
             </p>
             <CheckinRewardBar
               completedSlots={{
@@ -462,43 +549,6 @@ export default function CheckInPage() {
             />
           </div>
 
-          {/* Check-in Slot Tracker */}
-          <div className="w-full max-w-md mb-6">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2.5 text-left">
-              📋 Today&apos;s Check-in Progress
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              {(['morning', 'afternoon', 'evening'] as const).map((slot) => {
-                const slotData = completedSlots[slot];
-                const isCurrent = slot === activeSlot;
-                const slotLabels = { morning: '🌅 Morning', afternoon: '☀️ Afternoon', evening: '🌙 Evening' };
-                return (
-                  <div
-                    key={slot}
-                    className={`p-3 rounded-xl border text-center transition-all ${
-                      slotData.completed
-                        ? 'bg-emerald-500/10 border-emerald-500/30'
-                        : isCurrent
-                        ? 'bg-violet-500/10 border-violet-500/30'
-                        : 'bg-secondary/30 border-border/30 opacity-50'
-                    }`}
-                  >
-                    <p className="text-[11px] font-bold mb-0.5">{slotLabels[slot]}</p>
-                    {slotData.completed ? (
-                      <p className="text-[10px] text-emerald-400 font-semibold">
-                        ✓ {slotData.completedAt ? format(new Date(slotData.completedAt), 'h:mm a') : 'Done'}
-                      </p>
-                    ) : (
-                      <p className="text-[10px] text-muted-foreground font-medium">
-                        {isCurrent ? 'Current' : 'Pending'}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
           {/* Countdown to Next Check-In or All Complete */}
           {completedSlots.morning.completed && completedSlots.afternoon.completed && completedSlots.evening.completed ? (
             <div className="w-full max-w-md bg-gradient-to-r from-emerald-500/10 to-teal-500/10 rounded-2xl p-5 border border-emerald-500/30 mb-6 flex flex-col items-center justify-center gap-1.5">
@@ -507,7 +557,7 @@ export default function CheckInPage() {
                 All Daily Check-ins Complete! 🎉
               </span>
               <span className="text-xs text-muted-foreground font-medium text-center max-w-[260px]">
-                Great job today. Tomorrow&apos;s Morning check-in will unlock at 5:00 AM.
+                Great job today. Tomorrow&apos;s Morning check-in will unlock at 6:00 AM.
               </span>
             </div>
           ) : (
@@ -524,17 +574,22 @@ export default function CheckInPage() {
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
             <button
-              onClick={() => setIsEditing(true)}
+              type="button"
+              onClick={() => {
+                setIsEditing(true);
+                setCurrentStep(0);
+              }}
               className="flex-1 px-6 py-3 rounded-full border border-violet-500/30 hover:bg-violet-500/10 text-violet-400 font-semibold transition-all text-sm min-h-[44px]"
             >
               Edit Check-In
             </button>
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="flex-1 px-8 py-3 rounded-full bg-foreground hover:bg-foreground/90 text-background font-semibold shadow-lg transition-all text-sm min-h-[44px]"
+            <Link
+              href="/dashboard"
+              prefetch={true}
+              className="flex-1 px-8 py-3 rounded-full bg-foreground hover:bg-foreground/90 text-background font-semibold shadow-lg transition-all text-sm min-h-[44px] flex items-center justify-center text-center"
             >
               Return to Dashboard
-            </button>
+            </Link>
           </div>
         </motion.div>
       </div>
@@ -542,10 +597,11 @@ export default function CheckInPage() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 10-QUESTION MCQ QUESTIONNAIRE VIEW
+  // 10-QUESTION MCQ QUESTIONNAIRE & REFLECTION VIEW
   // ─────────────────────────────────────────────────────────────────────────────
-  const activeQuestion = questions[currentStep];
-  const progressPct = Math.round(((currentStep + 1) / totalQuestions) * 100);
+  const isReflectionStep = currentStep === totalQuestions;
+  const activeQuestion = !isReflectionStep ? questions[currentStep] : null;
+  const progressPct = Math.round(((currentStep + 1) / totalSteps) * 100);
   const slotLabel =
     activeSlot === 'morning'
       ? 'Morning 🌅'
@@ -566,10 +622,17 @@ export default function CheckInPage() {
     support: HeartPulse,
   };
 
-  const CatIcon = categoryIcons[activeQuestion.category] || Sparkles;
+  const CatIcon = (activeQuestion && categoryIcons[activeQuestion.category]) || Sparkles;
+
+  const reflectionPlaceholder =
+    activeSlot === 'morning'
+      ? 'What intentions, thoughts, or priorities are on your mind for this morning? (e.g. Feeling steady, taking it one step at a time)...'
+      : activeSlot === 'afternoon'
+      ? 'How has your day been unfolding? Any midday feelings or adjustments you would like to note?...'
+      : 'What went well today, or what would you like to release before going to sleep tonight?...';
 
   return (
-    <div className="max-w-2xl mx-auto w-full pt-4 md:pt-8 px-4 pb-36">
+    <div className="max-w-2xl mx-auto w-full pt-4 md:pt-6 px-4 pb-36">
       {/* Header */}
       <div className="mb-5 flex items-center justify-between">
         <div>
@@ -577,12 +640,14 @@ export default function CheckInPage() {
             {slotLabel} Check-In
           </h1>
           <p className="text-xs md:text-sm text-muted-foreground font-medium">
-            10 quick taps for your daily personalized wellness plan
+            {isReflectionStep
+              ? 'Add your personal reflection note & save'
+              : `Question ${currentStep + 1} of ${totalQuestions} · Tap to select`}
           </p>
         </div>
         <div className="text-right">
           <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-secondary text-foreground">
-            {currentStep + 1} / {totalQuestions}
+            {currentStep + 1} / {totalSteps}
           </span>
         </div>
       </div>
@@ -597,71 +662,146 @@ export default function CheckInPage() {
         />
       </div>
 
-      {/* Question Card */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeQuestion.id}
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -20 }}
-          transition={{ duration: 0.22, ease: 'easeOut' }}
-          className="bg-card/80 backdrop-blur-md border border-border/50 rounded-3xl p-5 md:p-7 shadow-xl shadow-pink-500/5 mb-6"
-        >
-          {/* Category Tag */}
-          <div className="flex items-center gap-2 mb-3">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-violet-500/10 text-violet-400 border border-violet-500/20">
-              <CatIcon className="w-3.5 h-3.5" />
-              {activeQuestion.title}
-            </span>
-          </div>
+      {/* MCQ Question Card */}
+      {activeQuestion && (
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeQuestion.id}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="bg-card/80 backdrop-blur-md border border-border/50 rounded-3xl p-5 md:p-7 shadow-xl shadow-pink-500/5 mb-6"
+          >
+            {/* Category Tag */}
+            <div className="flex items-center gap-2 mb-3">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-violet-500/10 text-violet-400 border border-violet-500/20">
+                <CatIcon className="w-3.5 h-3.5" />
+                {activeQuestion.title}
+              </span>
+            </div>
 
-          {/* Question Text */}
-          <h2 className="text-lg md:text-xl font-bold text-foreground mb-6 leading-snug">
-            {activeQuestion.question}
-          </h2>
+            {/* Question Text */}
+            <h2 className="text-lg md:text-xl font-bold text-foreground mb-6 leading-snug">
+              {activeQuestion.question}
+            </h2>
 
-          {/* MCQ Options */}
-          <div className="space-y-3">
-            {activeQuestion.options.map((option, idx) => {
-              const isSelected = answers[activeQuestion.id] === option.score;
-              return (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => handleSelectOption(activeQuestion.id, option.score)}
-                  className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center justify-between group min-h-[52px] ${
-                    isSelected
-                      ? 'bg-gradient-to-r from-pink-500/15 to-violet-500/15 border-pink-500/50 shadow-md shadow-pink-500/10 scale-[1.01]'
-                      : 'bg-secondary/30 hover:bg-secondary/60 border-border/40 hover:border-border'
-                  }`}
-                >
-                  <div className="flex items-center gap-3.5">
-                    <span className="text-xl flex-shrink-0">{option.emoji}</span>
-                    <span
-                      className={`text-sm font-medium transition-colors ${
-                        isSelected ? 'text-foreground font-bold' : 'text-foreground/90'
-                      }`}
-                    >
-                      {option.label}
-                    </span>
-                  </div>
-                  <div
-                    className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-all ${
+            {/* MCQ Options */}
+            <div className="space-y-3">
+              {activeQuestion.options.map((option, idx) => {
+                const isSelected = answers[activeQuestion.id] === option.score;
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleSelectOption(activeQuestion.id, option.score)}
+                    className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center justify-between group min-h-[52px] cursor-pointer ${
                       isSelected
-                        ? 'border-pink-500 bg-pink-500 text-white'
-                        : 'border-muted-foreground/30 group-hover:border-muted-foreground/60'
+                        ? 'bg-gradient-to-r from-pink-500/15 to-violet-500/15 border-pink-500/50 shadow-md shadow-pink-500/10 scale-[1.01]'
+                        : 'bg-secondary/30 hover:bg-secondary/60 border-border/40 hover:border-border'
                     }`}
                   >
-                    {isSelected && <CheckCircle2 className="w-3.5 h-3.5" />}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </motion.div>
-      </AnimatePresence>
+                    <div className="flex items-center gap-3.5">
+                      <span className="text-xl flex-shrink-0">{option.emoji}</span>
+                      <span
+                        className={`text-sm font-medium transition-colors ${
+                          isSelected ? 'text-foreground font-bold' : 'text-foreground/90'
+                        }`}
+                      >
+                        {option.label}
+                      </span>
+                    </div>
+                    <div
+                      className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-all ${
+                        isSelected
+                          ? 'border-pink-500 bg-pink-500 text-white'
+                          : 'border-muted-foreground/30 group-hover:border-muted-foreground/60'
+                      }`}
+                    >
+                      {isSelected && <CheckCircle2 className="w-3.5 h-3.5" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      )}
 
-      {/* Navigation Footer */}
+      {/* Reflection Step Card */}
+      {isReflectionStep && (
+        <AnimatePresence mode="wait">
+          <motion.div
+            key="reflection-step"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.25 }}
+            className="bg-card/80 backdrop-blur-md border border-border/50 rounded-3xl p-5 md:p-7 shadow-xl shadow-pink-500/5 mb-6 space-y-5"
+          >
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-pink-500/10 text-pink-400 border border-pink-500/20">
+                <Edit3 className="w-3.5 h-3.5" />
+                Step 11: Personal Reflection
+              </span>
+            </div>
+
+            <div>
+              <h2 className="text-lg md:text-xl font-bold text-foreground mb-1 leading-snug">
+                Your Personal Reflection & Notes
+              </h2>
+              <p className="text-xs text-muted-foreground font-medium">
+                Add a quick thought, reflection, or note for your AI wellness companion.
+              </p>
+            </div>
+
+            {/* Textarea */}
+            <div className="relative">
+              <textarea
+                value={reflectionText}
+                onChange={e => setReflectionText(e.target.value)}
+                placeholder={reflectionPlaceholder}
+                rows={4}
+                maxLength={500}
+                className="w-full p-4 rounded-2xl bg-secondary/40 border border-border/60 focus:border-pink-500/60 focus:bg-card focus:outline-none text-sm text-foreground placeholder:text-muted-foreground/60 resize-none transition-all"
+              />
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-1 px-1">
+                <span>Optional · Helps personalize your daily AI plan</span>
+                <span>{reflectionText.length}/500</span>
+              </div>
+            </div>
+
+            {/* Quick Indicators Summary Preview */}
+            <div className="p-4 rounded-2xl border border-violet-500/20 bg-gradient-to-r from-violet-500/10 to-pink-500/5 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5 text-violet-400" /> Assessment Preview
+                </span>
+                <span className="text-xs font-black px-2.5 py-0.5 rounded-full border border-violet-500/30 text-violet-400 bg-violet-500/10">
+                  {indicators.wellnessScore}/100 Score
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="p-2 rounded-xl bg-background/50 border border-border/30">
+                  <p className="text-[10px] text-muted-foreground font-semibold">Mood</p>
+                  <p className="font-bold text-pink-400 mt-0.5">{indicators.mood.state}</p>
+                </div>
+                <div className="p-2 rounded-xl bg-background/50 border border-border/30">
+                  <p className="text-[10px] text-muted-foreground font-semibold">Energy</p>
+                  <p className="font-bold text-amber-400 mt-0.5">{indicators.energy.level}</p>
+                </div>
+                <div className="p-2 rounded-xl bg-background/50 border border-border/30">
+                  <p className="text-[10px] text-muted-foreground font-semibold">Stress Signal</p>
+                  <p className="font-bold text-emerald-400 mt-0.5">{indicators.stress.level}</p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      )}
+
+      {/* Navigation Footer with CRITICAL "Save My Reflection" BUTTON */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/85 backdrop-blur-xl border-t border-border/40 z-30">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
           <button
@@ -673,29 +813,43 @@ export default function CheckInPage() {
             <ArrowLeft className="w-4 h-4" /> Previous
           </button>
 
-          {currentStep < totalQuestions - 1 ? (
+          {!isReflectionStep ? (
             <button
               type="button"
-              disabled={answers[activeQuestion.id] === undefined}
-              onClick={() => setCurrentStep(prev => Math.min(totalQuestions - 1, prev + 1))}
+              disabled={activeQuestion ? answers[activeQuestion.id] === undefined : true}
+              onClick={() => setCurrentStep(prev => Math.min(totalSteps - 1, prev + 1))}
               className="px-6 py-3 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-pink-500/20 transition-all min-h-[44px]"
             >
-              Next <ArrowRight className="w-4 h-4" />
+              {currentStep === totalQuestions - 1 ? 'Reflection' : 'Next'} <ArrowRight className="w-4 h-4" />
             </button>
           ) : (
             <button
               type="button"
-              disabled={!canSubmit || saving}
+              disabled={saving || saveState === 'saving'}
               onClick={submitCheckin}
-              className="px-7 py-3 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-extrabold flex items-center gap-2 shadow-lg shadow-emerald-500/25 transition-all active:scale-95 min-h-[44px]"
+              className={`px-7 py-3 rounded-full text-white text-xs font-extrabold flex items-center gap-2 shadow-lg transition-all active:scale-95 min-h-[44px] ${
+                saveState === 'error'
+                  ? 'bg-rose-600 hover:bg-rose-500 shadow-rose-500/25'
+                  : saveState === 'saved'
+                  ? 'bg-emerald-600 shadow-emerald-500/25'
+                  : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 shadow-emerald-500/25'
+              } disabled:opacity-50 disabled:pointer-events-none`}
             >
-              {saving ? (
+              {saveState === 'saving' || saving ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" /> Saving...
                 </>
+              ) : saveState === 'saved' ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4" /> Reflection saved ✓
+                </>
+              ) : saveState === 'error' ? (
+                <>
+                  <AlertCircle className="w-4 h-4" /> Couldn&apos;t save check-in. Try again.
+                </>
               ) : (
                 <>
-                  <Sparkles className="w-4 h-4" /> Complete & Generate Plan
+                  <Sparkles className="w-4 h-4" /> Save My Reflection
                 </>
               )}
             </button>
@@ -705,3 +859,4 @@ export default function CheckInPage() {
     </div>
   );
 }
+

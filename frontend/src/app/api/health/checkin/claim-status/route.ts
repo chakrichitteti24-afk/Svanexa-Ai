@@ -35,12 +35,14 @@ export async function GET(req: Request) {
     const bonusClaimed     = claimedRefs.has(`checkin:${today}:all_slots_bonus`);
 
     // ── Read today's check-in completion state ──────────────────────────
-    const { data: checkinRow } = await supabase
+    const { data: checkinRows } = await supabase
       .from('daily_checkins')
       .select('summary')
       .eq('user_id', userId)
       .eq('date', today)
-      .maybeSingle();
+      .limit(1);
+
+    const checkinRow = checkinRows && checkinRows.length > 0 ? checkinRows[0] : null;
 
     let slotMeta: Record<string, any> = {};
     if (checkinRow?.summary) {

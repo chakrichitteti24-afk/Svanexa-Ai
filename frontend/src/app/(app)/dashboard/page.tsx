@@ -71,8 +71,8 @@ export default function DashboardPage() {
 
   const getGreetingTime = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Morning';
-    if (hour < 18) return 'Afternoon';
+    if (hour >= 6 && hour < 12) return 'Morning';
+    if (hour >= 12 && hour < 18) return 'Afternoon';
     return 'Evening';
   };
 
@@ -131,10 +131,10 @@ export default function DashboardPage() {
   const completedTasks = wellnessTasks.filter(t => t.completed || t.status === 'completed').length;
   const totalTasks = wellnessTasks.length;
 
-  const getActiveTimeSlot = () => {
+  const getActiveTimeSlot = (): 'morning' | 'afternoon' | 'evening' => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'morning';
-    if (hour < 18) return 'afternoon';
+    if (hour >= 6 && hour < 12) return 'morning';
+    if (hour >= 12 && hour < 18) return 'afternoon';
     return 'evening';
   };
   const activeSlot = getActiveTimeSlot();

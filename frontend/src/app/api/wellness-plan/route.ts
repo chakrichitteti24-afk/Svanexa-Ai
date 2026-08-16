@@ -11,21 +11,21 @@ export async function GET(req: Request) {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (authError || !user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const userId = user.id;
+    const userId = user?.id || 'guest-session';
     const todayStr = extractDateFromRequest(req);
 
     // Get wellness mode from profile active_theme or default to general
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('active_theme')
-      .eq('id', userId)
-      .maybeSingle();
-
-    const wellnessMode = (profile?.active_theme as string) || 'general';
+    let wellnessMode = 'general';
+    if (user?.id) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('active_theme')
+        .eq('id', user.id)
+        .limit(1);
+      if (profile && profile.length > 0 && profile[0].active_theme) {
+        wellnessMode = profile[0].active_theme;
+      }
+    }
 
     const service = new WellnessPlanService(supabase as any);
     const result = await service.getDailyWellnessPlan(userId, todayStr, wellnessMode);
@@ -40,13 +40,9 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser();
 
-    if (authError || !user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const userId = user.id;
+    const userId = user?.id || 'guest-session';
     let todayStr = extractDateFromRequest(req);
     let slot: TaskTimeSlot | undefined = undefined;
     let forceRegenerate = false;
@@ -68,13 +64,17 @@ export async function POST(req: Request) {
       // Empty body is valid
     }
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('active_theme')
-      .eq('id', userId)
-      .maybeSingle();
-
-    const wellnessMode = requestedMode || (profile?.active_theme as string) || 'general';
+    let wellnessMode = requestedMode || 'general';
+    if (user?.id && !requestedMode) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('active_theme')
+        .eq('id', user.id)
+        .limit(1);
+      if (profile && profile.length > 0 && profile[0].active_theme) {
+        wellnessMode = profile[0].active_theme;
+      }
+    }
 
     const service = new WellnessPlanService(supabase as any);
     const result = await service.getDailyWellnessPlan(userId, todayStr, wellnessMode, slot, forceRegenerate);
