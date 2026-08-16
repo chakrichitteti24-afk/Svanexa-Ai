@@ -11,8 +11,6 @@ import { PWAInstaller } from '@/components/ui/PWAInstaller';
 import { createClient } from '@/utils/supabase/client';
 import { DashboardSkeleton } from '@/components/ui/skeleton';
 
-const supabase = createClient();
-
 export default function AppLayout({
   children,
 }: {
@@ -27,6 +25,7 @@ export default function AppLayout({
     let isSubscribed = true;
     const checkAuth = async () => {
       try {
+        const supabase = createClient();
         const { data: { session } } = await supabase.auth.getSession();
         if (!session && isSubscribed) {
           router.replace('/login');
