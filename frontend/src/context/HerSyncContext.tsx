@@ -605,7 +605,9 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
   }, [fetchAll, state.lastRefreshed]);
 
   const wellnessMode: 'general' | 'pcos' | 'pregnancy' =
-    (state.preferences?.theme as 'general' | 'pcos' | 'pregnancy') || 'general';
+    (state.preferences?.theme as 'general' | 'pcos' | 'pregnancy') ||
+    (state.profile?.active_theme as 'general' | 'pcos' | 'pregnancy') ||
+    'general';
   const userName = state.profile?.first_name || 'there';
   const aiName = state.profile?.ai_name || 'Luna';
 
