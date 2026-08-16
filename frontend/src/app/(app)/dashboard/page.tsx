@@ -5,7 +5,7 @@ import {
   BrainCircuit, Loader2, Droplets, Dumbbell,
   Check, Moon, Smile, Activity, Flame, Heart,
   Calendar, BarChart2, Sun, Sunset, Sparkles,
-  ArrowRight
+  ArrowRight, RotateCcw
 } from 'lucide-react';
 import { useHerSync } from '@/context/HerSyncContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -13,6 +13,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { apiFetch } from '@/utils/api-client';
 import { toast } from 'sonner';
+import { format } from 'date-fns';
 import styles from './dashboard.module.css';
 import { DashboardMascot } from '@/components/chat/DashboardMascot';
 import { DashboardSkeleton } from '@/components/ui/skeleton';
@@ -41,6 +42,7 @@ export default function DashboardPage() {
   const [togglingTask, setTogglingTask] = useState<string | null>(null);
   const [lunaReaction, setLunaReaction] = useState<string | null>(null);
   const [showSparkles, setShowSparkles] = useState<string | null>(null);
+  const [isRefreshingPlan, setIsRefreshingPlan] = useState(false);
 
   const LUNA_REACTIONS = [
     "Great job! Keep going. 🌸",
@@ -54,13 +56,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (isLoading) return;
-    const todayKey = `hersync_greeted_${new Date().toISOString().slice(0, 10)}`;
+    const todayKey = `hersync_greeted_${format(new Date(), 'yyyy-MM-dd')}`;
     if (!localStorage.getItem(todayKey)) {
       // First visit today — show the welcome animation once
       setShowWelcome(true);
       localStorage.setItem(todayKey, '1');
       // Clean up yesterday's key to avoid localStorage bloat
-      const yesterdayKey = `hersync_greeted_${new Date(Date.now() - 86400000).toISOString().slice(0, 10)}`;
+      const yesterdayKey = `hersync_greeted_${format(new Date(Date.now() - 86400000), 'yyyy-MM-dd')}`;
       localStorage.removeItem(yesterdayKey);
       const timer = setTimeout(() => setShowWelcome(false), 2800);
       return () => clearTimeout(timer);
@@ -126,7 +128,7 @@ export default function DashboardPage() {
   const exerciseLogged = l?.exercise ? Number(l.exercise) : 0;
   const exercisePct = Math.min(100, (exerciseLogged / exerciseTarget) * 100);
 
-  const completedTasks = wellnessTasks.filter(t => t.completed).length;
+  const completedTasks = wellnessTasks.filter(t => t.completed || t.status === 'completed').length;
   const totalTasks = wellnessTasks.length;
 
   const getActiveTimeSlot = () => {
@@ -140,14 +142,14 @@ export default function DashboardPage() {
   const isCheckinCompleted = checkinSlots?.[activeSlot]?.completed;
   
   const slotTasks = wellnessTasks.filter(t => t.timeSlot === activeSlot);
-  const areTasksCompleted = slotTasks.length > 0 && slotTasks.every(t => t.completed);
+  const areTasksCompleted = slotTasks.length > 0 && slotTasks.every(t => t.completed || t.status === 'completed');
 
   const handleToggleTask = async (taskId: string, planId?: string) => {
     if (togglingTask) return;
     setTogglingTask(taskId);
 
     const targetTask = wellnessTasks.find(t => t.id === taskId);
-    const isCompleting = !targetTask?.completed;
+    const isCompleting = !targetTask?.completed && targetTask?.status !== 'completed';
 
     if (isCompleting) {
       const randomMsg = LUNA_REACTIONS[Math.floor(Math.random() * LUNA_REACTIONS.length)];
@@ -161,9 +163,10 @@ export default function DashboardPage() {
       // Optimistic update in global context (instant UI toggle!)
       toggleTask(taskId);
 
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
       const res = await apiFetch('/api/wellness-plan/toggle', {
         method: 'POST',
-        body: JSON.stringify({ taskId, planId: planId || '', status: isCompleting ? 'completed' : 'pending' }),
+        body: JSON.stringify({ taskId, planId: planId || '', status: isCompleting ? 'completed' : 'pending', date: todayStr }),
       });
       if (res.ok) {
         const body = await res.json();
@@ -175,12 +178,34 @@ export default function DashboardPage() {
         toggleTask(taskId);
         toast.error('Failed to update task');
       }
-    } catch (error) {
+    } catch {
       // Revert on error
       toggleTask(taskId);
       toast.error('Failed to update task');
     } finally {
       setTogglingTask(null);
+    }
+  };
+
+  const handleFetchOrGeneratePlan = async () => {
+    setIsRefreshingPlan(true);
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    try {
+      const res = await apiFetch('/api/wellness-plan', {
+        method: 'POST',
+        body: JSON.stringify({ slot: activeSlot, date: todayStr, mode: wellnessMode }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.plan?.tasks) {
+          setWellnessTasks(data.plan.tasks);
+        }
+      }
+      await refreshAll();
+    } catch {
+      toast.error('Could not refresh wellness plan.');
+    } finally {
+      setIsRefreshingPlan(false);
     }
   };
 
@@ -361,6 +386,9 @@ export default function DashboardPage() {
       >
         <div className="flex items-center justify-between">
           <h2 className={styles.sectionTitle}>Today&apos;s Active Wellness Plan</h2>
+          <Link href="/wellness-plan" className="text-xs font-semibold text-pink-400 hover:text-pink-300 transition-colors">
+            View All Slots →
+          </Link>
         </div>
         
         {/* The Roaming AI Mascot */}
@@ -412,11 +440,30 @@ export default function DashboardPage() {
                 <span>Luna AI:</span> <span>&quot;I&apos;m so proud of your dedication today! 💜&quot;</span>
               </div>
             </motion.div>
+          ) : slotTasks.length === 0 ? (
+            <div className="flex flex-col items-center text-center py-6">
+              <Loader2 className="w-8 h-8 text-pink-500 animate-spin mb-3" />
+              <h3 className="font-semibold text-foreground mb-1 text-base">Preparing your {activeSlotTitle} tasks...</h3>
+              <p className="text-xs text-muted-foreground mb-4 max-w-[260px]">
+                Personalizing recommendations based on your check-in.
+              </p>
+              <button
+                onClick={handleFetchOrGeneratePlan}
+                disabled={isRefreshingPlan}
+                className="px-4 py-2 bg-secondary hover:bg-secondary/80 text-foreground font-semibold text-xs rounded-full border border-border/50 transition-all flex items-center gap-1.5"
+              >
+                {isRefreshingPlan ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                Refresh Tasks 🌸
+              </button>
+            </div>
           ) : (
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-2 mb-2">
                  <Sparkles className="w-4 h-4 text-pink-500" />
                  <span className="font-semibold text-foreground">{activeSlotTitle} Tasks</span>
+                 <span className="ml-auto text-xs text-muted-foreground font-medium">
+                   {slotTasks.filter(t => t.completed || t.status === 'completed').length}/{slotTasks.length} done
+                 </span>
               </div>
               
               {slotTasks.map(task => (
@@ -429,7 +476,7 @@ export default function DashboardPage() {
                   }}
                   className={`relative flex items-center gap-3.5 p-3.5 rounded-xl border transition-all cursor-pointer select-none min-h-[48px] ${
                     togglingTask === task.id ? 'pointer-events-none opacity-80' : ''
-                  } ${task.completed ? 'bg-secondary/40 border-border/30 opacity-70' : 'bg-card border-violet-500/20 hover:border-violet-500/50 shadow-sm hover:scale-[1.005]'}`}
+                  } ${task.completed || task.status === 'completed' ? 'bg-secondary/40 border-border/30 opacity-70' : 'bg-card border-violet-500/20 hover:border-violet-500/50 shadow-sm hover:scale-[1.005]'}`}
                 >
                   {showSparkles === task.id && (
                     <motion.div 
@@ -452,18 +499,25 @@ export default function DashboardPage() {
                     }}
                     aria-label={`Mark task ${task.text} as ${task.completed ? 'incomplete' : 'complete'}`}
                     className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all min-h-[24px] min-w-[24px] ${
-                      task.completed ? 'bg-emerald-500 border-emerald-500 text-white scale-105' : 'border-violet-400 text-transparent hover:border-violet-500'
+                      task.completed || task.status === 'completed' ? 'bg-emerald-500 border-emerald-500 text-white scale-105' : 'border-violet-400 text-transparent hover:border-violet-500'
                     }`}
                   >
                     {togglingTask === task.id ? <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-500" /> : <Check className="w-3.5 h-3.5" />}
                   </button>
-                  <div className="flex-1 flex flex-col justify-center gap-0.5">
-                    <p className={`text-sm font-medium transition-all ${task.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                  <div className="flex-1 flex flex-col justify-center gap-0.5 min-w-0">
+                    <p className={`text-sm font-medium transition-all break-words ${task.completed || task.status === 'completed' ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                       {task.text}
                     </p>
-                    <span className="text-[10px] font-semibold text-violet-400 uppercase tracking-wider bg-violet-500/10 px-2 py-0.5 rounded-full inline-block w-fit">
-                      {task.category}
-                    </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-semibold text-violet-400 uppercase tracking-wider bg-violet-500/10 px-2 py-0.5 rounded-full inline-block w-fit">
+                        {task.category}
+                      </span>
+                      {task.estimatedTime && (
+                        <span className="text-[10px] text-muted-foreground font-medium">
+                          ⏱️ {task.estimatedTime}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}

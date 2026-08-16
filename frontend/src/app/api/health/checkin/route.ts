@@ -1,33 +1,37 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
-import { format } from 'date-fns';
+import { extractDateFromRequest } from '@/utils/date-utils';
 
 type CheckinSlot = 'morning' | 'afternoon' | 'evening';
 const VALID_SLOTS: CheckinSlot[] = ['morning', 'afternoon', 'evening'];
 
-/**
- * Safe upsert: check if a row exists first (avoids relying on DB unique constraints).
- */
 async function safeUpsert(
   supabase: any,
   table: string,
   match: Record<string, any>,
   payload: Record<string, any>
 ) {
-  const { data: existing, error: selectErr } = await supabase
-    .from(table)
-    .select('id')
-    .match(match)
-    .maybeSingle();
+  try {
+    const { data: existing, error: selectErr } = await supabase
+      .from(table)
+      .select('id')
+      .match(match)
+      .maybeSingle();
 
-  if (selectErr) throw new Error(`[${table}] select failed: ${selectErr.message}`);
+    if (selectErr) {
+      console.warn(`[${table}] select warning: ${selectErr.message}`);
+      return;
+    }
 
-  if (existing?.id) {
-    const { error } = await supabase.from(table).update(payload).eq('id', existing.id);
-    if (error) throw new Error(`[${table}] update failed: ${error.message}`);
-  } else {
-    const { error } = await supabase.from(table).insert({ ...match, ...payload });
-    if (error) throw new Error(`[${table}] insert failed: ${error.message}`);
+    if (existing?.id) {
+      const { error } = await supabase.from(table).update(payload).eq('id', existing.id);
+      if (error) console.warn(`[${table}] update warning: ${error.message}`);
+    } else {
+      const { error } = await supabase.from(table).insert({ ...match, ...payload });
+      if (error) console.warn(`[${table}] insert warning: ${error.message}`);
+    }
+  } catch (err: any) {
+    console.warn(`[${table}] safeUpsert catch:`, err?.message);
   }
 }
 
@@ -41,9 +45,10 @@ export async function POST(req: Request) {
     }
 
     const userId = user.id;
-    const today = format(new Date(), 'yyyy-MM-dd');
     const body = await req.json();
-    const { slot, data } = body;
+    const { slot, data, date: bodyDate } = body;
+
+    const today = bodyDate || extractDateFromRequest(req);
 
     if (!slot || !VALID_SLOTS.includes(slot)) {
       return NextResponse.json(
@@ -57,7 +62,7 @@ export async function POST(req: Request) {
     // ── Save to dedicated granular log tables safely ───────────────────────────
     try {
       // 1. Mood log
-      const moodState = data?.indicators?.mood?.state || (data?.moodState);
+      const moodState = data?.indicators?.mood?.state || data?.moodState;
       const moodText =
         moodState === 'Positive'
           ? 'uplifted'
@@ -74,10 +79,9 @@ export async function POST(req: Request) {
         { mood: moodText, intensity: Math.round(Number(stressScore) * 2) }
       );
 
-      // 2. Sleep log (if morning check-in or sleep rating provided)
+      // 2. Sleep log (if sleep rating provided)
       const sleepScore = data?.indicators?.sleepRating || data?.sleep;
       if (sleepScore) {
-        // Map 1..5 rating to approximate hours if numerical rating provided
         const approxHours =
           sleepScore === 5 ? 8.5 : sleepScore === 4 ? 7.5 : sleepScore === 3 ? 6.5 : sleepScore === 2 ? 5.0 : 4.0;
 
@@ -88,11 +92,36 @@ export async function POST(req: Request) {
           { duration_hours: approxHours }
         );
       }
+
+      // 3. Water log (if hydration rating provided)
+      const hydrationScore = data?.indicators?.hydrationRating || data?.water;
+      if (hydrationScore) {
+        const approxMl = Number(hydrationScore) * 500;
+        await safeUpsert(
+          supabase,
+          'water_logs',
+          { user_id: userId, date: today },
+          { amount_ml: approxMl }
+        );
+      }
+
+      // 4. Save to checkin_slots table (if table exists)
+      await safeUpsert(
+        supabase,
+        'checkin_slots',
+        { user_id: userId, date: today, slot },
+        {
+          completed_at: completedAt,
+          mood: moodText,
+          sleep_hours: sleepScore ? Number(sleepScore) * 1.6 : null,
+          stress: Math.min(10, Math.max(1, Math.round(Number(stressScore) * 2))),
+        }
+      );
     } catch (granularErr) {
       console.warn('Skipping granular logs sync:', granularErr);
     }
 
-    // ── Save slot data into daily_checkins.summary (JSON blob per slot) ────────
+    // ── Save slot data into daily_checkins.summary (authoritative JSON store) ──
     const { data: existing } = await supabase
       .from('daily_checkins')
       .select('id, summary')
@@ -102,7 +131,11 @@ export async function POST(req: Request) {
 
     let slotMeta: Record<string, any> = {};
     if (existing?.summary) {
-      try { slotMeta = JSON.parse(existing.summary); } catch { slotMeta = {}; }
+      try {
+        slotMeta = JSON.parse(existing.summary);
+      } catch {
+        slotMeta = {};
+      }
     }
     if (typeof slotMeta !== 'object' || slotMeta === null) slotMeta = {};
 
@@ -137,6 +170,7 @@ export async function POST(req: Request) {
       success: true,
       data: {
         slot,
+        date: today,
         completedAt,
         allSlotsComplete,
         completedSlots,

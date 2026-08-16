@@ -19,12 +19,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { message, history } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const { message, history } = body;
 
-    if (!message) {
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return NextResponse.json({ success: false, error: 'Message is required' }, { status: 400 });
     }
 
+    if (message.length > 2000) {
+      return NextResponse.json({ success: false, error: 'Message cannot exceed 2000 characters' }, { status: 400 });
+    }
+
+    const sanitizedMessage = message.trim();
     const userId = user.id;
     const today = format(new Date(), 'yyyy-MM-dd');
     const currentSlot = getCurrentSlotLabel();
@@ -32,7 +38,6 @@ export async function POST(req: Request) {
     // Fetch all context in parallel — only what is needed for AI
     const [
       { data: profile },
-      { data: preferences },
       { data: todayCheckin },
       { data: recentCheckins },
       { data: cycleLogs },
@@ -41,8 +46,7 @@ export async function POST(req: Request) {
       { data: sleepLog },
       { data: moodLog },
     ] = await Promise.all([
-      supabase.from('profiles').select('first_name, ai_name').eq('id', userId).maybeSingle(),
-      supabase.from('user_preferences').select('theme').eq('user_id', userId).maybeSingle(),
+      supabase.from('profiles').select('first_name, ai_name, active_theme').eq('id', userId).maybeSingle(),
       // Today's check-in slot data
       supabase.from('daily_checkins').select('summary').eq('user_id', userId).eq('date', today).maybeSingle(),
       // Recent check-ins (last 5 days)
@@ -59,7 +63,7 @@ export async function POST(req: Request) {
       supabase.from('mood_logs').select('mood, intensity').eq('user_id', userId).eq('date', today).maybeSingle(),
     ]);
 
-    const wellnessMode = preferences?.theme || 'general';
+    const wellnessMode = profile?.active_theme || 'general';
     const companionName = profile?.ai_name || 'Luna';
 
     // Parse today's slot data from daily_checkins.summary
@@ -127,7 +131,7 @@ export async function POST(req: Request) {
 
     const ai = new AIService();
     const result = await ai.generateCompanionResponse(
-      message,
+      sanitizedMessage,
       formattedHistory,
       contextStr,
       companionName,

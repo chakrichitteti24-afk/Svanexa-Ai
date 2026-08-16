@@ -1,4 +1,5 @@
 import { createClient } from './supabase/client';
+import { format } from 'date-fns';
 
 export async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
   const supabase = createClient();
@@ -8,7 +9,13 @@ export async function apiFetch(input: string, init?: RequestInit): Promise<Respo
   if (session?.access_token) {
     headers.set('Authorization', `Bearer ${session.access_token}`);
   }
-  headers.set('Content-Type', 'application/json');
+  if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+  
+  // Attach user's local date to ensure timezone-accurate queries on the server
+  const clientDate = format(new Date(), 'yyyy-MM-dd');
+  headers.set('x-client-date', clientDate);
 
   let fullUrl = input;
   

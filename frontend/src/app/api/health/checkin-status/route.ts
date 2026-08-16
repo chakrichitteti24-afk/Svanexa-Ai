@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
-import { format } from 'date-fns';
+import { extractDateFromRequest } from '@/utils/date-utils';
 
 type CheckinSlot = 'morning' | 'afternoon' | 'evening';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -14,7 +14,7 @@ export async function GET() {
     }
 
     const userId = user.id;
-    const today = format(new Date(), 'yyyy-MM-dd');
+    const today = extractDateFromRequest(req);
 
     // Read daily_checkins.summary which stores slot meta as JSON
     const { data: checkin } = await supabase
@@ -26,7 +26,11 @@ export async function GET() {
 
     let slotMeta: Record<string, any> = {};
     if (checkin?.summary) {
-      try { slotMeta = JSON.parse(checkin.summary); } catch { slotMeta = {}; }
+      try {
+        slotMeta = JSON.parse(checkin.summary);
+      } catch {
+        slotMeta = {};
+      }
     }
     if (typeof slotMeta !== 'object' || slotMeta === null) slotMeta = {};
 
@@ -58,6 +62,6 @@ export async function GET() {
     });
   } catch (error: any) {
     console.error('[checkin-status GET error]', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: 500 });
   }
 }

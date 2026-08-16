@@ -17,6 +17,8 @@ import {
   Activity,
   Droplets,
   Moon,
+  AlertCircle,
+  RotateCcw,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useHerSync } from '@/context/HerSyncContext';
@@ -94,7 +96,7 @@ function useNextSlotCountdown(activeSlot: CheckinSlot, isCompleted: boolean) {
 
 export default function CheckInPage() {
   const router = useRouter();
-  const { wellnessMode, refreshAll } = useHerSync();
+  const { wellnessMode, refreshAll, setWellnessTasks } = useHerSync();
   const activeSlot = getCurrentSlot();
   const mode = (wellnessMode as WellnessMode) || 'general';
 
@@ -118,6 +120,8 @@ export default function CheckInPage() {
   const [currentStep, setCurrentStep] = useState<number>(0);
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [saving, setSaving] = useState(false);
+  const [planGenerating, setPlanGenerating] = useState(false);
+  const [planError, setPlanError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const isSavingRef = useRef(false);
 
@@ -126,9 +130,10 @@ export default function CheckInPage() {
 
   const fetchStatus = useCallback(async () => {
     try {
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
       const [statusRes, claimStatusRes] = await Promise.all([
-        apiFetch('/api/health/checkin-status'),
-        apiFetch('/api/health/checkin/claim-status'),
+        apiFetch(`/api/health/checkin-status?date=${todayStr}`),
+        apiFetch(`/api/health/checkin/claim-status?date=${todayStr}`),
       ]);
 
       if (statusRes.ok) {
@@ -180,6 +185,33 @@ export default function CheckInPage() {
   const answeredCount = questions.filter(q => answers[q.id] !== undefined).length;
   const canSubmit = answeredCount === totalQuestions;
 
+  const retryGeneratePlan = async () => {
+    setPlanGenerating(true);
+    setPlanError(null);
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+
+    try {
+      const planRes = await apiFetch('/api/wellness-plan', {
+        method: 'POST',
+        body: JSON.stringify({ slot: activeSlot, date: todayStr, mode, forceRegenerate: true }),
+      });
+      if (planRes.ok) {
+        const planBody = await planRes.json();
+        if (planBody.plan?.tasks) {
+          setWellnessTasks(planBody.plan.tasks);
+        }
+        toast.success("Today's wellness plan generated! 🌸");
+        await refreshAll();
+      } else {
+        setPlanError("Your check-in was saved, but your wellness plan couldn't be generated.");
+      }
+    } catch {
+      setPlanError("Your check-in was saved, but your wellness plan couldn't be generated.");
+    } finally {
+      setPlanGenerating(false);
+    }
+  };
+
   const submitCheckin = async () => {
     if (!canSubmit) {
       toast.error(`Please complete all 10 questions (${answeredCount}/${totalQuestions} answered).`);
@@ -188,14 +220,17 @@ export default function CheckInPage() {
     if (isSavingRef.current) return;
     isSavingRef.current = true;
     setSaving(true);
+    setPlanError(null);
+
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
 
     try {
       const payload = {
         slot: activeSlot,
+        date: todayStr,
         data: {
           answers,
           indicators,
-          // Legacy direct fields for backward compatibility
           averageScore: indicators.stress.score,
           stressIndicator: indicators.stress.level,
           stressLabel: indicators.stress.label,
@@ -240,10 +275,28 @@ export default function CheckInPage() {
         `${activeSlot.charAt(0).toUpperCase() + activeSlot.slice(1)} check-in saved! Tap "Claim" below to collect your reward. 🌸`
       );
 
-      // Trigger AI wellness plan generation in background — non-blocking.
-      apiFetch('/api/wellness-plan', { method: 'POST' }).catch(() => {
-        console.warn('Wellness plan generation failed in background. Check-in remains safely saved.');
-      });
+      // Trigger AI wellness plan generation and update Dashboard immediately
+      setPlanGenerating(true);
+      try {
+        const planRes = await apiFetch('/api/wellness-plan', {
+          method: 'POST',
+          body: JSON.stringify({ slot: activeSlot, date: todayStr, mode }),
+        });
+
+        if (planRes.ok) {
+          const planBody = await planRes.json();
+          if (planBody.plan?.tasks) {
+            setWellnessTasks(planBody.plan.tasks);
+          }
+        } else {
+          setPlanError("Your check-in was saved, but your wellness plan couldn't be generated.");
+        }
+      } catch (planErr) {
+        console.warn('Wellness plan generation failed:', planErr);
+        setPlanError("Your check-in was saved, but your wellness plan couldn't be generated.");
+      } finally {
+        setPlanGenerating(false);
+      }
 
       // Sync dashboard and global context state
       await refreshAll();
@@ -266,7 +319,7 @@ export default function CheckInPage() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // COMPLETION VIEW (Summary + Reward Claim)
+  // COMPLETION VIEW (Summary + Reward Claim + Plan Sync)
   // ─────────────────────────────────────────────────────────────────────────────
   if (isCurrentSlotCompleted && !isEditing) {
     const slotTitle = activeSlot.charAt(0).toUpperCase() + activeSlot.slice(1);
@@ -293,9 +346,34 @@ export default function CheckInPage() {
             ✓ {slotTitle} Check-In Complete
           </h2>
           {timeStr && (
-            <p className="text-xs font-semibold text-muted-foreground mb-6">
+            <p className="text-xs font-semibold text-muted-foreground mb-4">
               Completed at {timeStr}
             </p>
+          )}
+
+          {/* AI Plan Generation State */}
+          {planGenerating && (
+            <div className="w-full max-w-md mb-6 p-4 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center gap-3 text-xs font-semibold text-violet-400">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Creating your personalized wellness plan...</span>
+            </div>
+          )}
+
+          {planError && (
+            <div className="w-full max-w-md mb-6 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col gap-2.5 text-left">
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-400">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{planError}</span>
+              </div>
+              <button
+                onClick={retryGeneratePlan}
+                disabled={planGenerating}
+                className="self-start px-3 py-1.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-1.5 transition-all"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Retry Generating Plan
+              </button>
+            </div>
           )}
 
           {/* 🌟 10-Dimension Wellness Assessment Summary Card */}
@@ -449,100 +527,84 @@ export default function CheckInPage() {
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight mb-1 capitalize bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-violet-500">
             {slotLabel} Check-In
           </h1>
-          <p className="text-xs md:text-sm text-muted-foreground flex items-center gap-1.5 font-medium">
-            <Sparkles className="w-4 h-4 text-violet-400 flex-shrink-0" />
-            10-Question Daily Wellness Assessment
+          <p className="text-xs md:text-sm text-muted-foreground font-medium">
+            10 quick taps for your daily personalized wellness plan
           </p>
+        </div>
+        <div className="text-right">
+          <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-secondary text-foreground">
+            {currentStep + 1} / {totalQuestions}
+          </span>
         </div>
       </div>
 
-      {/* Progress Stepper Bar */}
-      <div className="mb-6 bg-card/60 backdrop-blur-md border border-border/50 rounded-2xl p-4 shadow-sm">
-        <div className="flex items-center justify-between text-xs font-bold mb-2">
-          <span className="text-foreground">
-            Question {currentStep + 1} of {totalQuestions}
-          </span>
-          <span className="text-pink-500">{progressPct}% Complete</span>
-        </div>
-
-        <div className="w-full h-2.5 bg-secondary rounded-full overflow-hidden p-0.5 border border-border/30">
-          <motion.div
-            className="h-full rounded-full bg-gradient-to-r from-pink-500 via-violet-500 to-indigo-500"
-            initial={{ width: 0 }}
-            animate={{ width: `${progressPct}%` }}
-            transition={{ duration: 0.25, ease: 'easeOut' }}
-          />
-        </div>
-
-        {/* 10-Dot Step Navigation */}
-        <div className="flex items-center justify-center gap-1.5 md:gap-2 mt-3 flex-wrap">
-          {questions.map((q, idx) => {
-            const isAnswered = answers[q.id] !== undefined;
-            const isCurrent = idx === currentStep;
-            return (
-              <button
-                key={q.id}
-                onClick={() => setCurrentStep(idx)}
-                aria-label={`Jump to Question ${idx + 1}: ${q.title}`}
-                className={`w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all min-h-[28px] ${
-                  isCurrent
-                    ? 'bg-pink-500 text-white scale-110 shadow-md shadow-pink-500/20'
-                    : isAnswered
-                    ? 'bg-violet-500/20 text-violet-400 border border-violet-500/40'
-                    : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
-                }`}
-              >
-                {isAnswered ? '✓' : idx + 1}
-              </button>
-            );
-          })}
-        </div>
+      {/* Progress Bar */}
+      <div className="w-full h-2 bg-secondary/80 rounded-full overflow-hidden mb-6">
+        <motion.div
+          className="h-full bg-gradient-to-r from-pink-500 via-violet-500 to-indigo-500"
+          initial={{ width: 0 }}
+          animate={{ width: `${progressPct}%` }}
+          transition={{ duration: 0.3, ease: 'easeOut' }}
+        />
       </div>
 
       {/* Question Card */}
       <AnimatePresence mode="wait">
         <motion.div
-          key={activeQuestion.id + currentStep}
-          initial={{ opacity: 0, x: 18 }}
+          key={activeQuestion.id}
+          initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -18 }}
-          transition={{ duration: 0.2 }}
-          className="bg-card/70 backdrop-blur-md border border-border/50 rounded-3xl p-6 shadow-md mb-6"
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.22, ease: 'easeOut' }}
+          className="bg-card/80 backdrop-blur-md border border-border/50 rounded-3xl p-5 md:p-7 shadow-xl shadow-pink-500/5 mb-6"
         >
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full text-violet-400 bg-violet-500/10 flex items-center gap-1.5">
+          {/* Category Tag */}
+          <div className="flex items-center gap-2 mb-3">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-violet-500/10 text-violet-400 border border-violet-500/20">
               <CatIcon className="w-3.5 h-3.5" />
               {activeQuestion.title}
             </span>
-            <span className="text-[11px] font-semibold text-muted-foreground">
-              {currentStep + 1} / {totalQuestions}
-            </span>
           </div>
 
-          <h2 className="text-xl md:text-2xl font-bold mb-6 text-foreground leading-snug">
+          {/* Question Text */}
+          <h2 className="text-lg md:text-xl font-bold text-foreground mb-6 leading-snug">
             {activeQuestion.question}
           </h2>
 
-          <div className="flex flex-col gap-3">
-            {activeQuestion.options.map(opt => {
-              const isSelected = answers[activeQuestion.id] === opt.score;
+          {/* MCQ Options */}
+          <div className="space-y-3">
+            {activeQuestion.options.map((option, idx) => {
+              const isSelected = answers[activeQuestion.id] === option.score;
               return (
                 <button
-                  key={`${opt.score}-${opt.label}`}
-                  onClick={() => handleSelectOption(activeQuestion.id, opt.score)}
-                  className={`flex items-center justify-between w-full px-5 py-4 rounded-2xl border-2 font-semibold transition-all duration-200 min-h-[56px] text-left ${
+                  key={idx}
+                  type="button"
+                  onClick={() => handleSelectOption(activeQuestion.id, option.score)}
+                  className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center justify-between group min-h-[52px] ${
                     isSelected
-                      ? 'border-pink-500 bg-pink-500/10 text-pink-600 shadow-md shadow-pink-500/10 scale-[1.01]'
-                      : 'border-border/50 bg-secondary/40 text-foreground/80 hover:bg-secondary hover:border-pink-500/30'
+                      ? 'bg-gradient-to-r from-pink-500/15 to-violet-500/15 border-pink-500/50 shadow-md shadow-pink-500/10 scale-[1.01]'
+                      : 'bg-secondary/30 hover:bg-secondary/60 border-border/40 hover:border-border'
                   }`}
                 >
                   <div className="flex items-center gap-3.5">
-                    <span className="text-2xl drop-shadow-sm flex-shrink-0">{opt.emoji}</span>
-                    <span className="text-sm md:text-base leading-snug">{opt.label}</span>
+                    <span className="text-xl flex-shrink-0">{option.emoji}</span>
+                    <span
+                      className={`text-sm font-medium transition-colors ${
+                        isSelected ? 'text-foreground font-bold' : 'text-foreground/90'
+                      }`}
+                    >
+                      {option.label}
+                    </span>
                   </div>
-                  {isSelected && (
-                    <CheckCircle2 className="w-5 h-5 text-pink-500 flex-shrink-0" />
-                  )}
+                  <div
+                    className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-all ${
+                      isSelected
+                        ? 'border-pink-500 bg-pink-500 text-white'
+                        : 'border-muted-foreground/30 group-hover:border-muted-foreground/60'
+                    }`}
+                  >
+                    {isSelected && <CheckCircle2 className="w-3.5 h-3.5" />}
+                  </div>
                 </button>
               );
             })}
@@ -550,61 +612,45 @@ export default function CheckInPage() {
         </motion.div>
       </AnimatePresence>
 
-      {/* Navigation Buttons */}
-      <div className="flex items-center justify-between gap-3 mb-24">
-        <button
-          onClick={() => setCurrentStep(prev => Math.max(0, prev - 1))}
-          disabled={currentStep === 0}
-          className="flex items-center gap-1.5 px-5 py-3 rounded-full border border-border/50 text-sm font-semibold disabled:opacity-30 disabled:cursor-not-allowed hover:bg-secondary transition-all min-h-[44px]"
-        >
-          <ArrowLeft className="w-4 h-4" /> Previous
-        </button>
-
-        {currentStep < totalQuestions - 1 ? (
+      {/* Navigation Footer */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/85 backdrop-blur-xl border-t border-border/40 z-30">
+        <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
           <button
-            onClick={() => setCurrentStep(prev => Math.min(totalQuestions - 1, prev + 1))}
-            className="flex items-center gap-1.5 px-6 py-3 rounded-full bg-secondary hover:bg-secondary/80 text-foreground text-sm font-semibold transition-all min-h-[44px]"
+            type="button"
+            disabled={currentStep === 0 || saving}
+            onClick={() => setCurrentStep(prev => Math.max(0, prev - 1))}
+            className="px-4 py-3 rounded-full border border-border/60 hover:bg-secondary disabled:opacity-40 disabled:pointer-events-none text-xs font-semibold text-foreground flex items-center gap-1.5 transition-all min-h-[44px]"
           >
-            Next <ArrowRight className="w-4 h-4" />
+            <ArrowLeft className="w-4 h-4" /> Previous
           </button>
-        ) : (
-          <span className="text-xs font-semibold text-emerald-500 flex items-center gap-1">
-            <CheckCircle2 className="w-4 h-4" /> All 10 Questions Answered
-          </span>
-        )}
-      </div>
 
-      {/* Sticky Bottom Save Bar */}
-      <div className="fixed bottom-[72px] md:bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-xl border-t border-border/50 flex justify-center z-50">
-        <div className="w-full max-w-2xl flex items-center justify-between gap-4">
-          <div className="text-xs font-medium text-muted-foreground hidden sm:block">
-            {canSubmit ? (
-              <span className="text-emerald-500 flex items-center gap-1 font-semibold">
-                <CheckCircle2 className="w-4 h-4" /> All 10 answered — Ready to save!
-              </span>
-            ) : (
-              <span>
-                {answeredCount} of {totalQuestions} answered
-              </span>
-            )}
-          </div>
-          <button
-            onClick={submitCheckin}
-            disabled={saving || !canSubmit}
-            className="flex-1 sm:flex-none w-full sm:w-auto px-8 py-3.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold shadow-lg shadow-pink-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 text-base md:text-lg min-h-[50px]"
-          >
-            {saving ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Saving your reflection...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-5 h-5 text-amber-300" />
-                <span>Save My Reflection 🌸</span>
-              </>
-            )}
-          </button>
+          {currentStep < totalQuestions - 1 ? (
+            <button
+              type="button"
+              disabled={answers[activeQuestion.id] === undefined}
+              onClick={() => setCurrentStep(prev => Math.min(totalQuestions - 1, prev + 1))}
+              className="px-6 py-3 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-pink-500/20 transition-all min-h-[44px]"
+            >
+              Next <ArrowRight className="w-4 h-4" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={!canSubmit || saving}
+              onClick={submitCheckin}
+              className="px-7 py-3 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-extrabold flex items-center gap-2 shadow-lg shadow-emerald-500/25 transition-all active:scale-95 min-h-[44px]"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" /> Saving...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" /> Complete & Generate Plan
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </div>

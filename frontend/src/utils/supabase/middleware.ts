@@ -45,7 +45,8 @@ export async function updateSession(request: NextRequest) {
   const isAppRoute = pathname.startsWith('/dashboard') || pathname.startsWith('/profile') ||
     pathname.startsWith('/check-in') || pathname.startsWith('/cycle') ||
     pathname.startsWith('/skin') || pathname.startsWith('/reports') ||
-    pathname.startsWith('/wellness-plan') || pathname.startsWith('/companion');
+    pathname.startsWith('/wellness-plan') || pathname.startsWith('/companion') ||
+    pathname.startsWith('/store');
 
   if (!user && !isAuthRoute && isAppRoute) {
     const url = request.nextUrl.clone()

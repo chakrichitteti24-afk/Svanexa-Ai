@@ -125,13 +125,10 @@ export default function SignUpPage() {
             last_name: lastName,
             email: email,
             ai_name: aiName || 'Luna',
+            active_theme: wellnessMode,
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'id' }
-        ),
-        supabase.from('user_preferences').upsert(
-          { user_id: authData.user.id, theme: wellnessMode, push_notifications: true },
-          { onConflict: 'user_id' }
         ),
         supabase.from('wellness_streaks').upsert(
           { user_id: authData.user.id, current_streak: 0, longest_streak: 0 },

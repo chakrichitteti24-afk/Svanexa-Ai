@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
-import { format } from 'date-fns';
+import { extractDateFromRequest } from '@/utils/date-utils';
 
 type CheckinSlot = 'morning' | 'afternoon' | 'evening';
 const VALID_SLOTS: CheckinSlot[] = ['morning', 'afternoon', 'evening'];
@@ -17,9 +17,10 @@ export async function POST(req: Request) {
     }
 
     const userId = user.id;
-    const today = format(new Date(), 'yyyy-MM-dd');
     const body = await req.json();
-    const { slot, claimBonus } = body as { slot?: CheckinSlot; claimBonus?: boolean };
+    const { slot, claimBonus, date: bodyDate } = body as { slot?: CheckinSlot; claimBonus?: boolean; date?: string };
+
+    const today = bodyDate || extractDateFromRequest(req);
 
     // ── Validation ────────────────────────────────────────────────────────────
     if (slot && !VALID_SLOTS.includes(slot)) {
@@ -46,7 +47,11 @@ export async function POST(req: Request) {
 
     let slotMeta: Record<string, any> = {};
     if (checkinRow?.summary) {
-      try { slotMeta = JSON.parse(checkinRow.summary); } catch { slotMeta = {}; }
+      try {
+        slotMeta = JSON.parse(checkinRow.summary);
+      } catch {
+        slotMeta = {};
+      }
     }
 
     // ── Handle slot claim ─────────────────────────────────────────────────────
@@ -80,7 +85,7 @@ export async function POST(req: Request) {
       const awarded: boolean = rpcResult?.awarded ?? false;
       const newBalance: number = rpcResult?.new_balance ?? 0;
 
-      // If awarded, also mark as claimed inside slotMeta (for UI persistence without DB query)
+      // Mark claimed in slotMeta
       if (awarded && checkinRow?.id) {
         slotMeta[slot] = { ...slotMeta[slot], claimed: true };
         await supabase
@@ -89,15 +94,12 @@ export async function POST(req: Request) {
           .eq('id', checkinRow.id);
       }
 
-      // Check if already claimed (awarded = false but the ref_id exists → already claimed)
-      const alreadyClaimed = !awarded;
-
       return NextResponse.json({
         success: true,
         data: {
           slot,
           awarded,
-          alreadyClaimed,
+          alreadyClaimed: !awarded,
           coinsEarned: awarded ? SLOT_COIN_AMOUNT : 0,
           newBalance,
           message: awarded
@@ -109,20 +111,10 @@ export async function POST(req: Request) {
 
     // ── Handle daily bonus claim ──────────────────────────────────────────────
     if (claimBonus) {
-      // All 3 slots must be completed
       const allComplete = VALID_SLOTS.every((s) => slotMeta[s]?.completed);
       if (!allComplete) {
         return NextResponse.json(
           { success: false, error: 'Complete all 3 daily check-ins first to claim the bonus.' },
-          { status: 400 }
-        );
-      }
-
-      // All 3 slots must be individually claimed before the bonus is available
-      const allSlotsClaimed = VALID_SLOTS.every((s) => slotMeta[s]?.claimed);
-      if (!allSlotsClaimed) {
-        return NextResponse.json(
-          { success: false, error: 'Claim your individual slot rewards first.' },
           { status: 400 }
         );
       }
@@ -148,7 +140,6 @@ export async function POST(req: Request) {
       const bonusAwarded: boolean = bonusRpcResult?.awarded ?? false;
       const newBalance: number = bonusRpcResult?.new_balance ?? 0;
 
-      // Mark bonus claimed inside slotMeta
       if (bonusAwarded && checkinRow?.id) {
         slotMeta['_bonusClaimed'] = true;
         await supabase

@@ -48,9 +48,8 @@ export default function ProfilePage() {
         setUserId(user.id);
 
         // Use maybeSingle() everywhere to avoid errors when row doesn't exist
-        const [profileRes, prefsRes, pregRes] = await Promise.all([
-          supabase.from('profiles').select('first_name, last_name, date_of_birth, ai_name').eq('id', user.id).maybeSingle(),
-          supabase.from('user_preferences').select('theme').eq('user_id', user.id).maybeSingle(),
+        const [profileRes, pregRes] = await Promise.all([
+          supabase.from('profiles').select('first_name, last_name, date_of_birth, ai_name, active_theme').eq('id', user.id).maybeSingle(),
           supabase.from('pregnancy_logs').select('due_date').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
         ]);
 
@@ -61,10 +60,7 @@ export default function ProfilePage() {
           setLastName(profileRes.data.last_name || '');
           setDob(profileRes.data.date_of_birth || '');
           setCompanionName(profileRes.data.ai_name || 'Luna');
-        }
-
-        if (prefsRes.data) {
-          const theme = prefsRes.data.theme as 'general' | 'pcos' | 'pregnancy';
+          const theme = profileRes.data.active_theme as 'general' | 'pcos' | 'pregnancy';
           if (theme) setUserMode(theme);
         }
 
@@ -114,7 +110,7 @@ export default function ProfilePage() {
     setSaving(true);
 
     try {
-      // 1. Update Profile (including ai_name)
+      // 1. Update Profile (including ai_name and active_theme)
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
@@ -122,6 +118,7 @@ export default function ProfilePage() {
           last_name: lastName.trim(),
           date_of_birth: dob || null,
           ai_name: companionName.trim(),
+          active_theme: userMode,
           updated_at: new Date().toISOString(),
         })
         .eq('id', userId);
@@ -136,6 +133,7 @@ export default function ProfilePage() {
             last_name: lastName.trim(),
             date_of_birth: dob || null,
             ai_name: companionName.trim(),
+            active_theme: userMode,
             updated_at: new Date().toISOString(),
           }, { onConflict: 'id' });
           if (insertError) throw insertError;
@@ -144,16 +142,7 @@ export default function ProfilePage() {
         }
       }
 
-      // 2. Upsert Preferences
-      const { error: prefsError } = await supabase
-        .from('user_preferences')
-        .upsert(
-          { user_id: userId, theme: userMode, updated_at: new Date().toISOString() },
-          { onConflict: 'user_id' }
-        );
-      if (prefsError) throw prefsError;
-
-      // 3. Update Pregnancy Logs if applicable
+      // 2. Update Pregnancy Logs if applicable
       if (userMode === 'pregnancy' && dueDate) {
         // Safe upsert: check if row exists first
         const { data: existingPreg } = await supabase

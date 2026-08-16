@@ -1,6 +1,31 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 
+// Authoritative server-side price catalog to prevent client-side price tampering
+const STORE_ITEM_PRICES: Record<string, number> = {
+  // Themes
+  'theme:default': 0,
+  'theme:lavender': 50,
+  'theme:rose': 50,
+  'theme:ocean': 50,
+  'theme:midnight': 50,
+  'theme:sage': 50,
+  'theme:sunrise': 50,
+  // Dashboard Styles
+  'dashboard_style:minimal': 0,
+  'dashboard_style:soft_glow': 40,
+  'dashboard_style:nature': 40,
+  'dashboard_style:calm': 40,
+  'dashboard_style:rose_tint': 40,
+  'dashboard_style:midnight': 40,
+  // Companion Styles
+  'companion_style:friendly': 0,
+  'companion_style:poetic': 60,
+  'companion_style:energizing': 60,
+  'companion_style:mindful': 60,
+  'companion_style:clinical': 60,
+};
+
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
@@ -11,27 +36,34 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { itemType, itemId, cost, itemName } = body;
+    const { itemType, itemId, itemName } = body;
 
-    if (!itemType || !itemId || typeof cost !== 'number' || !itemName) {
+    if (!itemType || !itemId || !itemName) {
       return NextResponse.json(
-        { success: false, error: 'Missing required parameters: itemType, itemId, cost, itemName' },
+        { success: false, error: 'Missing required parameters: itemType, itemId, itemName' },
         { status: 400 }
       );
     }
 
-    if (cost < 0) {
-      return NextResponse.json({ success: false, error: 'Invalid cost' }, { status: 400 });
+    // Authoritative server-side price lookup
+    const catalogKey = `${itemType}:${itemId}`;
+    const authoritativeCost = STORE_ITEM_PRICES[catalogKey];
+
+    if (authoritativeCost === undefined) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid store item' },
+        { status: 400 }
+      );
     }
 
     const userId = user.id;
 
-    // Call PostgreSQL RPC function for atomic purchase
+    // Call PostgreSQL RPC function for atomic purchase with server-verified cost
     const { data, error } = await supabase.rpc('purchase_store_item', {
       p_user_id: userId,
       p_item_type: itemType,
       p_item_id: itemId,
-      p_cost: cost,
+      p_cost: authoritativeCost,
       p_item_name: itemName,
     });
 

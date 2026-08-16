@@ -9,6 +9,7 @@ interface ChatMessage {
 export class AIService {
   private groq: Groq | null = null;
   private gemini: GoogleGenerativeAI | null = null;
+  private primaryModel: string = 'openai/gpt-oss-20b';
 
   constructor() {
     if (process.env.GROQ_API_KEY) {
@@ -26,16 +27,16 @@ export class AIService {
     companionName: string,
     userName: string,
     forceGemini: boolean = false
-  ): Promise<{ response: string; modelUsed: 'llama-3.1-8b' | 'gemini-1.5-flash'; error?: string }> {
+  ): Promise<{ response: string; modelUsed: string; error?: string }> {
     const trimmedMsg = message.trim().toLowerCase();
     if (trimmedMsg === 'hi') {
-      return { response: "Hey 😊\nHow are you doing today?", modelUsed: 'llama-3.1-8b' };
+      return { response: "Hey 😊\nHow are you doing today?", modelUsed: this.primaryModel };
     }
     if (trimmedMsg === 'hello') {
-      return { response: "Hi 💜\nHow's your day going?", modelUsed: 'llama-3.1-8b' };
+      return { response: "Hi 💜\nHow's your day going?", modelUsed: this.primaryModel };
     }
     if (trimmedMsg === 'hey') {
-      return { response: "Hey!\nNice to hear from you 😊", modelUsed: 'llama-3.1-8b' };
+      return { response: "Hey!\nNice to hear from you 😊", modelUsed: this.primaryModel };
     }
 
     let healthObj: any = null;
@@ -46,16 +47,14 @@ export class AIService {
       if (healthMatch) {
         healthObj = JSON.parse(healthMatch[1]);
       }
-    } catch (e) {
-    }
+    } catch {}
 
     try {
       const memoryMatch = healthSummary.match(/\[USER MEMORY\]:\s*(\{.*\})/);
       if (memoryMatch) {
         memoryObj = JSON.parse(memoryMatch[1]);
       }
-    } catch (e) {
-    }
+    } catch {}
 
     const msgLower = message.toLowerCase();
     
@@ -119,9 +118,6 @@ export class AIService {
         relevantDataText = 'NONE (No specific health query. Keep it conversational. Do NOT mention wellness trends).';
       } else {
         relevantCategories = uniqueCategories;
-        // With the new memory model, we pass everything if it exists.
-        // We will pass the full parsed healthObj instead of filtering it aggressively, 
-        // to support the 'Smart Memory' and 'Proactive Friend' requests.
         relevantDataText = JSON.stringify(healthObj);
       }
     }
@@ -136,13 +132,6 @@ export class AIService {
     }
 
     const userMode = healthObj?.userMode || 'general';
-
-    let personality = 'Friendly, Positive, Motivating';
-    if (userMode === 'pcos') {
-      personality = 'Supportive, Patient, Encouraging. Focus more on hormone balance and healthy habits.';
-    } else if (userMode === 'pregnancy') {
-      personality = 'Gentle, Calm, Warm, Reassuring, Protective.';
-    }
 
     const systemPrompt = `You are ${companionName}, the AI Wellness Companion inside Svanexa.
 You are talking with ${userName}.
@@ -223,7 +212,6 @@ User Data: ${relevantDataText}`;
 
     if (this.groq) {
       try {
-        
         const groqMessages = [
           { role: 'system' as const, content: systemPrompt },
           ...history.map(m => ({
@@ -233,28 +221,41 @@ User Data: ${relevantDataText}`;
           { role: 'user' as const, content: message }
         ];
 
-        const responsePromise = this.groq.chat.completions.create({
-          messages: groqMessages,
-          model: 'llama-3.1-8b-instant',
-          temperature: 0.7,
-          max_tokens: maxTokens,
-        });
+        let chatCompletion: any = null;
 
-        const timeoutPromise = new Promise<null>((_, reject) =>
-          setTimeout(() => reject(new Error('Llama 3.1 API Timeout')), 6000)
-        );
+        // Try primary model openai/gpt-oss-20b, with fallback to llama-3.1-8b-instant
+        try {
+          const responsePromise = this.groq.chat.completions.create({
+            messages: groqMessages,
+            model: 'openai/gpt-oss-20b',
+            temperature: 0.7,
+            max_tokens: maxTokens,
+          });
 
-        const chatCompletion = await Promise.race([responsePromise, timeoutPromise]);
+          const timeoutPromise = new Promise<null>((_, reject) =>
+            setTimeout(() => reject(new Error('Groq Primary Model Timeout')), 6000)
+          );
+
+          chatCompletion = await Promise.race([responsePromise, timeoutPromise]);
+        } catch {
+          // Fallback to llama-3.1-8b-instant
+          const fallbackPromise = this.groq.chat.completions.create({
+            messages: groqMessages,
+            model: 'llama-3.1-8b-instant',
+            temperature: 0.7,
+            max_tokens: maxTokens,
+          });
+          chatCompletion = await fallbackPromise;
+        }
         
         if (chatCompletion && chatCompletion.choices[0]?.message?.content) {
           return {
             response: chatCompletion.choices[0].message.content,
-            modelUsed: 'llama-3.1-8b'
+            modelUsed: this.primaryModel
           };
         }
-        throw new Error('Empty response from Llama 3.1');
+        throw new Error('Empty response from Groq');
       } catch (error) {
-        
         if (this.gemini) {
           try {
             const responseText = await this.queryGemini(systemPrompt, history, message, maxTokens);
@@ -265,14 +266,14 @@ User Data: ${relevantDataText}`;
           } catch (geminiError) {
             return {
               response: "I'm sorry, I'm having trouble communicating right now. Please try again later. 🌸",
-              modelUsed: 'llama-3.1-8b',
+              modelUsed: this.primaryModel,
               error: geminiError instanceof Error ? geminiError.message : String(geminiError)
             };
           }
         } else {
           return {
             response: "I'm sorry, my systems are experiencing issues and I cannot reach my backup models. 🌸",
-            modelUsed: 'llama-3.1-8b',
+            modelUsed: this.primaryModel,
             error: error instanceof Error ? error.message : String(error)
           };
         }
@@ -288,7 +289,7 @@ User Data: ${relevantDataText}`;
       }
     }
 
-    return { response: 'AI API keys not configured. Please set GROQ_API_KEY or GEMINI_API_KEY in backend environment', modelUsed: 'llama-3.1-8b' };
+    return { response: 'AI API keys not configured. Please set GROQ_API_KEY or GEMINI_API_KEY in backend environment', modelUsed: this.primaryModel };
   }
 
   private async queryGemini(systemInstruction: string, history: ChatMessage[], message: string, maxTokens: number): Promise<string> {

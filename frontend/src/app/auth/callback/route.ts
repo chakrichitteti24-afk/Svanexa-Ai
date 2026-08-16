@@ -4,8 +4,13 @@ import { createClient } from '@/utils/supabase/server';
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
-  // if "next" is in param, use it as the redirect URL
-  const next = searchParams.get('next') ?? '/dashboard';
+
+  // Security: prevent open redirects by verifying `next` starts with a single `/`
+  const rawNext = searchParams.get('next');
+  let next = '/dashboard';
+  if (rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//') && !rawNext.includes('\\')) {
+    next = rawNext;
+  }
 
   if (code) {
     const supabase = await createClient();
@@ -17,7 +22,7 @@ export async function GET(request: Request) {
         .from('profiles')
         .select('id')
         .eq('id', authData.user.id)
-        .single();
+        .maybeSingle();
         
       if (!profile) {
         const email = authData.user.email || '';
@@ -33,14 +38,13 @@ export async function GET(request: Request) {
               first_name: firstName,
               last_name: lastName,
               email: email,
-              ai_name: 'Luna', // Default AI name
+              ai_name: 'Luna',
+              active_theme: 'general',
+              active_dashboard_style: 'minimal',
+              active_companion_style: 'friendly',
               updated_at: new Date().toISOString(),
             },
             { onConflict: 'id' }
-          ),
-          supabase.from('user_preferences').upsert(
-            { user_id: authData.user.id, theme: 'general', push_notifications: true },
-            { onConflict: 'user_id' }
           ),
           supabase.from('wellness_streaks').upsert(
             { user_id: authData.user.id, current_streak: 0, longest_streak: 0 },

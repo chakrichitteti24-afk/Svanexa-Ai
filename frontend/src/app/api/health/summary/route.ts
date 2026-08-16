@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
-import { format } from 'date-fns';
+import { extractDateFromRequest } from '@/utils/date-utils';
 
 type CheckinSlot = 'morning' | 'afternoon' | 'evening';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -14,11 +14,10 @@ export async function GET() {
     }
 
     const userId = user.id;
-    const today = format(new Date(), 'yyyy-MM-dd');
+    const today = extractDateFromRequest(req);
 
     const [
       { data: profile },
-      { data: prefs },
       { data: todayCheckin },
       { count: checkinsCount },
       { data: streakData },
@@ -30,11 +29,10 @@ export async function GET() {
       { data: exercise },
       { data: todayPlan }
     ] = await Promise.all([
-      supabase.from('profiles').select('first_name, ai_name').eq('id', userId).single(),
-      supabase.from('user_preferences').select('theme').eq('user_id', userId).maybeSingle(),
+      supabase.from('profiles').select('id, first_name, last_name, username, ai_name, active_theme, active_dashboard_style, active_companion_style').eq('id', userId).maybeSingle(),
       supabase.from('daily_checkins').select('summary').eq('user_id', userId).eq('date', today).maybeSingle(),
       supabase.from('daily_checkins').select('id', { count: 'exact', head: true }).eq('user_id', userId),
-      supabase.from('wellness_streaks').select('current_streak').eq('user_id', userId).maybeSingle(),
+      supabase.from('wellness_streaks').select('current_streak, longest_streak, last_active_date, weekly_consistency').eq('user_id', userId).maybeSingle(),
       supabase.from('cycle_logs').select('start_date').eq('user_id', userId).order('start_date', { ascending: false }).limit(1),
       supabase.from('pregnancy_logs').select('due_date, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('sleep_logs').select('duration_hours').eq('user_id', userId).eq('date', today).maybeSingle(),
@@ -53,21 +51,44 @@ export async function GET() {
         last_name: meta.last_name || '',
         email: user.email,
         ai_name: meta.ai_name || 'Luna',
+        active_theme: 'general',
+        active_dashboard_style: 'minimal',
+        active_companion_style: 'friendly',
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'id' }).select('first_name, ai_name').maybeSingle();
+      }, { onConflict: 'id' }).select('id, first_name, last_name, username, ai_name, active_theme, active_dashboard_style, active_companion_style').maybeSingle();
 
-      userProfile = newProfile || { first_name: meta.first_name || 'User', ai_name: meta.ai_name || 'Luna' };
+      userProfile = newProfile || {
+        id: userId,
+        first_name: meta.first_name || meta.username || 'User',
+        last_name: meta.last_name || '',
+        username: meta.username || 'User',
+        ai_name: meta.ai_name || 'Luna',
+        active_theme: 'general',
+        active_dashboard_style: 'minimal',
+        active_companion_style: 'friendly',
+      };
     }
 
-    let wellness_tasks = [];
+    let wellness_tasks: any[] = [];
     if (todayPlan?.content) {
-      try { wellness_tasks = JSON.parse(todayPlan.content); } catch { wellness_tasks = []; }
+      try {
+        const parsed = JSON.parse(todayPlan.content);
+        if (Array.isArray(parsed)) {
+          wellness_tasks = parsed;
+        }
+      } catch {
+        wellness_tasks = [];
+      }
     }
 
     // Parse slot meta from daily_checkins.summary
     let slotMeta: Record<string, any> = {};
     if (todayCheckin?.summary) {
-      try { slotMeta = JSON.parse(todayCheckin.summary); } catch { slotMeta = {}; }
+      try {
+        slotMeta = JSON.parse(todayCheckin.summary);
+      } catch {
+        slotMeta = {};
+      }
     }
     if (typeof slotMeta !== 'object' || slotMeta === null) slotMeta = {};
 
@@ -78,6 +99,7 @@ export async function GET() {
     };
 
     const allSlotsComplete = slotsMap.morning.completed && slotsMap.afternoon.completed && slotsMap.evening.completed;
+    const hasCheckedInToday = Object.values(slotsMap).some(s => s.completed);
 
     const currentStreak = streakData?.current_streak || 0;
 
@@ -91,6 +113,18 @@ export async function GET() {
       else cycle_status = 'luteal_phase';
     }
 
+    // Build preferences object from profile columns
+    const userPreferences = {
+      user_id: userId,
+      theme: (userProfile?.active_theme as 'general' | 'pcos' | 'pregnancy') || 'general',
+      tracking_goals: null,
+      language: 'en',
+      communication_style: userProfile?.active_companion_style || 'friendly',
+      emoji_preference: true,
+      response_length: 'concise',
+      notifications_enabled: true,
+    };
+
     const today_log = {
       sleep:    sleep    ? sleep.duration_hours                  : null,
       water:    water    ? (water.amount_ml / 1000).toFixed(1)  : null,
@@ -102,10 +136,11 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       data: {
+        date: today,
         profile: userProfile,
-        preferences: prefs,
+        preferences: userPreferences,
         total_logs_count: checkinsCount || 0,
-        has_checked_in_today: allSlotsComplete || Object.values(slotsMap).some(s => s.completed),
+        has_checked_in_today: hasCheckedInToday,
         current_streak: currentStreak,
         cycle_status,
         pregnancy: preg,
@@ -118,6 +153,6 @@ export async function GET() {
     });
   } catch (error: any) {
     console.error('[summary GET error]', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: 500 });
   }
 }

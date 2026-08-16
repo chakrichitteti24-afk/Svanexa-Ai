@@ -564,7 +564,7 @@ const parseLocalDate = (dateStr: string | null) => {
         due_date: dueDate,
         created_at: selectedDate.toISOString()
       });
-      await supabase.from('user_preferences').upsert({ user_id: user.id, theme: 'pregnancy' }, { onConflict: 'user_id' });
+      await supabase.from('profiles').update({ active_theme: 'pregnancy' }).eq('id', user.id);
       toast.success('Pregnancy tracking started!');
       await refreshAll();
       setSelectedDate(null);
@@ -578,7 +578,7 @@ const parseLocalDate = (dateStr: string | null) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      await supabase.from('user_preferences').upsert({ user_id: user.id, theme: 'general' }, { onConflict: 'user_id' });
+      await supabase.from('profiles').update({ active_theme: 'general' }).eq('id', user.id);
       toast.success('Pregnancy tracking completed.');
       await refreshAll();
       setSelectedDate(null);

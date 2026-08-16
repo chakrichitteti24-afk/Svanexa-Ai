@@ -1,18 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
-import { format } from 'date-fns';
+import { extractDateFromRequest } from '@/utils/date-utils';
 
-/**
- * GET /api/health/checkin/claim-status
- *
- * Returns which slots and the daily bonus have been claimed today.
- * Reads from two sources and merges them:
- *   1. daily_checkins.summary — has `.claimed` flag per slot (written by /claim endpoint)
- *   2. user_coin_transactions — authoritative truth (never writable by client)
- *
- * The transactions table is the ground truth; the summary flag is just for fast reads.
- */
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -22,10 +12,9 @@ export async function GET() {
     }
 
     const userId = user.id;
-    const today = format(new Date(), 'yyyy-MM-dd');
+    const today = extractDateFromRequest(req);
 
     // ── Query the coin transactions table for today's reference IDs ─────────
-    // This is the authoritative source — cannot be manipulated by the client
     const { data: txRows } = await supabase
       .from('user_coin_transactions')
       .select('reference_id, amount')
@@ -40,7 +29,7 @@ export async function GET() {
     const eveningClaimed   = claimedRefs.has(`checkin:${today}:evening`);
     const bonusClaimed     = claimedRefs.has(`checkin:${today}:all_slots_bonus`);
 
-    // ── Also read today's check-in completion state ──────────────────────────
+    // ── Read today's check-in completion state ──────────────────────────
     const { data: checkinRow } = await supabase
       .from('daily_checkins')
       .select('summary')
@@ -50,7 +39,11 @@ export async function GET() {
 
     let slotMeta: Record<string, any> = {};
     if (checkinRow?.summary) {
-      try { slotMeta = JSON.parse(checkinRow.summary); } catch { slotMeta = {}; }
+      try {
+        slotMeta = JSON.parse(checkinRow.summary);
+      } catch {
+        slotMeta = {};
+      }
     }
 
     const allSlotsComplete =

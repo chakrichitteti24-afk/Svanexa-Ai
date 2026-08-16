@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { apiFetch } from '@/utils/api-client';
+import { format } from 'date-fns';
 
 // ============================================================
 // TYPES
@@ -59,17 +60,28 @@ export interface CycleLog {
 
 export interface SkinLog {
   id: string;
-  date: string;
-  condition: string;
-  notes: string | null;
-  breakouts: boolean | null;
+  log_date: string;
+  image?: string | null;
+  acne?: number;
+  oiliness?: number;
+  dryness?: number;
+  condition?: string;
+  notes?: string | null;
+  breakouts?: boolean | null;
 }
 
 export interface WellnessTask {
   id: string;
+  userId?: string;
+  planId?: string;
+  planDate?: string;
   text: string;
   category: string;
   timeSlot: 'morning' | 'afternoon' | 'evening';
+  priority?: 'high' | 'recommended' | 'optional';
+  status?: 'pending' | 'completed' | 'skipped';
+  estimatedTime?: string;
+  rationale?: string;
   completed: boolean;
   completedAt: string | null;
 }
@@ -224,15 +236,33 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Restore cache on mount for instant zero-latency UI
+  // Restore cache on mount with date validation to prevent yesterday's data from flashing
   useEffect(() => {
     try {
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
       const cached = localStorage.getItem('svanexa_app_cache_v1');
       if (cached) {
         const parsed = JSON.parse(cached);
+        const isSameDate = parsed.cacheDate === todayStr;
+
         setState(prev => ({
           ...prev,
-          ...parsed,
+          profile: parsed.profile || prev.profile,
+          preferences: parsed.preferences || prev.preferences,
+          activeTheme: parsed.activeTheme || prev.activeTheme,
+          activeDashboardStyle: parsed.activeDashboardStyle || prev.activeDashboardStyle,
+          activeCompanionStyle: parsed.activeCompanionStyle || prev.activeCompanionStyle,
+          coinBalance: parsed.coinBalance ?? prev.coinBalance,
+          currentStreak: parsed.currentStreak ?? prev.currentStreak,
+          totalCheckIns: parsed.totalCheckIns ?? prev.totalCheckIns,
+          hasCheckedInToday: isSameDate ? (parsed.hasCheckedInToday ?? false) : false,
+          checkinSlots: isSameDate ? (parsed.checkinSlots || prev.checkinSlots) : {
+            morning: { completed: false, completedAt: null },
+            afternoon: { completed: false, completedAt: null },
+            evening: { completed: false, completedAt: null },
+          },
+          todayLog: isSameDate ? (parsed.todayLog || prev.todayLog) : { sleep: null, water: null, mood: null, stress: null, exercise: null },
+          wellnessTasks: isSameDate ? (parsed.wellnessTasks || []) : [],
           isLoading: false,
         }));
       }
@@ -249,10 +279,11 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         return;
       }
       const userId = session.user.id;
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
 
-      // Execute ALL 4 health, coin, skin, and cycle requests in a single parallel pass!
+      // Execute ALL health, coin, skin, and cycle requests in parallel with todayStr
       const [healthRes, coinsRes, skinRes, cycleRes] = await Promise.all([
-        apiFetch('/api/health/summary'),
+        apiFetch(`/api/health/summary?date=${todayStr}`),
         apiFetch('/api/coins/balance'),
         supabase
           .from('skin_logs')
@@ -349,11 +380,12 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         cycleHistory: cycleData !== undefined ? cycleData : prev.cycleHistory,
       }));
 
-      // Cache snapshot for 0ms instant open on next launch
+      // Cache snapshot tagged with today's local date
       try {
         localStorage.setItem(
           'svanexa_app_cache_v1',
           JSON.stringify({
+            cacheDate: todayStr,
             profile,
             preferences,
             activeTheme,
@@ -363,6 +395,9 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
             hasCheckedInToday,
             currentStreak,
             totalCheckIns,
+            checkinSlots,
+            todayLog,
+            wellnessTasks,
           })
         );
       } catch {}
@@ -413,6 +448,7 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
     if (!targetTask) return;
     const nextCompleted = !targetTask.completed;
     const nextStatus = nextCompleted ? 'completed' : 'pending';
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
 
     // Optimistic UI update
     setState(prev => ({
@@ -432,12 +468,15 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       const res = await apiFetch('/api/wellness-plan/toggle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId, status: nextStatus }),
+        body: JSON.stringify({ taskId, status: nextStatus, date: todayStr }),
       });
       if (res.ok) {
         const data = await res.json();
         if (data.coinsEarned && data.coinsEarned > 0) {
           updateCoinBalanceLocally(data.newBalance, data.coinsEarned);
+        }
+        if (data.tasks) {
+          setState(prev => ({ ...prev, wellnessTasks: data.tasks }));
         }
       }
     } catch (err) {

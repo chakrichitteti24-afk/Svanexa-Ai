@@ -40,7 +40,7 @@ export default function ReportsPage() {
           supabase.from('exercise_logs').select('*').eq('user_id', user.id).order('date', { ascending: true }),
           supabase.from('mood_logs').select('*').eq('user_id', user.id).order('date', { ascending: true }),
           supabase.from('daily_checkins').select('*').eq('user_id', user.id).order('date', { ascending: true }),
-          supabase.from('skin_logs').select('*').eq('user_id', user.id).order('date', { ascending: false }),
+          supabase.from('skin_logs').select('*').eq('user_id', user.id).order('log_date', { ascending: false }),
           supabase.from('cycle_logs').select('*').eq('user_id', user.id).order('start_date', { ascending: false })
         ]);
 

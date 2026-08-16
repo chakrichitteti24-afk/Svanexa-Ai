@@ -158,18 +158,31 @@ You MUST format your entire response using the following markdown template exact
     if (!responseText && process.env.GROQ_API_KEY) {
       try {
         const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-        const chatCompletion = await groq.chat.completions.create({
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: 'Compile my skin logs analysis report please.' }
-          ],
-          model: 'llama-3.1-8b-instant',
-          temperature: 0.7,
-          max_tokens: 800,
-        });
+        let chatCompletion: any = null;
+        try {
+          chatCompletion = await groq.chat.completions.create({
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: 'Compile my skin logs analysis report please.' }
+            ],
+            model: 'openai/gpt-oss-20b',
+            temperature: 0.7,
+            max_tokens: 800,
+          });
+        } catch {
+          chatCompletion = await groq.chat.completions.create({
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: 'Compile my skin logs analysis report please.' }
+            ],
+            model: 'llama-3.1-8b-instant',
+            temperature: 0.7,
+            max_tokens: 800,
+          });
+        }
 
-        responseText = chatCompletion.choices[0]?.message?.content || '';
-        modelUsed = 'llama-3.1-8b';
+        responseText = chatCompletion?.choices?.[0]?.message?.content || '';
+        modelUsed = 'openai/gpt-oss-20b' as any;
       } catch (groqError) {
         console.error('Groq skin analysis failed, falling back to Gemini text:', groqError);
       }
