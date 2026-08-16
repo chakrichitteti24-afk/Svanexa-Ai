@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
   User,
@@ -20,13 +20,24 @@ import {
   Activity,
   ShieldCheck,
   Palette,
-  HelpCircle,
+  Edit3,
+  X,
+  RotateCcw,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { HabitBadges } from '@/components/profile/HabitBadges';
 import { useHerSync } from '@/context/HerSyncContext';
 
 type WellnessMode = 'general' | 'pcos' | 'pregnancy';
+
+interface ProfileData {
+  firstName: string;
+  lastName: string;
+  dob: string;
+  companionName: string;
+  userMode: WellnessMode;
+  dueDate: string;
+}
 
 function calculateAge(dobString: string): number | null {
   if (!dobString) return null;
@@ -89,12 +100,22 @@ export default function ProfilePage() {
   const { refreshAll } = useHerSync();
 
   const [loading, setLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
-
-  // Form State
   const [email, setEmail] = useState('');
+
+  // Persisted source-of-truth copy to discard changes on Cancel
+  const [savedData, setSavedData] = useState<ProfileData>({
+    firstName: '',
+    lastName: '',
+    dob: '',
+    companionName: 'Luna',
+    userMode: 'general',
+    dueDate: '',
+  });
+
+  // Working state for form inputs
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [dob, setDob] = useState('');
@@ -102,77 +123,125 @@ export default function ProfilePage() {
   const [userMode, setUserMode] = useState<WellnessMode>('general');
   const [dueDate, setDueDate] = useState('');
 
+  // Field validation error state
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
+
   // Prevent duplicate submit on fast double-click
   const isSavingRef = useRef(false);
 
   // Calculate age dynamically
   const userAge = useMemo(() => calculateAge(dob), [dob]);
 
-  useEffect(() => {
-    let mounted = true;
+  // Check if form has unsaved modifications
+  const isDirty = useMemo(() => {
+    return (
+      firstName !== savedData.firstName ||
+      lastName !== savedData.lastName ||
+      dob !== savedData.dob ||
+      companionName !== savedData.companionName ||
+      userMode !== savedData.userMode ||
+      dueDate !== savedData.dueDate
+    );
+  }, [firstName, lastName, dob, companionName, userMode, dueDate, savedData]);
 
-    async function fetchProfile() {
-      try {
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        if (authError || !user) {
-          router.replace('/login');
-          return;
-        }
-
-        if (!mounted) return;
-        setUserId(user.id);
-        setEmail(user.email || '');
-
-        // Fetch profile and pregnancy logs in parallel with maybeSingle to avoid 406 errors
-        const [profileRes, pregRes] = await Promise.all([
-          supabase
-            .from('profiles')
-            .select('first_name, last_name, username, date_of_birth, ai_name, active_theme')
-            .eq('id', user.id)
-            .maybeSingle(),
-          supabase
-            .from('pregnancy_logs')
-            .select('due_date')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle(),
-        ]);
-
-        if (!mounted) return;
-
-        if (profileRes.data) {
-          setFirstName(profileRes.data.first_name || profileRes.data.username || '');
-          setLastName(profileRes.data.last_name || '');
-          setDob(profileRes.data.date_of_birth || '');
-          setCompanionName(profileRes.data.ai_name || 'Luna');
-          const theme = profileRes.data.active_theme as WellnessMode;
-          if (theme && ['general', 'pcos', 'pregnancy'].includes(theme)) {
-            setUserMode(theme);
-          }
-        } else if (user.user_metadata) {
-          // Fallback to user metadata if profile row hasn't been created yet
-          setFirstName(user.user_metadata.first_name || user.user_metadata.username || '');
-          setLastName(user.user_metadata.last_name || '');
-        }
-
-        if (pregRes.data?.due_date) {
-          setDueDate(pregRes.data.due_date);
-        }
-      } catch (e) {
-        console.error('Error fetching profile', e);
-        toast.error('Unable to load profile data. Please refresh.');
-      } finally {
-        if (mounted) setLoading(false);
+  const loadProfile = useCallback(async () => {
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        router.replace('/login');
+        return;
       }
+
+      setUserId(user.id);
+      setEmail(user.email || '');
+
+      const [profileRes, pregRes] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('first_name, last_name, username, date_of_birth, ai_name, active_theme')
+          .eq('id', user.id)
+          .maybeSingle(),
+        supabase
+          .from('pregnancy_logs')
+          .select('due_date')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+
+      const initialData: ProfileData = {
+        firstName: profileRes.data?.first_name || profileRes.data?.username || user.user_metadata?.first_name || user.user_metadata?.username || '',
+        lastName: profileRes.data?.last_name || user.user_metadata?.last_name || '',
+        dob: profileRes.data?.date_of_birth || '',
+        companionName: profileRes.data?.ai_name || 'Luna',
+        userMode: (profileRes.data?.active_theme as WellnessMode) || 'general',
+        dueDate: pregRes.data?.due_date || '',
+      };
+
+      setSavedData(initialData);
+      setFirstName(initialData.firstName);
+      setLastName(initialData.lastName);
+      setDob(initialData.dob);
+      setCompanionName(initialData.companionName);
+      setUserMode(initialData.userMode);
+      setDueDate(initialData.dueDate);
+      setErrors({});
+    } catch (e) {
+      console.error('Error fetching profile', e);
+      toast.error('Unable to load profile data. Please refresh.');
+    } finally {
+      setLoading(false);
+    }
+  }, [router, supabase]);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  // Validation function
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    if (!firstName.trim()) {
+      newErrors.firstName = 'This field is required.';
+    }
+    if (!companionName.trim()) {
+      newErrors.companionName = 'This field is required.';
+    }
+    if (userMode === 'pregnancy' && !dueDate) {
+      newErrors.dueDate = 'This field is required.';
     }
 
-    fetchProfile();
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
-    return () => {
-      mounted = false;
-    };
-  }, [router, supabase]);
+  const handleStartEditing = () => {
+    setErrors({});
+    setIsEditing(true);
+  };
+
+  const handleCancelEditing = () => {
+    if (isDirty) {
+      setShowUnsavedModal(true);
+      return;
+    }
+    discardChanges();
+  };
+
+  const discardChanges = () => {
+    setFirstName(savedData.firstName);
+    setLastName(savedData.lastName);
+    setDob(savedData.dob);
+    setCompanionName(savedData.companionName);
+    setUserMode(savedData.userMode);
+    setDueDate(savedData.dueDate);
+    setErrors({});
+    setIsEditing(false);
+    setShowUnsavedModal(false);
+  };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -181,28 +250,17 @@ export default function ProfilePage() {
       return;
     }
 
-    // Validation
-    if (!firstName.trim()) {
-      toast.error('First name is required.');
-      return;
-    }
-    if (!companionName.trim()) {
-      toast.error('AI Companion name is required.');
-      return;
-    }
-    if (userMode === 'pregnancy' && !dueDate) {
-      toast.error('Please specify your expected due date for Pregnancy Mode.');
+    if (!validateForm()) {
+      toast.error('Please fill in all required fields.');
       return;
     }
 
-    // Prevent duplicate submissions
     if (isSavingRef.current || saving) return;
     isSavingRef.current = true;
     setSaving(true);
-    setSaveSuccess(false);
 
     try {
-      // 1. Save / Upsert Profile in Supabase
+      // 1. Save Profile in Supabase
       const profilePayload = {
         id: userId,
         first_name: firstName.trim(),
@@ -244,13 +302,24 @@ export default function ProfilePage() {
         }
       }
 
-      setSaveSuccess(true);
-      toast.success('Changes saved successfully ✓');
+      // 3. Update saved source-of-truth
+      const updatedData: ProfileData = {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        dob,
+        companionName: companionName.trim(),
+        userMode,
+        dueDate: userMode === 'pregnancy' ? dueDate : '',
+      };
+      setSavedData(updatedData);
 
-      // 3. Immediately synchronize application context (Dashboard, Check-in, Wellness Plan, AI Companion)
+      toast.success('Profile saved successfully.');
+
+      // 4. Return to read-only mode & refresh app context
+      setIsEditing(false);
+      setErrors({});
       await refreshAll();
 
-      setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err: any) {
       console.error('Profile save error:', err);
       toast.error("Couldn't save your changes. Please try again.", {
@@ -282,7 +351,6 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <div className="max-w-3xl mx-auto w-full px-4 py-6 md:py-10 space-y-6 animate-pulse">
-        {/* Header Skeleton */}
         <div className="p-6 md:p-8 rounded-3xl bg-card/40 border border-border/30 flex flex-col sm:flex-row items-center gap-5">
           <div className="w-20 h-20 rounded-full bg-secondary/70 shrink-0" />
           <div className="space-y-2.5 text-center sm:text-left flex-1 w-full">
@@ -291,21 +359,11 @@ export default function ProfilePage() {
             <div className="h-5 w-28 bg-secondary/60 rounded-full mx-auto sm:mx-0" />
           </div>
         </div>
-        {/* Card Skeleton 1 */}
         <div className="p-6 rounded-3xl bg-card/40 border border-border/30 space-y-4">
           <div className="h-5 w-36 bg-secondary/70 rounded-md" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="h-12 bg-secondary/50 rounded-xl" />
             <div className="h-12 bg-secondary/50 rounded-xl" />
-          </div>
-        </div>
-        {/* Card Skeleton 2 */}
-        <div className="p-6 rounded-3xl bg-card/40 border border-border/30 space-y-4">
-          <div className="h-5 w-36 bg-secondary/70 rounded-md" />
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="h-24 bg-secondary/50 rounded-2xl" />
-            <div className="h-24 bg-secondary/50 rounded-2xl" />
-            <div className="h-24 bg-secondary/50 rounded-2xl" />
           </div>
         </div>
       </div>
@@ -319,7 +377,27 @@ export default function ProfilePage() {
   return (
     <div className="max-w-3xl mx-auto w-full px-4 py-4 md:py-8 space-y-6 pb-36 animate-in fade-in duration-300">
       {/* ─────────────────────────────────────────────────────────────────────────
-          1. PROFILE HEADER (Apple-inspired Minimal Card)
+          TOP BAR: TITLE & DISTINCT SEPARATE LOGOUT BUTTON
+          ───────────────────────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Profile & Settings</h1>
+          <p className="text-xs text-muted-foreground">Manage your personal details and wellness preferences</p>
+        </div>
+
+        {/* Visually distinct Logout at top-right */}
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="px-4 py-2 rounded-full border border-rose-500/30 hover:bg-rose-500/10 text-rose-400 hover:text-rose-300 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 shrink-0 min-h-[38px]"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          <span>Logout</span>
+        </button>
+      </div>
+
+      {/* ─────────────────────────────────────────────────────────────────────────
+          1. PROFILE HEADER CARD
           ───────────────────────────────────────────────────────────────────────── */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -342,11 +420,11 @@ export default function ProfilePage() {
           </div>
 
           {/* User Details */}
-          <div className="flex-1 text-center sm:text-left space-y-1.5 min-w-0">
+          <div className="flex-1 text-center sm:text-left space-y-1.5 min-w-0 w-full">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground truncate">
+              <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground truncate">
                 {firstName ? `${firstName} ${lastName}`.trim() : 'My Profile'}
-              </h1>
+              </h2>
               <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full border self-center sm:self-auto ${activeModeConfig.bgActive} ${activeModeConfig.borderActive} ${activeModeConfig.color}`}>
                 <activeModeConfig.icon className="w-3.5 h-3.5" />
                 {activeModeConfig.badge}
@@ -365,6 +443,23 @@ export default function ProfilePage() {
             )}
           </div>
         </div>
+
+        {/* Read-Only State Helper Banner when locked */}
+        {!isEditing && (
+          <div className="mt-5 pt-4 border-t border-border/30 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5 text-violet-400" />
+              <span>Profile is currently in <strong>read-only</strong> mode.</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleStartEditing}
+              className="px-4 py-1.5 rounded-full bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 text-violet-300 font-bold text-xs flex items-center gap-1.5 transition-all"
+            >
+              <Edit3 className="w-3.5 h-3.5" /> Edit Profile
+            </button>
+          </div>
+        )}
       </motion.div>
 
       {/* ─────────────────────────────────────────────────────────────────────────
@@ -372,21 +467,21 @@ export default function ProfilePage() {
           ───────────────────────────────────────────────────────────────────────── */}
       <form onSubmit={handleSaveProfile} className="space-y-6">
         {/* ───────────────────────────────────────────────────────────────────────
-            2. PERSONAL INFORMATION
+            2. PERSONAL INFORMATION (READ-ONLY OR EDITABLE)
             ─────────────────────────────────────────────────────────────────────── */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border/40 shadow-sm space-y-5"
+          className={`p-6 rounded-3xl bg-card/60 backdrop-blur-md border ${isEditing ? 'border-pink-500/30 ring-1 ring-pink-500/20' : 'border-border/40'} shadow-sm space-y-5 transition-all`}
         >
           <div className="flex items-center justify-between border-b border-border/30 pb-3">
             <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
               <User className="w-4 h-4 text-pink-400" />
               Personal Information
             </h2>
-            <span className="text-[11px] text-muted-foreground font-medium">
-              Synced with Supabase
+            <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md ${isEditing ? 'bg-pink-500/15 text-pink-400' : 'bg-secondary/40 text-muted-foreground'}`}>
+              {isEditing ? 'Editing Enabled' : 'Read-Only'}
             </span>
           </div>
 
@@ -400,11 +495,24 @@ export default function ProfilePage() {
                 id="firstNameInput"
                 type="text"
                 value={firstName}
-                onChange={e => setFirstName(e.target.value)}
+                disabled={!isEditing}
+                onChange={e => {
+                  setFirstName(e.target.value);
+                  if (errors.firstName) setErrors(prev => ({ ...prev, firstName: '' }));
+                }}
                 placeholder="Enter your first name"
-                required
-                className="w-full h-11 px-3.5 rounded-xl bg-secondary/40 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-pink-500/40 transition-all"
+                className={`w-full h-11 px-3.5 rounded-xl text-sm transition-all ${
+                  isEditing
+                    ? 'bg-secondary/50 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-pink-500/40'
+                    : 'bg-secondary/20 border border-border/30 text-muted-foreground/90 cursor-not-allowed select-none'
+                } ${errors.firstName ? 'border-rose-500 focus:ring-rose-500/40' : ''}`}
               />
+              {errors.firstName && (
+                <p className="text-[11px] text-rose-400 font-semibold flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                  {errors.firstName}
+                </p>
+              )}
             </div>
 
             {/* Last Name */}
@@ -416,20 +524,25 @@ export default function ProfilePage() {
                 id="lastNameInput"
                 type="text"
                 value={lastName}
+                disabled={!isEditing}
                 onChange={e => setLastName(e.target.value)}
                 placeholder="Enter your last name"
-                className="w-full h-11 px-3.5 rounded-xl bg-secondary/40 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-pink-500/40 transition-all"
+                className={`w-full h-11 px-3.5 rounded-xl text-sm transition-all ${
+                  isEditing
+                    ? 'bg-secondary/50 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-pink-500/40'
+                    : 'bg-secondary/20 border border-border/30 text-muted-foreground/90 cursor-not-allowed select-none'
+                }`}
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Email (Read-only) */}
+            {/* Email (Always Read-only) */}
             <div className="space-y-1.5">
               <label htmlFor="emailInput" className="text-xs font-semibold text-muted-foreground flex items-center justify-between">
                 <span>Email Address</span>
                 <span className="text-[10px] text-muted-foreground/70 flex items-center gap-1">
-                  <Lock className="w-3 h-3" /> Read-only
+                  <Lock className="w-3 h-3" /> Protected
                 </span>
               </label>
               <input
@@ -452,15 +565,18 @@ export default function ProfilePage() {
                   </span>
                 )}
               </label>
-              <div className="relative">
-                <input
-                  id="dobInput"
-                  type="date"
-                  value={dob}
-                  onChange={e => setDob(e.target.value)}
-                  className="w-full h-11 px-3.5 rounded-xl bg-secondary/40 border border-border/50 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-pink-500/40 transition-all scheme-dark"
-                />
-              </div>
+              <input
+                id="dobInput"
+                type="date"
+                value={dob}
+                disabled={!isEditing}
+                onChange={e => setDob(e.target.value)}
+                className={`w-full h-11 px-3.5 rounded-xl text-sm transition-all scheme-dark ${
+                  isEditing
+                    ? 'bg-secondary/50 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-pink-500/40'
+                    : 'bg-secondary/20 border border-border/30 text-muted-foreground/90 cursor-not-allowed select-none'
+                }`}
+              />
             </div>
           </div>
         </motion.div>
@@ -472,7 +588,7 @@ export default function ProfilePage() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border/40 shadow-sm space-y-5"
+          className={`p-6 rounded-3xl bg-card/60 backdrop-blur-md border ${isEditing ? 'border-pink-500/30 ring-1 ring-pink-500/20' : 'border-border/40'} shadow-sm space-y-5 transition-all`}
         >
           <div className="flex items-center justify-between border-b border-border/30 pb-3">
             <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
@@ -494,11 +610,21 @@ export default function ProfilePage() {
                 <button
                   key={mode.id}
                   type="button"
-                  onClick={() => setUserMode(mode.id)}
+                  disabled={!isEditing}
+                  onClick={() => {
+                    if (isEditing) {
+                      setUserMode(mode.id);
+                      if (errors.dueDate) setErrors(prev => ({ ...prev, dueDate: '' }));
+                    }
+                  }}
                   className={`p-4 rounded-2xl border text-left transition-all relative flex flex-col justify-between min-h-[110px] ${
-                    isSelected
-                      ? `${mode.bgActive} ${mode.borderActive} shadow-lg shadow-purple-500/5 ring-1 ring-purple-500/30`
-                      : 'bg-secondary/20 border-border/40 hover:bg-secondary/40'
+                    !isEditing
+                      ? isSelected
+                        ? `${mode.bgActive} ${mode.borderActive} opacity-100 cursor-default`
+                        : 'bg-secondary/10 border-border/20 opacity-50 cursor-not-allowed'
+                      : isSelected
+                      ? `${mode.bgActive} ${mode.borderActive} shadow-lg shadow-purple-500/5 ring-2 ring-purple-500/40 cursor-pointer`
+                      : 'bg-secondary/20 border-border/40 hover:bg-secondary/40 cursor-pointer'
                   }`}
                 >
                   <div className="flex items-center justify-between w-full mb-2">
@@ -538,13 +664,27 @@ export default function ProfilePage() {
                 id="dueDateInput"
                 type="date"
                 value={dueDate}
-                onChange={e => setDueDate(e.target.value)}
-                required={userMode === 'pregnancy'}
-                className="w-full h-11 px-3.5 rounded-xl bg-secondary/40 border border-amber-500/40 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/40 transition-all scheme-dark"
+                disabled={!isEditing}
+                onChange={e => {
+                  setDueDate(e.target.value);
+                  if (errors.dueDate) setErrors(prev => ({ ...prev, dueDate: '' }));
+                }}
+                className={`w-full h-11 px-3.5 rounded-xl text-sm transition-all scheme-dark ${
+                  isEditing
+                    ? 'bg-secondary/50 border border-amber-500/50 text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/40'
+                    : 'bg-secondary/20 border border-border/30 text-muted-foreground/90 cursor-not-allowed select-none'
+                } ${errors.dueDate ? 'border-rose-500' : ''}`}
               />
-              <p className="text-[11px] text-muted-foreground">
-                Used to calculate gestational trimesters and tailor your daily AI recommendations.
-              </p>
+              {errors.dueDate ? (
+                <p className="text-[11px] text-rose-400 font-semibold flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                  {errors.dueDate}
+                </p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  Used to calculate gestational trimesters and tailor your daily AI recommendations.
+                </p>
+              )}
             </motion.div>
           )}
         </motion.div>
@@ -556,7 +696,7 @@ export default function ProfilePage() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
-          className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border/40 shadow-sm space-y-4"
+          className={`p-6 rounded-3xl bg-card/60 backdrop-blur-md border ${isEditing ? 'border-pink-500/30 ring-1 ring-pink-500/20' : 'border-border/40'} shadow-sm space-y-4 transition-all`}
         >
           <div className="flex items-center justify-between border-b border-border/30 pb-3">
             <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
@@ -576,14 +716,28 @@ export default function ProfilePage() {
               id="companionNameInput"
               type="text"
               value={companionName}
-              onChange={e => setCompanionName(e.target.value)}
+              disabled={!isEditing}
+              onChange={e => {
+                setCompanionName(e.target.value);
+                if (errors.companionName) setErrors(prev => ({ ...prev, companionName: '' }));
+              }}
               placeholder="e.g. Luna"
-              required
-              className="w-full h-11 px-3.5 rounded-xl bg-secondary/40 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500/40 transition-all"
+              className={`w-full h-11 px-3.5 rounded-xl text-sm transition-all ${
+                isEditing
+                  ? 'bg-secondary/50 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-violet-500/40'
+                  : 'bg-secondary/20 border border-border/30 text-muted-foreground/90 cursor-not-allowed select-none'
+              } ${errors.companionName ? 'border-rose-500' : ''}`}
             />
-            <p className="text-[11px] text-muted-foreground">
-              Your personal AI wellness guide will introduce itself with this name in chat and daily briefings.
-            </p>
+            {errors.companionName ? (
+              <p className="text-[11px] text-rose-400 font-semibold flex items-center gap-1 mt-1">
+                <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                {errors.companionName}
+              </p>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                Your personal AI wellness guide will introduce itself with this name in chat and daily briefings.
+              </p>
+            )}
           </div>
         </motion.div>
 
@@ -591,7 +745,6 @@ export default function ProfilePage() {
             5. APPEARANCE & SECURITY SECTIONS
             ─────────────────────────────────────────────────────────────────────── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Appearance Card */}
           <div className="p-5 rounded-3xl bg-card/50 border border-border/40 space-y-2.5">
             <div className="flex items-center gap-2 text-xs font-bold text-foreground">
               <Palette className="w-4 h-4 text-purple-400" /> Interface & Theme
@@ -601,7 +754,6 @@ export default function ProfilePage() {
             </p>
           </div>
 
-          {/* Security Card */}
           <div className="p-5 rounded-3xl bg-card/50 border border-border/40 space-y-2.5">
             <div className="flex items-center gap-2 text-xs font-bold text-foreground">
               <ShieldCheck className="w-4 h-4 text-emerald-400" /> Data & Privacy
@@ -618,42 +770,92 @@ export default function ProfilePage() {
         <HabitBadges />
 
         {/* ───────────────────────────────────────────────────────────────────────
-            7. SAVE CHANGES & SIGN OUT ACTIONS
+            7. DYNAMIC ACTIONS: [ Edit Profile ] VS [ Save Changes ] [ Cancel ]
             ─────────────────────────────────────────────────────────────────────── */}
-        <div className="space-y-3 pt-2">
-          <button
-            type="submit"
-            disabled={saving}
-            className={`w-full h-12 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-[0.99] cursor-pointer min-h-[48px] ${
-              saveSuccess
-                ? 'bg-emerald-600 text-white shadow-emerald-500/25'
-                : 'bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 hover:opacity-95 text-white shadow-purple-500/25'
-            } disabled:opacity-60 disabled:cursor-not-allowed`}
-          >
-            {saving ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" /> Saving Changes...
-              </>
-            ) : saveSuccess ? (
-              <>
-                <CheckCircle2 className="w-4 h-4" /> Changes saved ✓
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4" /> Save Changes
-              </>
-            )}
-          </button>
+        <div className="pt-2">
+          {!isEditing ? (
+            /* READ-ONLY STATE: Primary "Edit Profile" Button */
+            <button
+              type="button"
+              onClick={handleStartEditing}
+              className="w-full h-12 rounded-2xl bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 hover:opacity-95 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-purple-500/25 transition-all active:scale-[0.99] cursor-pointer min-h-[48px]"
+            >
+              <Edit3 className="w-4 h-4" /> Edit Profile
+            </button>
+          ) : (
+            /* EDITING STATE: "Save Changes" and "Cancel" */
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <button
+                type="submit"
+                disabled={saving}
+                className="w-full sm:flex-1 h-12 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:opacity-95 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 transition-all active:scale-[0.99] cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed min-h-[48px]"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" /> Save Changes
+                  </>
+                )}
+              </button>
 
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="w-full h-11 rounded-2xl border border-rose-500/30 hover:bg-rose-500/10 text-rose-400 hover:text-rose-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all min-h-[44px]"
-          >
-            <LogOut className="w-4 h-4" /> Sign Out of Svanexa AI
-          </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={handleCancelEditing}
+                className="w-full sm:w-auto px-6 h-12 rounded-2xl border border-border/60 hover:bg-secondary text-foreground text-sm font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-[0.99] cursor-pointer min-h-[48px]"
+              >
+                <X className="w-4 h-4" /> Cancel
+              </button>
+            </div>
+          )}
         </div>
       </form>
+
+      {/* ─────────────────────────────────────────────────────────────────────────
+          UNSAVED CHANGES MODAL
+          ───────────────────────────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showUnsavedModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-sm p-6 rounded-3xl bg-card border border-border/60 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">Unsaved Changes</h3>
+                  <p className="text-xs text-muted-foreground">You have unsaved changes. Leave without saving?</p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowUnsavedModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-secondary hover:bg-secondary/80 text-foreground transition-all"
+                >
+                  Stay
+                </button>
+                <button
+                  type="button"
+                  onClick={discardChanges}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white transition-all shadow-md shadow-rose-500/20"
+                >
+                  Discard Changes
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

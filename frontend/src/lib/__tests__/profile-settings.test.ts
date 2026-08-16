@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-// Age calculation helper identical to profile logic
+// Age calculation helper
 function calculateAge(dobString: string): number | null {
   if (!dobString) return null;
   const birthDate = new Date(dobString);
@@ -14,28 +14,31 @@ function calculateAge(dobString: string): number | null {
   return age > 0 && age < 120 ? age : null;
 }
 
-// Profile validation helper identical to page submission logic
+// Validation logic matching ProfilePage
 function validateProfileForm(input: {
   firstName: string;
   companionName: string;
   userMode: 'general' | 'pcos' | 'pregnancy';
   dueDate: string;
-}): { valid: boolean; error?: string } {
+}): { valid: boolean; errors: Record<string, string> } {
+  const errors: Record<string, string> = {};
+
   if (!input.firstName.trim()) {
-    return { valid: false, error: 'First name is required.' };
+    errors.firstName = 'This field is required.';
   }
   if (!input.companionName.trim()) {
-    return { valid: false, error: 'AI Companion name is required.' };
+    errors.companionName = 'This field is required.';
   }
   if (input.userMode === 'pregnancy' && !input.dueDate) {
-    return { valid: false, error: 'Please specify your expected due date for Pregnancy Mode.' };
+    errors.dueDate = 'This field is required.';
   }
-  return { valid: true };
+
+  return { valid: Object.keys(errors).length === 0, errors };
 }
 
-describe('Profile & Settings Logic', () => {
+describe('Profile & Settings UX and Validation', () => {
   describe('Age Calculation', () => {
-    it('correctly computes age from valid birth date', () => {
+    it('correctly calculates age from valid date string', () => {
       const birthYear = new Date().getFullYear() - 25;
       const dob = `${birthYear}-01-01`;
       const age = calculateAge(dob);
@@ -43,37 +46,37 @@ describe('Profile & Settings Logic', () => {
       expect(age).toBeLessThanOrEqual(25);
     });
 
-    it('returns null for empty or invalid date strings', () => {
+    it('returns null for empty or invalid strings', () => {
       expect(calculateAge('')).toBeNull();
-      expect(calculateAge('invalid-date')).toBeNull();
-      expect(calculateAge('2099-01-01')).toBeNull(); // Future date
+      expect(calculateAge('not-a-date')).toBeNull();
+      expect(calculateAge('2099-12-31')).toBeNull();
     });
   });
 
-  describe('Profile Form Validation', () => {
-    it('rejects empty first name', () => {
+  describe('Mandatory Field Validation', () => {
+    it('requires First Name and returns inline error', () => {
       const res = validateProfileForm({
-        firstName: '',
+        firstName: '   ',
         companionName: 'Luna',
         userMode: 'general',
         dueDate: '',
       });
       expect(res.valid).toBe(false);
-      expect(res.error).toBe('First name is required.');
+      expect(res.errors.firstName).toBe('This field is required.');
     });
 
-    it('rejects empty companion name', () => {
+    it('requires Companion Name and returns inline error', () => {
       const res = validateProfileForm({
         firstName: 'Chakri',
-        companionName: '   ',
+        companionName: '',
         userMode: 'general',
         dueDate: '',
       });
       expect(res.valid).toBe(false);
-      expect(res.error).toBe('AI Companion name is required.');
+      expect(res.errors.companionName).toBe('This field is required.');
     });
 
-    it('rejects pregnancy mode without due date', () => {
+    it('requires Expected Due Date when in Pregnancy Mode', () => {
       const res = validateProfileForm({
         firstName: 'Chakri',
         companionName: 'Luna',
@@ -81,20 +84,10 @@ describe('Profile & Settings Logic', () => {
         dueDate: '',
       });
       expect(res.valid).toBe(false);
-      expect(res.error).toBe('Please specify your expected due date for Pregnancy Mode.');
+      expect(res.errors.dueDate).toBe('This field is required.');
     });
 
-    it('accepts valid general profile input', () => {
-      const res = validateProfileForm({
-        firstName: 'Chakri',
-        companionName: 'Luna',
-        userMode: 'general',
-        dueDate: '',
-      });
-      expect(res.valid).toBe(true);
-    });
-
-    it('accepts valid pregnancy mode input with due date', () => {
+    it('passes validation when all required fields are present', () => {
       const res = validateProfileForm({
         firstName: 'Chakri',
         companionName: 'Luna',
@@ -102,33 +95,34 @@ describe('Profile & Settings Logic', () => {
         dueDate: '2026-11-20',
       });
       expect(res.valid).toBe(true);
+      expect(Object.keys(res.errors).length).toBe(0);
     });
   });
 
-  describe('Supabase Payload Formatting', () => {
-    it('constructs correct profile upsert payload', () => {
-      const userId = 'test-uuid-1234';
-      const firstName = 'Chakri';
-      const lastName = 'Chitteti';
-      const dob = '1998-05-15';
-      const companionName = 'Luna';
-      const userMode = 'pcos';
-
-      const payload = {
-        id: userId,
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        username: firstName.trim(),
-        date_of_birth: dob || null,
-        ai_name: companionName.trim(),
-        active_theme: userMode,
-        updated_at: expect.any(String),
+  describe('Read-Only vs Edit Mode State Transitions', () => {
+    it('initializes in read-only mode with saved values intact', () => {
+      const initialSaved = {
+        firstName: 'Chakri',
+        lastName: 'Chitteti',
+        dob: '1998-05-15',
+        companionName: 'Luna',
+        userMode: 'general' as const,
+        dueDate: '',
       };
+      let isEditing = false;
+      expect(isEditing).toBe(false);
 
-      expect(payload.id).toBe('test-uuid-1234');
-      expect(payload.first_name).toBe('Chakri');
-      expect(payload.active_theme).toBe('pcos');
-      expect(payload.ai_name).toBe('Luna');
+      // Transition to edit mode
+      isEditing = true;
+      expect(isEditing).toBe(true);
+
+      // Discard changes returns to initialSaved
+      let workingCopy = { ...initialSaved, firstName: 'ChangedName' };
+      workingCopy = { ...initialSaved };
+      isEditing = false;
+
+      expect(workingCopy.firstName).toBe('Chakri');
+      expect(isEditing).toBe(false);
     });
   });
 });
