@@ -18,6 +18,11 @@ const mobileNavItems = [
 export const BottomNav = memo(function BottomNav() {
   const pathname = usePathname();
 
+  // Hide BottomNav on check-in page so questionnaire action controls are completely unobstructed on mobile
+  if (pathname === '/check-in') {
+    return null;
+  }
+
   return (
     <nav
       aria-label="Mobile navigation"

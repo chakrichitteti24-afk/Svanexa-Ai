@@ -797,18 +797,52 @@ export default function CheckInPage() {
                 </div>
               </div>
             </div>
+
+            {/* Direct In-Card Save Button for Mobile & Desktop */}
+            <div className="pt-2">
+              <button
+                type="button"
+                disabled={saving || saveState === 'saving'}
+                onClick={submitCheckin}
+                className={`w-full py-3.5 px-6 rounded-2xl text-white text-sm font-extrabold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-[0.98] min-h-[48px] cursor-pointer ${
+                  saveState === 'error'
+                    ? 'bg-rose-600 hover:bg-rose-500 shadow-rose-500/25'
+                    : saveState === 'saved'
+                    ? 'bg-emerald-600 shadow-emerald-500/25'
+                    : 'bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:opacity-95 shadow-emerald-500/25'
+                } disabled:opacity-50 disabled:pointer-events-none`}
+              >
+                {saveState === 'saving' || saving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Saving Reflection...
+                  </>
+                ) : saveState === 'saved' ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" /> Reflection saved ✓
+                  </>
+                ) : saveState === 'error' ? (
+                  <>
+                    <AlertCircle className="w-4 h-4" /> Couldn&apos;t save check-in. Try again.
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" /> Save My Reflection
+                  </>
+                )}
+              </button>
+            </div>
           </motion.div>
         </AnimatePresence>
       )}
 
-      {/* Navigation Footer with CRITICAL "Save My Reflection" BUTTON */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/85 backdrop-blur-xl border-t border-border/40 z-30">
+      {/* Navigation Footer with Bottom Navigation Controls */}
+      <div className="fixed bottom-0 left-0 right-0 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] px-4 bg-background/95 backdrop-blur-2xl border-t border-border/50 z-50 shadow-2xl">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
           <button
             type="button"
             disabled={currentStep === 0 || saving}
             onClick={() => setCurrentStep(prev => Math.max(0, prev - 1))}
-            className="px-4 py-3 rounded-full border border-border/60 hover:bg-secondary disabled:opacity-40 disabled:pointer-events-none text-xs font-semibold text-foreground flex items-center gap-1.5 transition-all min-h-[44px]"
+            className="px-4 py-2.5 sm:py-3 rounded-full border border-border/60 hover:bg-secondary disabled:opacity-40 disabled:pointer-events-none text-xs font-semibold text-foreground flex items-center gap-1.5 transition-all min-h-[44px]"
           >
             <ArrowLeft className="w-4 h-4" /> Previous
           </button>
@@ -818,7 +852,7 @@ export default function CheckInPage() {
               type="button"
               disabled={activeQuestion ? answers[activeQuestion.id] === undefined : true}
               onClick={() => setCurrentStep(prev => Math.min(totalSteps - 1, prev + 1))}
-              className="px-6 py-3 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-pink-500/20 transition-all min-h-[44px]"
+              className="px-6 py-2.5 sm:py-3 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-pink-500/20 transition-all min-h-[44px]"
             >
               {currentStep === totalQuestions - 1 ? 'Reflection' : 'Next'} <ArrowRight className="w-4 h-4" />
             </button>
@@ -827,7 +861,7 @@ export default function CheckInPage() {
               type="button"
               disabled={saving || saveState === 'saving'}
               onClick={submitCheckin}
-              className={`px-7 py-3 rounded-full text-white text-xs font-extrabold flex items-center gap-2 shadow-lg transition-all active:scale-95 min-h-[44px] ${
+              className={`px-5 sm:px-7 py-2.5 sm:py-3 rounded-full text-white text-xs font-extrabold flex items-center gap-2 shadow-lg transition-all active:scale-95 min-h-[44px] ${
                 saveState === 'error'
                   ? 'bg-rose-600 hover:bg-rose-500 shadow-rose-500/25'
                   : saveState === 'saved'
@@ -841,15 +875,15 @@ export default function CheckInPage() {
                 </>
               ) : saveState === 'saved' ? (
                 <>
-                  <CheckCircle2 className="w-4 h-4" /> Reflection saved ✓
+                  <CheckCircle2 className="w-4 h-4" /> Saved ✓
                 </>
               ) : saveState === 'error' ? (
                 <>
-                  <AlertCircle className="w-4 h-4" /> Couldn&apos;t save check-in. Try again.
+                  <AlertCircle className="w-4 h-4" /> Try again
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-4 h-4" /> Save My Reflection
+                  <Sparkles className="w-4 h-4" /> Save Reflection
                 </>
               )}
             </button>
