@@ -10,6 +10,7 @@ import { HerSyncProvider, useHerSync } from '@/context/HerSyncContext';
 import { PWAInstaller } from '@/components/ui/PWAInstaller';
 import { createClient } from '@/utils/supabase/client';
 import { DashboardSkeleton } from '@/components/ui/skeleton';
+import { SafeBoundary } from '@/components/ui/SafeBoundary';
 
 export default function AppLayout({
   children,
@@ -43,7 +44,6 @@ export default function AppLayout({
       } catch (err: any) {
         console.error('Auth verification error in AppLayout:', err);
         if (isSubscribed) {
-          // If session cannot be read (network or unauthenticated), guide to login gracefully
           setAuthState('UNAUTHENTICATED');
           router.replace('/login');
         }
@@ -58,7 +58,7 @@ export default function AppLayout({
       if (session?.user) {
         setAuthState('AUTHENTICATED');
         setErrorMessage(null);
-      } else if (event === 'SIGNED_OUT' || !session) {
+      } else if (event === 'SIGNED_OUT') {
         setAuthState('UNAUTHENTICATED');
         router.replace('/login');
       }
@@ -95,28 +95,42 @@ export default function AppLayout({
     );
   }
 
-
   return (
     <HerSyncProvider>
-      <ThemeSync />
+      <SafeBoundary name="ThemeSync">
+        <ThemeSync />
+      </SafeBoundary>
       <div className="flex h-screen h-[100dvh] overflow-hidden bg-background">
-        <Sidebar className="hidden md:flex border-r border-border/40 shrink-0" />
+        <SafeBoundary name="SidebarDesktop">
+          <Sidebar className="hidden md:flex border-r border-border/40 shrink-0" />
+        </SafeBoundary>
         <div className="flex-1 flex flex-col overflow-hidden">
-          <Navbar />
+          <SafeBoundary name="Navbar">
+            <Navbar />
+          </SafeBoundary>
           
           <main className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden p-3 sm:p-6 md:p-8 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-8 max-w-full smooth-scroll">
-            {children}
+            <SafeBoundary name="AppMainContent">
+              {children}
+            </SafeBoundary>
           </main>
           
-          <FloatingCompanion />
-          <PWAInstaller />
+          <SafeBoundary name="FloatingCompanion">
+            <FloatingCompanion />
+          </SafeBoundary>
+          <SafeBoundary name="PWAInstaller">
+            <PWAInstaller />
+          </SafeBoundary>
           
-          <BottomNav />
+          <SafeBoundary name="BottomNav">
+            <BottomNav />
+          </SafeBoundary>
         </div>
       </div>
     </HerSyncProvider>
   );
 }
+
 
 function ThemeSync() {
   const { wellnessMode, activeTheme, activeDashboardStyle } = useHerSync();

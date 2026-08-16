@@ -27,3 +27,19 @@ export async function createClient() {
     }
   )
 }
+
+export async function getAuthenticatedUser(req?: Request) {
+  const supabase = await createClient();
+  let token: string | undefined;
+
+  if (req) {
+    const authHeader = req.headers.get('authorization') || req.headers.get('Authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7).trim();
+    }
+  }
+
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  return { supabase, user, error };
+}
+

@@ -38,7 +38,8 @@ const SUGGESTED_PROMPTS = [
 ];
 
 // Memoized Markdown renderer
-const MarkdownRenderer = memo(({ content }: { content: string }) => {
+const MarkdownRenderer = memo(({ content }: { content?: string | null }) => {
+  const safeText = typeof content === 'string' ? content : '';
   return (
     <div className="markdown-prose text-[14px] leading-relaxed">
       <ReactMarkdown 
@@ -57,11 +58,12 @@ const MarkdownRenderer = memo(({ content }: { content: string }) => {
             )
         }}
       >
-        {content}
+        {safeText}
       </ReactMarkdown>
     </div>
   );
 });
+
 MarkdownRenderer.displayName = 'MarkdownRenderer';
 
 export const FloatingCompanion = memo(function FloatingCompanion() {

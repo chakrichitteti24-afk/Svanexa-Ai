@@ -228,11 +228,6 @@ export default function DashboardPage() {
     }
   };
 
-  if (!mounted || isLoading) {
-    return <DashboardSkeleton />;
-  }
-
-
   const handleQuickLogWater = async (amountLiters: number) => {
     try {
       if (typeof window !== 'undefined' && 'vibrate' in navigator) {
@@ -268,9 +263,13 @@ export default function DashboardPage() {
     return anyPending.length > 0 ? anyPending[0] : null;
   }, [tasksList, activeSlot]);
 
+  if (!mounted || isLoading) {
+    return <DashboardSkeleton />;
+  }
 
   return (
     <div className={styles.dashboardContainer}>
+
       <AnimatePresence>
         {showWelcome && (
           <motion.div
