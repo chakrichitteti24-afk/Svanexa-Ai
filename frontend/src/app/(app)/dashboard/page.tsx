@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   BrainCircuit, Loader2, Droplets, Dumbbell,
-  Check, Moon, Smile, Activity, Flame, Heart,
+  Check, CheckSquare, Moon, Smile, Activity, Flame, Heart,
   Calendar, BarChart2, Sun, Sunset, Sparkles,
   ArrowRight, RotateCcw
 } from 'lucide-react';
@@ -262,17 +262,21 @@ export default function DashboardPage() {
           <h1 className={styles.pageTitle}>{greeting}, {userName}</h1>
           <p className={styles.pageSubtitle}>Here is your wellness overview for today.</p>
         </div>
-        {!allSlotsComplete && (
-          <Link
-            href="/check-in"
-            className="flex items-center justify-center gap-1.5 text-xs font-bold px-4 py-2.5 min-h-[44px] rounded-full transition-all active:scale-95 shadow-md shadow-pink-500/20 text-white"
-            style={{ 
-              background: 'linear-gradient(135deg, var(--hs-pink), var(--hs-violet))', 
-            }}
-          >
-            Complete Check-in <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        )}
+        <Link
+          href="/check-in"
+          className="flex items-center justify-center gap-1.5 text-xs font-bold px-4 py-2.5 min-h-[44px] rounded-full transition-all active:scale-95 shadow-md shadow-pink-500/20 text-white"
+          style={{ 
+            background: allSlotsComplete 
+              ? 'linear-gradient(135deg, #10B981, #14B8A6)' 
+              : 'linear-gradient(135deg, var(--hs-pink), var(--hs-violet))', 
+          }}
+        >
+          {allSlotsComplete ? (
+            <>Review Check-ins <CheckSquare className="w-3.5 h-3.5" /></>
+          ) : (
+            <>Complete Check-in <ArrowRight className="w-3.5 h-3.5" /></>
+          )}
+        </Link>
       </motion.header>
       
       <div className={styles.dashboardGrid}>
@@ -439,6 +443,14 @@ export default function DashboardPage() {
               <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/15 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
                 <span>Luna AI:</span> <span>&quot;I&apos;m so proud of your dedication today! 💜&quot;</span>
               </div>
+
+              <Link
+                href="/check-in"
+                className="mt-3 px-5 py-2.5 rounded-full border border-violet-500/30 hover:bg-violet-500/10 text-violet-400 font-semibold text-xs transition-all flex items-center gap-1.5"
+              >
+                <CheckSquare className="w-3.5 h-3.5" />
+                View Today&apos;s Check-in Summary
+              </Link>
             </motion.div>
           ) : slotTasks.length === 0 ? (
             <div className="flex flex-col items-center text-center py-6">

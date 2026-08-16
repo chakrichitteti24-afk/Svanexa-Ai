@@ -462,15 +462,64 @@ export default function CheckInPage() {
             />
           </div>
 
-          {/* Countdown to Next Check-In */}
-          <div className="w-full max-w-md bg-secondary/50 rounded-2xl p-5 border border-border/50 mb-6 flex flex-col items-center justify-center gap-1.5">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {nextSlotName} Check-In unlocks in
-            </span>
-            <div className="text-3xl font-black tabular-nums tracking-tight text-foreground font-mono">
-              {countdown || '...'}
+          {/* Check-in Slot Tracker */}
+          <div className="w-full max-w-md mb-6">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2.5 text-left">
+              📋 Today&apos;s Check-in Progress
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {(['morning', 'afternoon', 'evening'] as const).map((slot) => {
+                const slotData = completedSlots[slot];
+                const isCurrent = slot === activeSlot;
+                const slotLabels = { morning: '🌅 Morning', afternoon: '☀️ Afternoon', evening: '🌙 Evening' };
+                return (
+                  <div
+                    key={slot}
+                    className={`p-3 rounded-xl border text-center transition-all ${
+                      slotData.completed
+                        ? 'bg-emerald-500/10 border-emerald-500/30'
+                        : isCurrent
+                        ? 'bg-violet-500/10 border-violet-500/30'
+                        : 'bg-secondary/30 border-border/30 opacity-50'
+                    }`}
+                  >
+                    <p className="text-[11px] font-bold mb-0.5">{slotLabels[slot]}</p>
+                    {slotData.completed ? (
+                      <p className="text-[10px] text-emerald-400 font-semibold">
+                        ✓ {slotData.completedAt ? format(new Date(slotData.completedAt), 'h:mm a') : 'Done'}
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground font-medium">
+                        {isCurrent ? 'Current' : 'Pending'}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
+
+          {/* Countdown to Next Check-In or All Complete */}
+          {completedSlots.morning.completed && completedSlots.afternoon.completed && completedSlots.evening.completed ? (
+            <div className="w-full max-w-md bg-gradient-to-r from-emerald-500/10 to-teal-500/10 rounded-2xl p-5 border border-emerald-500/30 mb-6 flex flex-col items-center justify-center gap-1.5">
+              <CheckCircle2 className="w-6 h-6 text-emerald-400 mb-1" />
+              <span className="text-sm font-bold text-emerald-400">
+                All Daily Check-ins Complete! 🎉
+              </span>
+              <span className="text-xs text-muted-foreground font-medium text-center max-w-[260px]">
+                Great job today. Tomorrow&apos;s Morning check-in will unlock at 5:00 AM.
+              </span>
+            </div>
+          ) : (
+            <div className="w-full max-w-md bg-secondary/50 rounded-2xl p-5 border border-border/50 mb-6 flex flex-col items-center justify-center gap-1.5">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {nextSlotName} Check-In unlocks in
+              </span>
+              <div className="text-3xl font-black tabular-nums tracking-tight text-foreground font-mono">
+                {countdown || '...'}
+              </div>
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
