@@ -19,6 +19,7 @@ import { DashboardMascot } from '@/components/chat/DashboardMascot';
 import { DashboardSkeleton } from '@/components/ui/skeleton';
 
 export default function DashboardPage() {
+  const [mounted, setMounted] = useState(false);
   const {
     profile,
     preferences,
@@ -44,6 +45,11 @@ export default function DashboardPage() {
   const [showSparkles, setShowSparkles] = useState<string | null>(null);
   const [isRefreshingPlan, setIsRefreshingPlan] = useState(false);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+
   const LUNA_REACTIONS = [
     "Great job! Keep going. 🌸",
     "You're building healthy habits. ✨",
@@ -55,7 +61,7 @@ export default function DashboardPage() {
   ];
 
   useEffect(() => {
-    if (isLoading) return;
+    if (!mounted || isLoading) return;
     try {
       const todayKey = `hersync_greeted_${format(new Date(), 'yyyy-MM-dd')}`;
       if (!localStorage.getItem(todayKey)) {
@@ -71,7 +77,8 @@ export default function DashboardPage() {
     } catch (err) {
       console.warn('Dashboard greeting localStorage error:', err);
     }
-  }, [isLoading]);
+  }, [mounted, isLoading]);
+
 
   const getGreetingTime = () => {
     const hour = new Date().getHours();
@@ -221,9 +228,10 @@ export default function DashboardPage() {
     }
   };
 
-  if (isLoading) {
+  if (!mounted || isLoading) {
     return <DashboardSkeleton />;
   }
+
 
   const handleQuickLogWater = async (amountLiters: number) => {
     try {

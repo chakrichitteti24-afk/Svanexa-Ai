@@ -676,10 +676,53 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
 // HOOK
 // ============================================================
 
+const defaultContextValue: HerSyncContextValue = {
+  profile: null,
+  preferences: null,
+  todayLog: { sleep: null, water: null, mood: null, stress: null, exercise: null },
+  checkinSlots: {
+    morning: { completed: false, completedAt: null },
+    afternoon: { completed: false, completedAt: null },
+    evening: { completed: false, completedAt: null },
+  },
+  allSlotsComplete: false,
+  hasCheckedInToday: false,
+  totalCheckIns: 0,
+  currentStreak: 0,
+  cycleStatus: 'insufficient_data',
+  cycleHistory: [],
+  skinLogs: [],
+  wellnessTasks: [],
+  pregnancyDueDate: null,
+  coinBalance: 0,
+  unlockedItems: [],
+  activeTheme: 'default',
+  activeDashboardStyle: 'minimal',
+  activeCompanionStyle: 'friendly',
+  coinAnimation: null,
+  isLoading: false,
+  lastRefreshed: 0,
+  refreshAll: async () => {},
+  refreshCycleHistory: async () => {},
+  refreshSkinLogs: async () => {},
+  toggleTask: async () => {},
+  setWellnessTasks: () => {},
+  setCycleHistory: () => {},
+  purchaseItem: async () => false,
+  setActiveCustomization: async () => {},
+  refreshCoins: async () => {},
+  triggerCoinAnimation: () => {},
+  updateCoinBalanceLocally: () => {},
+  wellnessMode: 'general',
+  userName: 'there',
+  aiName: 'Luna',
+};
+
 export function useHerSync(): HerSyncContextValue {
   const ctx = useContext(HerSyncContext);
   if (!ctx) {
-    throw new Error('useHerSync must be used inside a HerSyncProvider');
+    return defaultContextValue;
   }
   return ctx;
 }
+
