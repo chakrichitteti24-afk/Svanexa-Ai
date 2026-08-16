@@ -59,12 +59,12 @@ export default function AppLayout({
   return (
     <HerSyncProvider>
       <ThemeSync />
-      <div className="flex h-screen overflow-hidden bg-background">
+      <div className="flex h-screen h-[100dvh] overflow-hidden bg-background">
         <Sidebar className="hidden md:flex border-r border-border/40 shrink-0" />
         <div className="flex-1 flex flex-col overflow-hidden">
           <Navbar />
           
-          <main className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden p-3 sm:p-6 md:p-8 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-8 max-w-full">
+          <main className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden p-3 sm:p-6 md:p-8 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-8 max-w-full smooth-scroll">
             {children}
           </main>
           

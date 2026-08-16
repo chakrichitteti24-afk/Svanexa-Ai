@@ -509,47 +509,47 @@ function WellnessPlanContent() {
           {/* Progress & Consistency Breakdown */}
           <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
             <div className={styles.premiumCard} style={{ padding: '1.25rem', marginBottom: '0.5rem' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--hs-pink)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.85rem' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--hs-pink)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.75rem' }}>
                 📊 Progress Tracking
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.65rem', marginBottom: '0.85rem' }}>
-                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', padding: '0.65rem', borderRadius: '0.85rem', textAlign: 'center' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)', fontWeight: 600 }}>🌅 Morning (30%)</span>
-                  <div style={{ fontSize: '1rem', fontWeight: 900, color: '#FBBF24', marginTop: '0.2rem' }}>
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5 mb-2.5">
+                <div className="bg-white/[0.03] border border-white/[0.06] p-2 sm:p-2.5 rounded-2xl text-center flex flex-col justify-center min-w-0">
+                  <span className="text-[10px] sm:text-xs text-muted-foreground font-semibold truncate">🌅 Morning (30%)</span>
+                  <div className="text-sm sm:text-base font-black text-amber-400 mt-0.5">
                     {plan.tasks.filter(t => t.timeSlot === 'morning').length > 0
                       ? Math.round((plan.tasks.filter(t => t.timeSlot === 'morning' && (t.completed || t.status === 'completed')).length / plan.tasks.filter(t => t.timeSlot === 'morning').length) * 100)
                       : 0}%
                   </div>
                 </div>
-                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', padding: '0.65rem', borderRadius: '0.85rem', textAlign: 'center' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)', fontWeight: 600 }}>☀️ Afternoon (30%)</span>
-                  <div style={{ fontSize: '1rem', fontWeight: 900, color: '#38BDF8', marginTop: '0.2rem' }}>
+                <div className="bg-white/[0.03] border border-white/[0.06] p-2 sm:p-2.5 rounded-2xl text-center flex flex-col justify-center min-w-0">
+                  <span className="text-[10px] sm:text-xs text-muted-foreground font-semibold truncate">☀️ Midday (30%)</span>
+                  <div className="text-sm sm:text-base font-black text-sky-400 mt-0.5">
                     {plan.tasks.filter(t => t.timeSlot === 'afternoon').length > 0
                       ? Math.round((plan.tasks.filter(t => t.timeSlot === 'afternoon' && (t.completed || t.status === 'completed')).length / plan.tasks.filter(t => t.timeSlot === 'afternoon').length) * 100)
                       : 0}%
                   </div>
                 </div>
-                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', padding: '0.65rem', borderRadius: '0.85rem', textAlign: 'center' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)', fontWeight: 600 }}>🌙 Evening (40%)</span>
-                  <div style={{ fontSize: '1rem', fontWeight: 900, color: '#A78BFA', marginTop: '0.2rem' }}>
+                <div className="bg-white/[0.03] border border-white/[0.06] p-2 sm:p-2.5 rounded-2xl text-center flex flex-col justify-center min-w-0">
+                  <span className="text-[10px] sm:text-xs text-muted-foreground font-semibold truncate">🌙 Evening (40%)</span>
+                  <div className="text-sm sm:text-base font-black text-purple-400 mt-0.5">
                     {plan.tasks.filter(t => t.timeSlot === 'evening').length > 0
                       ? Math.round((plan.tasks.filter(t => t.timeSlot === 'evening' && (t.completed || t.status === 'completed')).length / plan.tasks.filter(t => t.timeSlot === 'evening').length) * 100)
                       : 0}%
                   </div>
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.65rem' }}>
-                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', padding: '0.65rem', borderRadius: '0.85rem', textAlign: 'center' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)', fontWeight: 600 }}>Daily Progress</span>
-                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#10B981', marginTop: '0.2rem' }}>{animScore}%</div>
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5">
+                <div className="bg-white/[0.03] border border-white/[0.06] p-2 sm:p-2.5 rounded-2xl text-center flex flex-col justify-center min-w-0">
+                  <span className="text-[10px] sm:text-xs text-muted-foreground font-semibold truncate">Daily</span>
+                  <div className="text-xs sm:text-sm font-extrabold text-emerald-400 mt-0.5">{animScore}%</div>
                 </div>
-                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', padding: '0.65rem', borderRadius: '0.85rem', textAlign: 'center' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)', fontWeight: 600 }}>Weekly</span>
-                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--hs-violet)', marginTop: '0.2rem' }}>{streak?.weeklyConsistency ?? 100}%</div>
+                <div className="bg-white/[0.03] border border-white/[0.06] p-2 sm:p-2.5 rounded-2xl text-center flex flex-col justify-center min-w-0">
+                  <span className="text-[10px] sm:text-xs text-muted-foreground font-semibold truncate">Weekly</span>
+                  <div className="text-xs sm:text-sm font-extrabold text-violet-400 mt-0.5">{streak?.weeklyConsistency ?? 100}%</div>
                 </div>
-                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', padding: '0.65rem', borderRadius: '0.85rem', textAlign: 'center' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)', fontWeight: 600 }}>Monthly</span>
-                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--hs-pink)', marginTop: '0.2rem' }}>{Math.min(100, Math.round(((streak?.currentStreak ?? 1) / 30) * 100))}%</div>
+                <div className="bg-white/[0.03] border border-white/[0.06] p-2 sm:p-2.5 rounded-2xl text-center flex flex-col justify-center min-w-0">
+                  <span className="text-[10px] sm:text-xs text-muted-foreground font-semibold truncate">Monthly</span>
+                  <div className="text-xs sm:text-sm font-extrabold text-pink-400 mt-0.5">{Math.min(100, Math.round(((streak?.currentStreak ?? 1) / 30) * 100))}%</div>
                 </div>
               </div>
             </div>
@@ -645,7 +645,7 @@ function WellnessPlanContent() {
           )}
 
           {/* Period Slot Switcher (Shows current period plan by default) */}
-          <div className="flex items-center justify-center gap-2 mb-4 p-1.5 rounded-2xl bg-secondary/50 border border-border/40">
+          <div className="flex items-center justify-between gap-1.5 sm:gap-2 mb-4 p-1.5 rounded-2xl bg-secondary/50 border border-border/40 w-full overflow-x-auto">
             {(['morning', 'afternoon', 'evening'] as const).map(slot => {
               const cfg = SLOT_CONFIG[slot];
               const isTabActive = slot === activePlanSlot;
@@ -655,15 +655,15 @@ function WellnessPlanContent() {
                   key={slot}
                   type="button"
                   onClick={() => setActivePlanSlot(slot)}
-                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  className={`flex-1 min-w-0 py-2 sm:py-2.5 px-2 sm:px-3 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 active:scale-[0.98] ${
                     isTabActive
                       ? 'bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-md shadow-pink-500/20'
                       : 'text-muted-foreground hover:text-foreground hover:bg-secondary/80'
                   }`}
                 >
-                  <span>{cfg.emoji}</span>
-                  <span>{cfg.label} Plan</span>
-                  {isTabUnlocked && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300 ml-0.5" />}
+                  <span className="shrink-0">{cfg.emoji}</span>
+                  <span className="truncate">{cfg.label}</span>
+                  {isTabUnlocked && <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-300 ml-0.5 shrink-0" />}
                 </button>
               );
             })}
@@ -724,8 +724,8 @@ function WellnessPlanContent() {
                     animate={{ opacity: 1, scale: 1 }}
                     style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '0.75rem', padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 700, color: '#34D399', marginBottom: '0.5rem' }}
                   >
-                    <CheckCircle2 size={16} className="text-emerald-400" />
-                    {cfg.label} Tasks Completed! {slotIdx < 2 ? `${SLOT_CONFIG[slots[slotIdx + 1] as TimeSlot]?.label || 'Next'} check-in is next.` : '🎉'}
+                    <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
+                    <span className="truncate">{cfg.label} Tasks Completed! {slotIdx < 2 ? `${SLOT_CONFIG[slots[slotIdx + 1] as TimeSlot]?.label || 'Next'} check-in is next.` : '🎉'}</span>
                   </motion.div>
                 )}
 
@@ -819,30 +819,42 @@ function WellnessPlanContent() {
                           )}
 
                           {/* Status Actions */}
-                          <div className={styles.taskActions}>
+                          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-2 pt-1 border-t border-white/5">
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'completed'); }}
-                              style={{ padding: '0.3rem 0.75rem', minHeight: '32px', borderRadius: '99px', fontSize: '0.7rem', fontWeight: 700, border: 'none', cursor: 'pointer', background: isDone ? '#10B981' : 'rgba(16,185,129,0.15)', color: isDone ? '#fff' : '#34D399', transition: 'all 0.2s' }}
+                              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer min-h-[32px] ${
+                                isDone
+                                  ? 'bg-emerald-500 text-white shadow-sm'
+                                  : 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25'
+                              }`}
                             >
                               ✓ Done
                             </button>
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'pending'); }}
-                              style={{ padding: '0.3rem 0.75rem', minHeight: '32px', borderRadius: '99px', fontSize: '0.7rem', fontWeight: 700, border: 'none', cursor: 'pointer', background: (!isDone && !isSkipped) ? 'var(--hs-violet)' : 'rgba(255,255,255,0.08)', color: (!isDone && !isSkipped) ? '#fff' : 'var(--muted-foreground)', transition: 'all 0.2s' }}
+                              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer min-h-[32px] ${
+                                !isDone && !isSkipped
+                                  ? 'bg-violet-600 text-white shadow-sm'
+                                  : 'bg-white/5 text-muted-foreground hover:bg-white/10'
+                              }`}
                             >
                               ⏳ Pending
                             </button>
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'skipped'); }}
-                              style={{ padding: '0.3rem 0.75rem', minHeight: '32px', borderRadius: '99px', fontSize: '0.7rem', fontWeight: 700, border: 'none', cursor: 'pointer', background: isSkipped ? '#EF4444' : 'rgba(239,68,68,0.15)', color: isSkipped ? '#fff' : '#F87171', transition: 'all 0.2s' }}
+                              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer min-h-[32px] ${
+                                isSkipped
+                                  ? 'bg-rose-500 text-white shadow-sm'
+                                  : 'bg-rose-500/15 text-rose-300 hover:bg-rose-500/25'
+                              }`}
                             >
                               ⏭️ Skip
                             </button>
                             {task.completedAt && (
-                              <span className={styles.completedAt} style={{ marginLeft: 'auto' }}>
+                              <span className="text-[10px] sm:text-xs text-emerald-400 font-semibold ml-auto truncate">
                                 Completed {format(new Date(task.completedAt), 'h:mm a')}
                               </span>
                             )}
