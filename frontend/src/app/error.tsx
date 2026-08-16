@@ -45,11 +45,18 @@ export default function RootError({
         <div className="flex flex-col gap-2.5 pt-2">
           <button
             type="button"
-            onClick={() => reset()}
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.location.href = window.location.pathname;
+              } else {
+                reset();
+              }
+            }}
             className="w-full py-3.5 px-6 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 text-white font-bold text-xs shadow-lg shadow-pink-500/20 flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" /> Try Again
           </button>
+
 
           <Link
             href="/"
