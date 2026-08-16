@@ -11,7 +11,11 @@ export interface PendingCheckin {
 export function saveOfflineCheckin(payload: any): void {
   try {
     const existingStr = localStorage.getItem(OFFLINE_QUEUE_KEY);
-    const queue: PendingCheckin[] = existingStr ? JSON.parse(existingStr) : [];
+    let queue: PendingCheckin[] = [];
+    if (existingStr) {
+      const parsed = JSON.parse(existingStr);
+      if (Array.isArray(parsed)) queue = parsed;
+    }
     
     queue.push({
       id: Date.now().toString(),
@@ -21,7 +25,7 @@ export function saveOfflineCheckin(payload: any): void {
 
     localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
   } catch (err) {
-    console.error('Error saving offline check-in', err);
+    console.warn('Warning saving offline check-in', err);
   }
 }
 
@@ -30,8 +34,10 @@ export async function flushOfflineQueue(apiFetchFunc: Function): Promise<number>
     const existingStr = localStorage.getItem(OFFLINE_QUEUE_KEY);
     if (!existingStr) return 0;
     
-    const queue: PendingCheckin[] = JSON.parse(existingStr);
+    const parsed = JSON.parse(existingStr);
+    const queue: PendingCheckin[] = Array.isArray(parsed) ? parsed : [];
     if (!queue.length) return 0;
+
 
     let syncedCount = 0;
     const remainingQueue: PendingCheckin[] = [];

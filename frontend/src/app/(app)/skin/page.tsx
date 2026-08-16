@@ -79,15 +79,18 @@ export default function SkinTrackerPage() {
     try {
       const stored = localStorage.getItem('svanexa_skin_scans');
       if (stored) {
-        setLocalLogs(JSON.parse(stored));
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setLocalLogs(parsed);
+        }
       }
     } catch (e) {}
   }, [supabase]);
 
-  const dbEntries = skinLogs.map(d => {
+  const dbEntries = (Array.isArray(skinLogs) ? skinLogs : []).map(d => {
     let parsedNotes = { oiliness: 5, dryness: 2, text: d.notes || '', photoUrl: '', aiReport: '' };
     try {
-      if (d.notes && d.notes.startsWith('{')) {
+      if (d.notes && typeof d.notes === 'string' && d.notes.startsWith('{')) {
         parsedNotes = JSON.parse(d.notes);
       }
     } catch (e) {}
@@ -101,8 +104,9 @@ export default function SkinTrackerPage() {
   });
 
   const dbDates = new Set(dbEntries.map(e => e.date));
-  const filteredLocal = localLogs.filter(l => !dbDates.has(l.date));
+  const filteredLocal = (Array.isArray(localLogs) ? localLogs : []).filter(l => l && !dbDates.has(l.date));
   const entries = [...dbEntries, ...filteredLocal];
+
 
   const selectedEntry = entries.find(e => e.id === selectedEntryId);
 

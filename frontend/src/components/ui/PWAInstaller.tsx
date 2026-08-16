@@ -15,21 +15,31 @@ export function PWAInstaller() {
   useEffect(() => {
     // Purge any stale service workers and clear CacheStorage across all mobile, tablet, and desktop clients
     if (typeof window !== 'undefined') {
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then((registrations) => {
-          for (const registration of registrations) {
-            registration.unregister().catch(() => {});
-          }
-        }).catch(() => {});
-      }
-      if ('caches' in window) {
-        caches.keys().then((keys) => {
-          for (const key of keys) {
-            caches.delete(key).catch(() => {});
-          }
-        }).catch(() => {});
-      }
+      try {
+        if ('serviceWorker' in navigator && typeof navigator.serviceWorker?.getRegistrations === 'function') {
+          navigator.serviceWorker.getRegistrations().then((registrations) => {
+            if (Array.isArray(registrations)) {
+              for (const registration of registrations) {
+                registration.unregister().catch(() => {});
+              }
+            }
+          }).catch(() => {});
+        }
+      } catch {}
+
+      try {
+        if ('caches' in window && typeof caches?.keys === 'function') {
+          caches.keys().then((keys) => {
+            if (Array.isArray(keys)) {
+              for (const key of keys) {
+                caches.delete(key).catch(() => {});
+              }
+            }
+          }).catch(() => {});
+        }
+      } catch {}
     }
+
 
     // 2. Listen for install prompt
     const handleBeforeInstallPrompt = (e: any) => {

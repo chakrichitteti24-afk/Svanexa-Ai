@@ -312,10 +312,15 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
   };
 
   const handleCopy = (content: string, index: number) => {
-    navigator.clipboard.writeText(content);
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(content).catch(() => {});
+      }
+    } catch {}
     setCopiedIndex(index);
     setTimeout(() => setCopiedIndex(null), 2000);
   };
+
 
   if (profileLoading) return null;
 
