@@ -16,10 +16,8 @@ export default function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [authState, setAuthState] = useState<'INITIALIZING' | 'AUTHENTICATED' | 'UNAUTHENTICATED'>('INITIALIZING');
 
   useEffect(() => {
     let isSubscribed = true;
@@ -27,16 +25,20 @@ export default function AppLayout({
       try {
         const supabase = createClient();
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session && isSubscribed) {
+        if (!isSubscribed) return;
+
+        if (!session?.user) {
+          setAuthState('UNAUTHENTICATED');
           router.replace('/login');
           return;
         }
+
+        setAuthState('AUTHENTICATED');
       } catch (err) {
-        console.error('Auth check error', err);
-      } finally {
+        console.error('Auth check error in AppLayout:', err);
         if (isSubscribed) {
-          setMounted(true);
-          setLoading(false);
+          setAuthState('UNAUTHENTICATED');
+          router.replace('/login');
         }
       }
     };
@@ -47,7 +49,7 @@ export default function AppLayout({
     };
   }, [router]);
 
-  if (!mounted || loading) {
+  if (authState !== 'AUTHENTICATED') {
     return (
       <div className="min-h-screen bg-background p-4 sm:p-8 flex items-center justify-center">
         <DashboardSkeleton />
@@ -80,9 +82,11 @@ export default function AppLayout({
 function ThemeSync() {
   const { wellnessMode, activeTheme, activeDashboardStyle } = useHerSync();
   useEffect(() => {
-    document.body.setAttribute('data-mode', wellnessMode);
-    document.body.setAttribute('data-theme', activeTheme || 'default');
-    document.body.setAttribute('data-dashboard-style', activeDashboardStyle || 'minimal');
+    try {
+      document.body.setAttribute('data-mode', wellnessMode || 'general');
+      document.body.setAttribute('data-theme', activeTheme || 'default');
+      document.body.setAttribute('data-dashboard-style', activeDashboardStyle || 'minimal');
+    } catch {}
   }, [wellnessMode, activeTheme, activeDashboardStyle]);
   return null;
 }

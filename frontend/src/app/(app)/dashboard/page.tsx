@@ -56,16 +56,20 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (isLoading) return;
-    const todayKey = `hersync_greeted_${format(new Date(), 'yyyy-MM-dd')}`;
-    if (!localStorage.getItem(todayKey)) {
-      // First visit today — show the welcome animation once
-      setShowWelcome(true);
-      localStorage.setItem(todayKey, '1');
-      // Clean up yesterday's key to avoid localStorage bloat
-      const yesterdayKey = `hersync_greeted_${format(new Date(Date.now() - 86400000), 'yyyy-MM-dd')}`;
-      localStorage.removeItem(yesterdayKey);
-      const timer = setTimeout(() => setShowWelcome(false), 2800);
-      return () => clearTimeout(timer);
+    try {
+      const todayKey = `hersync_greeted_${format(new Date(), 'yyyy-MM-dd')}`;
+      if (!localStorage.getItem(todayKey)) {
+        // First visit today — show the welcome animation once
+        setShowWelcome(true);
+        localStorage.setItem(todayKey, '1');
+        // Clean up yesterday's key to avoid localStorage bloat
+        const yesterdayKey = `hersync_greeted_${format(new Date(Date.now() - 86400000), 'yyyy-MM-dd')}`;
+        localStorage.removeItem(yesterdayKey);
+        const timer = setTimeout(() => setShowWelcome(false), 2800);
+        return () => clearTimeout(timer);
+      }
+    } catch (err) {
+      console.warn('Dashboard greeting localStorage error:', err);
     }
   }, [isLoading]);
 
