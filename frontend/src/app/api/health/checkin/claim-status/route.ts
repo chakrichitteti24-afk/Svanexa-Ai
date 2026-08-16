@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { getAuthenticatedUser } from '@/utils/supabase/server';
 import { extractDateFromRequest } from '@/utils/date-utils';
 
 export async function GET(req: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { supabase, user, error: authError } = await getAuthenticatedUser(req);
 
     if (authError || !user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
+
 
     const userId = user.id;
     const today = extractDateFromRequest(req);

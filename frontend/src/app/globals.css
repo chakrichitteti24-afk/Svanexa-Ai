@@ -526,9 +526,37 @@ body[data-dashboard-style="calm"] .glass-card {
     overscroll-behavior-y: contain;
     scroll-behavior: smooth;
   }
+
+  /* Safe Area responsive helper classes for iOS dynamic island & Android nav bars */
+  .safe-area-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .safe-area-top {
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+
+  /* Fluid typography and container safeguards */
+  .fluid-container {
+    width: 100%;
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: clamp(0.75rem, 3vw, 1.5rem);
+    padding-right: clamp(0.75rem, 3vw, 1.5rem);
+    box-sizing: border-box;
+  }
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
 }
 
 html, body {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  min-height: 100dvh;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
   text-rendering: optimizeLegibility;

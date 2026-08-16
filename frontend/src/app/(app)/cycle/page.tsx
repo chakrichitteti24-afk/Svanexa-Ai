@@ -758,8 +758,9 @@ const parseLocalDate = (dateStr: string | null) => {
               animate={{ y: 0 }} 
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-              className="fixed bottom-0 left-0 right-0 z-50 bg-card rounded-t-[36px] border-t border-border/40 shadow-2xl max-h-[85vh] flex flex-col max-w-xl mx-auto"
+              className="fixed bottom-0 left-0 right-0 z-50 bg-card rounded-t-[36px] border-t border-border/40 shadow-2xl max-h-[85dvh] pb-[max(1.5rem,calc(1rem+env(safe-area-inset-bottom)))] flex flex-col max-w-xl mx-auto"
             >
+
               <div className="w-12 h-1.5 rounded-full bg-border/60 mx-auto mt-4 mb-2 shrink-0" />
               
               {/* SHEET HEADER */}

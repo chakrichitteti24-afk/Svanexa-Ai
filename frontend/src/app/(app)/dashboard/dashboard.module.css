@@ -5,21 +5,24 @@
   width: 100%;
   margin: 0 auto;
   padding: 0 16px max(6rem, calc(5rem + env(safe-area-inset-bottom))) 16px;
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 28px;
   color: #FFFFFF;
   font-family: 'Inter', sans-serif;
   flex: 1 0 auto;
   overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 @media (min-width: 768px) {
   .dashboardContainer {
-    padding: 0 0 32px 0;
+    padding: 0 24px 32px 24px;
+    gap: 32px;
   }
 }
+
 
 .dashboardGrid {
   display: grid;

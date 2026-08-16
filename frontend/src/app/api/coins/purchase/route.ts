@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { getAuthenticatedUser } from '@/utils/supabase/server';
 
 // Authoritative server-side price catalog to prevent client-side price tampering
 const STORE_ITEM_PRICES: Record<string, number> = {
@@ -20,8 +20,9 @@ const STORE_ITEM_PRICES: Record<string, number> = {
   'dashboard_style:midnight': 40,
   // Companion Styles
   'companion_style:friendly': 0,
-  'companion_style:calm': 30,
-  'companion_style:focus': 30,
+  'companion_style:empathetic': 30,
+  'companion_style:motivational': 30,
+  'companion_style:gentle': 30,
   'companion_style:joy': 30,
   'companion_style:poetic': 60,
   'companion_style:energizing': 60,
@@ -31,8 +32,7 @@ const STORE_ITEM_PRICES: Record<string, number> = {
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { supabase, user, error: authError } = await getAuthenticatedUser(req);
 
     if (authError || !user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });

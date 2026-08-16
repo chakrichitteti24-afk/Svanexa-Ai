@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { getAuthenticatedUser } from '@/utils/supabase/server';
 import { WellnessPlanService } from '@/lib/services/wellness-plan-service';
 import { extractDateFromRequest } from '@/utils/date-utils';
 import { TaskTimeSlot } from '@/types/wellness-plan';
@@ -8,8 +8,7 @@ export const maxDuration = 60;
 
 export async function GET(req: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { supabase, user } = await getAuthenticatedUser(req);
 
     const userId = user?.id || 'guest-session';
     const todayStr = extractDateFromRequest(req);
@@ -39,10 +38,10 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { supabase, user } = await getAuthenticatedUser(req);
 
     const userId = user?.id || 'guest-session';
+
     let todayStr = extractDateFromRequest(req);
     let slot: TaskTimeSlot | undefined = undefined;
     let forceRegenerate = false;

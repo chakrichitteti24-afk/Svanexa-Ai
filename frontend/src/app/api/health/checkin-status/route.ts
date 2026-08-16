@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { getAuthenticatedUser } from '@/utils/supabase/server';
 import { extractDateFromRequest } from '@/utils/date-utils';
 
 type CheckinSlot = 'morning' | 'afternoon' | 'evening';
 
 export async function GET(req: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { supabase, user } = await getAuthenticatedUser(req);
 
     const userId = user?.id || null;
     const today = extractDateFromRequest(req);
+
 
     if (!userId) {
       return NextResponse.json({

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { getAuthenticatedUser } from '@/utils/supabase/server';
 import { extractDateFromRequest } from '@/utils/date-utils';
 
 type CheckinSlot = 'morning' | 'afternoon' | 'evening';
@@ -20,63 +20,66 @@ async function awardCoinsHelper(
       p_user_id: userId,
       p_amount: amount,
       p_type: type,
-      p_ref_id: refId,
+      p_reference_id: refId,
       p_description: description,
     });
 
-    if (!rpcError && rpcResult) {
-      return {
-        awarded: rpcResult.awarded ?? false,
-        newBalance: rpcResult.new_balance ?? 0,
-      };
+    if (!rpcError && rpcResult !== null && rpcResult !== undefined) {
+      return { awarded: true, newBalance: Number(rpcResult) };
     }
-  } catch (err) {
-    console.warn('[claim RPC catch, trying direct table fallback]', err);
+  } catch (rpcErr) {
+    console.warn('[award_user_coins RPC fallback]', rpcErr);
   }
 
-  // Direct table fallback
+  // ── Manual Fallback if RPC function does not exist ───────────────────────
   try {
     const { data: existingTx } = await supabase
       .from('user_coin_transactions')
       .select('id')
       .eq('user_id', userId)
       .eq('reference_id', refId)
-      .limit(1);
+      .limit(1)
+      .maybeSingle();
 
-    if (existingTx && existingTx.length > 0) {
-      const { data: balRows } = await supabase
+    if (existingTx) {
+      const { data: balRow } = await supabase
         .from('user_coin_balances')
         .select('balance')
         .eq('user_id', userId)
-        .limit(1);
-      const cur = balRows && balRows.length > 0 ? balRows[0].balance : 0;
-      return { awarded: false, newBalance: cur };
+        .maybeSingle();
+      return { awarded: false, newBalance: balRow?.balance || 0 };
     }
+
+    const { data: curBal } = await supabase
+      .from('user_coin_balances')
+      .select('balance, total_earned')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const currentBalance = curBal?.balance || 0;
+    const currentTotal = curBal?.total_earned || 0;
+    const newBalance = currentBalance + amount;
+    const newTotal = currentTotal + amount;
+
+    await supabase.from('user_coin_balances').upsert(
+      {
+        user_id: userId,
+        balance: newBalance,
+        total_earned: newTotal,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' }
+    );
 
     await supabase.from('user_coin_transactions').insert({
       user_id: userId,
       amount,
-      transaction_type: type,
+      type,
       reference_id: refId,
       description,
     });
 
-    const { data: balRows } = await supabase
-      .from('user_coin_balances')
-      .select('balance')
-      .eq('user_id', userId)
-      .limit(1);
-
-    const prevBal = balRows && balRows.length > 0 ? (balRows[0].balance || 0) : 0;
-    const newBal = prevBal + amount;
-
-    if (balRows && balRows.length > 0) {
-      await supabase.from('user_coin_balances').update({ balance: newBal, updated_at: new Date().toISOString() }).eq('user_id', userId);
-    } else {
-      await supabase.from('user_coin_balances').insert({ user_id: userId, balance: newBal, updated_at: new Date().toISOString() });
-    }
-
-    return { awarded: true, newBalance: newBal };
+    return { awarded: true, newBalance };
   } catch (directErr) {
     console.warn('[direct coin award fallback warning]', directErr);
     return { awarded: true, newBalance: amount };
@@ -85,8 +88,7 @@ async function awardCoinsHelper(
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { supabase, user, error: authError } = await getAuthenticatedUser(req);
 
     if (authError || !user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });

@@ -70,11 +70,12 @@
   grid-template-columns: 1fr;
   gap: 1.75rem;
   align-items: start;
+  width: 100%;
 }
 
 @media (min-width: 1024px) {
   .mainGrid {
-    grid-template-columns: 1.1fr 1.2fr;
+    grid-template-columns: 1fr 1fr;
     gap: 2rem;
   }
 }
@@ -83,20 +84,24 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  width: 100%;
+  min-width: 0;
 }
 
 .rightCol {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  width: 100%;
+  min-width: 0;
 }
 
 /* ── PREMIUM CARD BASE ── */
 .premiumCard {
-  background: rgba(18, 16, 28, 0.6);
+  background: rgba(18, 16, 28, 0.65);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.08);
   border-radius: 1.5rem;
   position: relative;
   overflow: hidden;
@@ -105,12 +110,13 @@
     0 0 0 1px rgba(255,255,255,0.03) inset;
   transition: border-color 0.4s ease, box-shadow 0.4s ease;
   box-sizing: border-box;
+  width: 100%;
 }
 .premiumCard:hover {
-  border-color: rgba(139,92,246,0.2);
+  border-color: rgba(139,92,246,0.25);
   box-shadow:
     0 20px 50px -12px rgba(0,0,0,0.4),
-    0 0 30px rgba(139,92,246,0.08),
+    0 0 30px rgba(139,92,246,0.1),
     0 0 0 1px rgba(139,92,246,0.08) inset;
 }
 
@@ -122,6 +128,8 @@
   grid-template-columns: 1fr auto;
   gap: 1.25rem;
   align-items: center;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 @media (max-width: 640px) {
@@ -141,6 +149,7 @@
     justify-content: center;
   }
 }
+
 .scoreGlow {
   position: absolute; top: -60%; left: 40%;
   transform: translateX(-50%);
@@ -379,21 +388,28 @@
 
 /* ── TASK CARD ── */
 .taskCard {
-  background: rgba(24, 22, 36, 0.6);
+  background: rgba(24, 22, 36, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 1.25rem;
-  padding: 1.15rem;
-  display: grid;
-  grid-template-columns: 28px 1fr;
-  gap: 1rem;
-  align-items: start;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
   cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
   position: relative;
   overflow: hidden;
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   box-sizing: border-box;
+  width: 100%;
+}
+
+.taskTopRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
   width: 100%;
 }
 
@@ -417,8 +433,8 @@
 
 .taskCard.completed {
   background: rgba(16,185,129,0.04);
-  border-color: rgba(16,185,129,0.18);
-  opacity: 0.75;
+  border-color: rgba(16,185,129,0.2);
+  opacity: 0.85;
 }
 
 .taskCheck {
@@ -445,6 +461,7 @@
   padding: 0.2rem 0.5rem; border-radius: 6px;
   display: inline-flex; align-items: center; gap: 0.25rem;
 }
+
 .priorityHigh { background: rgba(239,68,68,0.15); color: #FCA5A5; border: 1px solid rgba(239,68,68,0.25); }
 .priorityRec { background: rgba(139,92,246,0.12); color: #D8B4FE; border: 1px solid rgba(139,92,246,0.25); }
 .priorityOpt { background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.5); border: 1px solid rgba(255,255,255,0.08); }

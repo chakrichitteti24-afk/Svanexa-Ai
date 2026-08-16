@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { getAuthenticatedUser } from '@/utils/supabase/server';
 import { AIService } from '@/lib/services/ai-service';
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { supabase, user, error: authError } = await getAuthenticatedUser(req);
 
     if (authError || !user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
+
 
     const { type: reportType = 'weekly' } = await req.json().catch(() => ({ type: 'weekly' }));
     const userId = user.id;

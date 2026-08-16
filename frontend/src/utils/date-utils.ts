@@ -61,14 +61,19 @@ export function safeParseDate(input: string | number | Date | null | undefined):
     return isValid(d) ? d : null;
   }
   if (typeof input === 'string') {
-    const normalized = input.includes(' ') ? input.replace(' ', 'T') : input;
-    const d = new Date(normalized);
-    if (isValid(d)) return d;
+    const trimmed = input.trim();
+    if (!trimmed || trimmed === 'null' || trimmed === 'undefined' || trimmed === 'NaN' || trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      return null;
+    }
+    const normalized = trimmed.includes(' ') ? trimmed.replace(' ', 'T') : trimmed;
     const parsed = parseISO(normalized);
     if (isValid(parsed)) return parsed;
+    const d = new Date(normalized);
+    if (isValid(d)) return d;
   }
   return null;
 }
+
 
 /**
  * Safely formats any date or timestamp string without throwing RangeError.

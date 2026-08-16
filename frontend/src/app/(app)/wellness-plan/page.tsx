@@ -777,95 +777,98 @@ function WellnessPlanContent() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1 + slotIdx * 0.06 + taskIdx * 0.04, duration: 0.3, ease: 'easeOut' }}
                       >
-                        {/* Check circle */}
-                        <button 
-                          type="button"
-                          aria-label={`Mark task as ${isDone ? 'incomplete' : 'complete'}`}
-                          className={`${styles.taskCheck} ${isDone ? styles.done : ''} ${isLoading ? styles.loading : ''}`}
-                          onClick={() => handleToggle(task.id)}
-                        >
-                          <AnimatePresence mode="wait">
-                            {isLoading ? (
-                              <motion.div key="spin" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                                <Loader2 size={12} style={{ color: 'var(--hs-violet)' }} className="animate-spin" />
-                              </motion.div>
-                            ) : isDone ? (
-                              <motion.div key="done" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', bounce: 0.5 }}>
-                                <CheckCircle2 size={14} color="#fff" fill="#fff" />
-                              </motion.div>
-                            ) : (
-                              <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                                <Circle size={14} color="var(--muted-foreground)" />
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </button>
+                        {/* Top Row: Check Circle + Text & Badges */}
+                        <div className={styles.taskTopRow}>
+                          {/* Check circle */}
+                          <button 
+                            type="button"
+                            aria-label={`Mark task as ${isDone ? 'incomplete' : 'complete'}`}
+                            className={`${styles.taskCheck} ${isDone ? styles.done : ''} ${isLoading ? styles.loading : ''}`}
+                            onClick={() => handleToggle(task.id)}
+                          >
+                            <AnimatePresence mode="wait">
+                              {isLoading ? (
+                                <motion.div key="spin" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                                  <Loader2 size={12} style={{ color: 'var(--hs-violet)' }} className="animate-spin" />
+                                </motion.div>
+                              ) : isDone ? (
+                                <motion.div key="done" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', bounce: 0.5 }}>
+                                  <CheckCircle2 size={14} color="#fff" fill="#fff" />
+                                </motion.div>
+                              ) : (
+                                <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                                  <Circle size={14} color="var(--muted-foreground)" />
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </button>
 
-                        {/* Content */}
-                        <div className={styles.taskBody}>
-                          <div className={styles.taskMeta}>
-                            <span className={`${styles.taskBadge} ${priorityCls}`}>{priorityLabel}</span>
-                            <span className={`${styles.taskBadge}`} style={{ background: catCfg.color, color: 'var(--foreground)', border: 'none' }}>
-                              {catCfg.emoji} {catCfg.label}
-                            </span>
-                            {task.estimatedTime && (
-                              <span className={styles.taskBadge} style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--muted-foreground)', border: 'none' }}>
-                                ⏱️ {task.estimatedTime}
+                          {/* Content */}
+                          <div className={styles.taskBody}>
+                            <div className={styles.taskMeta}>
+                              <span className={`${styles.taskBadge} ${priorityCls}`}>{priorityLabel}</span>
+                              <span className={`${styles.taskBadge}`} style={{ background: catCfg.color, color: 'var(--foreground)', border: 'none' }}>
+                                {catCfg.emoji} {catCfg.label}
                               </span>
-                            )}
-                          </div>
-                          
-                          <p className={`${styles.taskText} ${isDone ? styles.done : ''}`}>{task.text}</p>
-                          
-                          {/* Luna AI Rationale */}
-                          {task.rationale && (
-                            <div style={{ marginTop: '0.4rem', padding: '0.45rem 0.65rem', borderRadius: '0.5rem', background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.15)', fontSize: '0.72rem', color: 'var(--muted-foreground)', lineHeight: '1.4' }}>
-                              <span style={{ fontWeight: 700, color: 'var(--hs-violet)' }}>Luna AI: </span>
-                              {task.rationale}
+                              {task.estimatedTime && (
+                                <span className={styles.taskBadge} style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--muted-foreground)', border: 'none' }}>
+                                  ⏱️ {task.estimatedTime}
+                                </span>
+                              )}
                             </div>
-                          )}
-
-                          {/* Status Actions */}
-                          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-2 pt-1 border-t border-white/5">
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'completed'); }}
-                              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer min-h-[32px] ${
-                                isDone
-                                  ? 'bg-emerald-500 text-white shadow-sm'
-                                  : 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25'
-                              }`}
-                            >
-                              ✓ Done
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'pending'); }}
-                              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer min-h-[32px] ${
-                                !isDone && !isSkipped
-                                  ? 'bg-violet-600 text-white shadow-sm'
-                                  : 'bg-white/5 text-muted-foreground hover:bg-white/10'
-                              }`}
-                            >
-                              ⏳ Pending
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'skipped'); }}
-                              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer min-h-[32px] ${
-                                isSkipped
-                                  ? 'bg-rose-500 text-white shadow-sm'
-                                  : 'bg-rose-500/15 text-rose-300 hover:bg-rose-500/25'
-                              }`}
-                            >
-                              ⏭️ Skip
-                            </button>
-                            {task.completedAt && (
-                              <span className="text-[10px] sm:text-xs text-emerald-400 font-semibold ml-auto truncate">
-                                Completed {safeFormat(task.completedAt, 'h:mm a')}
-                              </span>
+                            
+                            <p className={`${styles.taskText} ${isDone ? styles.done : ''}`}>{task.text}</p>
+                            
+                            {/* Luna AI Rationale */}
+                            {task.rationale && (
+                              <div style={{ marginTop: '0.4rem', padding: '0.45rem 0.65rem', borderRadius: '0.5rem', background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.15)', fontSize: '0.72rem', color: 'var(--muted-foreground)', lineHeight: '1.4' }}>
+                                <span style={{ fontWeight: 700, color: 'var(--hs-violet)' }}>Luna AI: </span>
+                                {task.rationale}
+                              </div>
                             )}
                           </div>
+                        </div>
+
+                        {/* Status Actions Row */}
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pt-2 border-t border-white/5 w-full">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'completed'); }}
+                            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer min-h-[32px] ${
+                              isDone
+                                ? 'bg-emerald-500 text-white shadow-sm'
+                                : 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25'
+                            }`}
+                          >
+                            ✓ Done
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'pending'); }}
+                            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer min-h-[32px] ${
+                              !isDone && !isSkipped
+                                ? 'bg-violet-600 text-white shadow-sm'
+                                : 'bg-white/5 text-muted-foreground hover:bg-white/10'
+                            }`}
+                          >
+                            ⏳ Pending
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'skipped'); }}
+                            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer min-h-[32px] ${
+                              isSkipped
+                                ? 'bg-rose-500 text-white shadow-sm'
+                                : 'bg-rose-500/15 text-rose-300 hover:bg-rose-500/25'
+                            }`}
+                          >
+                            ⏭️ Skip
+                          </button>
+                          {task.completedAt && (
+                            <span className="text-[10px] sm:text-xs text-emerald-400 font-semibold ml-auto truncate">
+                              Completed {safeFormat(task.completedAt, 'h:mm a')}
+                            </span>
+                          )}
                         </div>
                       </motion.div>
                     );

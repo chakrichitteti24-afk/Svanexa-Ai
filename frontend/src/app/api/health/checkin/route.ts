@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { getAuthenticatedUser } from '@/utils/supabase/server';
 import { extractDateFromRequest } from '@/utils/date-utils';
 
 type CheckinSlot = 'morning' | 'afternoon' | 'evening';
@@ -43,10 +43,10 @@ async function safeUpsert(
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { supabase, user } = await getAuthenticatedUser(req);
 
     const userId = user?.id || null;
+
     const body = await req.json();
     const { slot, data, date: bodyDate } = body;
 
