@@ -130,31 +130,47 @@ You MUST format your entire response using the following markdown template exact
 
 *Disclaimer: This report is an AI-powered wellness guide. It does not constitute medical advice. Please consult a dermatologist for clinical concerns.*`;
 
-    // ── DUAL PROVIDER EXECUTION (GEMINI (if photo) -> GROQ -> GEMINI FALLBACK) ───────────────────
+    // ── DUAL PROVIDER EXECUTION (GEMINI (multimodal/text) <-> GROQ FALLBACK) ───────────────────
     let responseText = '';
-    let modelUsed: 'llama-3.1-8b' | 'gemini-1.5-flash' = 'llama-3.1-8b';
+    let modelUsed = 'gemini-2.5-flash';
 
-    // 1. If there is an image, prioritize Gemini since it is multimodal and can evaluate image focus/blur!
-    if (latestPhotoBase64 && process.env.GEMINI_API_KEY) {
+    // 1. Try Gemini (handles both multimodal photo and text)
+    if (process.env.GEMINI_API_KEY) {
       try {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        let model: any;
+        try {
+          model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+        } catch {
+          model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
+        }
 
         const promptParts: any[] = [systemPrompt];
-        const imagePart = fileToGenerativePart(latestPhotoBase64);
-        if (imagePart) {
-          promptParts.push(imagePart);
+        if (latestPhotoBase64) {
+          const imagePart = fileToGenerativePart(latestPhotoBase64);
+          if (imagePart) {
+            promptParts.push(imagePart);
+          }
         }
 
         const result = await model.generateContent(promptParts);
         responseText = result.response.text();
-        modelUsed = 'gemini-1.5-flash';
+        modelUsed = 'gemini-2.5-flash';
       } catch (geminiError) {
-        console.error('Gemini multimodal analysis failed, falling back to Groq:', geminiError);
+        console.error('Gemini skin analysis failed, trying alternate Gemini model or Groq:', geminiError);
+        try {
+          const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+          const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
+          const result = await model.generateContent([systemPrompt]);
+          responseText = result.response.text();
+          modelUsed = 'gemini-3.6-flash';
+        } catch (geminiError2) {
+          console.error('Gemini 3.6 flash fallback failed:', geminiError2);
+        }
       }
     }
 
-    // 2. Try Groq (if text-only or if Gemini failed)
+    // 2. Try Groq (if Gemini failed or was unavailable)
     if (!responseText && process.env.GROQ_API_KEY) {
       try {
         const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -165,7 +181,7 @@ You MUST format your entire response using the following markdown template exact
               { role: 'system', content: systemPrompt },
               { role: 'user', content: 'Compile my skin logs analysis report please.' }
             ],
-            model: 'openai/gpt-oss-20b',
+            model: 'openai/gpt-oss-120b',
             temperature: 0.7,
             max_tokens: 800,
           });
@@ -175,36 +191,23 @@ You MUST format your entire response using the following markdown template exact
               { role: 'system', content: systemPrompt },
               { role: 'user', content: 'Compile my skin logs analysis report please.' }
             ],
-            model: 'llama-3.1-8b-instant',
+            model: 'qwen/qwen3.6-27b',
             temperature: 0.7,
             max_tokens: 800,
           });
         }
 
         responseText = chatCompletion?.choices?.[0]?.message?.content || '';
-        modelUsed = 'openai/gpt-oss-20b' as any;
+        modelUsed = 'groq' as any;
       } catch (groqError) {
-        console.error('Groq skin analysis failed, falling back to Gemini text:', groqError);
-      }
-    }
-
-    // 3. Fallback to Gemini (text-only) if everything else failed
-    if (!responseText && process.env.GEMINI_API_KEY) {
-      try {
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-        const result = await model.generateContent([systemPrompt]);
-        responseText = result.response.text();
-        modelUsed = 'gemini-1.5-flash';
-      } catch (geminiError) {
-        console.error('Gemini skin analysis fallback failed:', geminiError);
+        console.error('Groq skin analysis fallback failed:', groqError);
       }
     }
 
     if (!responseText) {
       return NextResponse.json({ 
         success: false, 
-        error: "AI Services are temporarily unavailable. Please verify that GROQ_API_KEY is configured in your .env.local file." 
+        error: "AI Services are temporarily unavailable. Please verify that GEMINI_API_KEY or GROQ_API_KEY is configured in your .env.local file." 
       });
     }
 

@@ -2,15 +2,20 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { differenceInDays } from 'date-fns';
 import { WellnessTask, WellnessPlan, PremiumStreak, TaskCategory, TaskTimeSlot, TaskPriority } from '../../types/wellness-plan';
 import Groq from 'groq-sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export class WellnessPlanService {
   private supabase: SupabaseClient;
   private groq: Groq | null = null;
+  private gemini: GoogleGenerativeAI | null = null;
 
   constructor(supabaseClient: SupabaseClient) {
     this.supabase = supabaseClient;
     if (process.env.GROQ_API_KEY) {
       this.groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+    }
+    if (process.env.GEMINI_API_KEY) {
+      this.gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     }
   }
 
@@ -416,11 +421,36 @@ export class WellnessPlanService {
     let raw: any[] = [];
 
     try {
-      if (this.groq) {
+      // 1. Try Gemini first
+      if (this.gemini) {
+        try {
+          let model: any;
+          try {
+            model = this.gemini.getGenerativeModel({ model: 'gemini-2.5-flash' });
+          } catch {
+            model = this.gemini.getGenerativeModel({ model: 'gemini-3.6-flash' });
+          }
+          const result = await model.generateContent(prompt);
+          const text = result.response.text();
+          // Extract JSON if wrapped in markdown code fence
+          const jsonMatch = text.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (Array.isArray(parsed.tasks) && parsed.tasks.length > 0) {
+              raw = parsed.tasks;
+            }
+          }
+        } catch (geminiError) {
+          console.warn('[WellnessPlanService] Gemini task generation error:', geminiError);
+        }
+      }
+
+      // 2. Try Groq as secondary provider if Gemini did not produce tasks
+      if ((!raw || raw.length === 0) && this.groq) {
         let resp: any = null;
         try {
           const groqCall = this.groq.chat.completions.create({
-            model: 'openai/gpt-oss-20b',
+            model: 'openai/gpt-oss-120b',
             messages: [{ role: 'user', content: prompt }],
             temperature: 0.55,
             max_tokens: 800,
@@ -432,7 +462,7 @@ export class WellnessPlanService {
           resp = await Promise.race([groqCall, timeout]);
         } catch {
           const fallbackCall = this.groq.chat.completions.create({
-            model: 'llama-3.1-8b-instant',
+            model: 'qwen/qwen3.6-27b',
             messages: [{ role: 'user', content: prompt }],
             temperature: 0.55,
             max_tokens: 800,

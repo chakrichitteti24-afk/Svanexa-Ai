@@ -203,10 +203,10 @@ User Data: ${relevantDataText}`;
     if (forceGemini) {
       try {
         const responseText = await this.queryGemini(systemPrompt, history, message, maxTokens);
-        return { response: responseText, modelUsed: 'gemini-1.5-flash' };
+        return { response: responseText, modelUsed: 'gemini-2.5-flash' };
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
-        return { response: "I'm having trouble analyzing your wellness data right now. Please try again soon. 🌸", modelUsed: 'gemini-1.5-flash', error: errorMsg };
+        return { response: "I'm having trouble analyzing your wellness data right now. Please try again soon. 🌸", modelUsed: 'gemini-2.5-flash', error: errorMsg };
       }
     }
 
@@ -223,11 +223,11 @@ User Data: ${relevantDataText}`;
 
         let chatCompletion: any = null;
 
-        // Try primary model openai/gpt-oss-20b, with fallback to llama-3.1-8b-instant
+        // Try primary model openai/gpt-oss-120b, with fallback to qwen/qwen3.6-27b
         try {
           const responsePromise = this.groq.chat.completions.create({
             messages: groqMessages,
-            model: 'openai/gpt-oss-20b',
+            model: 'openai/gpt-oss-120b',
             temperature: 0.7,
             max_tokens: maxTokens,
           });
@@ -238,10 +238,10 @@ User Data: ${relevantDataText}`;
 
           chatCompletion = await Promise.race([responsePromise, timeoutPromise]);
         } catch {
-          // Fallback to llama-3.1-8b-instant
+          // Fallback to qwen/qwen3.6-27b
           const fallbackPromise = this.groq.chat.completions.create({
             messages: groqMessages,
-            model: 'llama-3.1-8b-instant',
+            model: 'qwen/qwen3.6-27b',
             temperature: 0.7,
             max_tokens: maxTokens,
           });
@@ -261,7 +261,7 @@ User Data: ${relevantDataText}`;
             const responseText = await this.queryGemini(systemPrompt, history, message, maxTokens);
             return {
               response: responseText,
-              modelUsed: 'gemini-1.5-flash'
+              modelUsed: 'gemini-2.5-flash'
             };
           } catch (geminiError) {
             return {
@@ -282,9 +282,9 @@ User Data: ${relevantDataText}`;
       if (this.gemini) {
         try {
           const responseText = await this.queryGemini(systemPrompt, history, message, maxTokens);
-          return { response: responseText, modelUsed: 'gemini-1.5-flash' };
+          return { response: responseText, modelUsed: 'gemini-2.5-flash' };
         } catch (err) {
-          return { response: "Backend API keys are not fully configured.", modelUsed: 'gemini-1.5-flash', error: String(err) };
+          return { response: "Backend API keys are not fully configured.", modelUsed: 'gemini-2.5-flash', error: String(err) };
         }
       }
     }
@@ -297,10 +297,18 @@ User Data: ${relevantDataText}`;
       throw new Error('Gemini API key is not configured.');
     }
 
-    const model = this.gemini.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      systemInstruction: systemInstruction,
-    });
+    let model: any;
+    try {
+      model = this.gemini.getGenerativeModel({
+        model: 'gemini-2.5-flash',
+        systemInstruction: systemInstruction,
+      });
+    } catch {
+      model = this.gemini.getGenerativeModel({
+        model: 'gemini-3.6-flash',
+        systemInstruction: systemInstruction,
+      });
+    }
 
     const contents = [
       ...history.map(m => ({
@@ -313,15 +321,31 @@ User Data: ${relevantDataText}`;
       }
     ];
 
-    const result = await model.generateContent({
-      contents: contents,
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: maxTokens,
-      }
-    });
-
-    const response = await result.response;
-    return response.text();
+    try {
+      const result = await model.generateContent({
+        contents: contents,
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: maxTokens,
+        }
+      });
+      const response = await result.response;
+      return response.text();
+    } catch (e) {
+      // Fallback model
+      const fallbackModel = this.gemini.getGenerativeModel({
+        model: 'gemini-3.6-flash',
+        systemInstruction: systemInstruction,
+      });
+      const result = await fallbackModel.generateContent({
+        contents: contents,
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: maxTokens,
+        }
+      });
+      const response = await result.response;
+      return response.text();
+    }
   }
 }
