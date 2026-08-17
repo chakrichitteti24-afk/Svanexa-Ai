@@ -66,7 +66,7 @@ export default function LoginPage() {
 
   if (isCheckingSession) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
+      <div className="flex flex-col items-center justify-center min-h-dvh bg-background p-4">
         <div className="flex flex-col items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-pink-500 to-violet-500 flex items-center justify-center text-white shadow-xl shadow-pink-500/20 animate-pulse">
             <Heart className="w-6 h-6 fill-white" />
@@ -78,34 +78,34 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-background p-4 selection:bg-pink-500/20">
-      <div className="w-full max-w-md space-y-8 animate-in fade-in zoom-in duration-500">
+    <div className="flex flex-col items-center justify-center min-h-dvh bg-background py-8 px-4 sm:py-12 sm:px-6 w-full max-w-full overflow-x-hidden selection:bg-pink-500/20">
+      <div className="w-full max-w-md mx-auto space-y-5 sm:space-y-6 animate-in fade-in duration-300">
         
         <div className="text-center space-y-2">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-tr from-pink-500 to-violet-500 text-white mb-2 shadow-lg shadow-pink-500/20">
             <Heart className="w-6 h-6 fill-white" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Welcome Back</h1>
-          <p className="text-sm text-muted-foreground">Sign in to your Svanexa account</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Welcome Back</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">Sign in to your Svanexa account</p>
         </div>
 
         {/* Segmented Tab Control */}
-        <div className="bg-secondary/50 p-1 rounded-xl flex items-center justify-between mx-auto">
-          <Link href="/login" className="flex-1 text-center py-2 text-sm font-semibold rounded-lg bg-background shadow-sm text-foreground">
+        <div className="w-full grid grid-cols-2 p-1 rounded-xl bg-secondary/50 border border-border/40">
+          <Link href="/login" className="text-center py-2.5 sm:py-2 text-sm font-semibold rounded-lg bg-background shadow-sm text-foreground transition-all">
             Sign In
           </Link>
-          <Link href="/signup" className="flex-1 text-center py-2 text-sm font-medium rounded-lg text-muted-foreground hover:text-foreground transition-colors">
+          <Link href="/signup" className="text-center py-2.5 sm:py-2 text-sm font-medium rounded-lg text-muted-foreground hover:text-foreground transition-colors">
             Sign Up
           </Link>
         </div>
 
-        <Card className="border-pink-500/10 shadow-xl shadow-pink-500/5 bg-card/60 backdrop-blur-xl relative overflow-hidden">
-          <CardContent className="pt-6">
+        <Card className="border-pink-500/15 shadow-xl shadow-pink-500/5 bg-card/60 backdrop-blur-xl relative overflow-hidden py-0 gap-0">
+          <CardContent className="pt-6 pb-6 px-4 sm:px-6">
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-2.5 h-5 w-5 text-muted-foreground" />
+                <div className="relative flex items-center">
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                   <Input
                     id="email"
                     type="email"
@@ -121,12 +121,12 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password">Password</Label>
-                  <Link href="/forgot-password" className="text-xs font-medium text-pink-500 hover:text-pink-600">
+                  <Link href="/forgot-password" className="text-xs font-medium text-pink-500 hover:text-pink-600 transition-colors">
                     Forgot password?
                   </Link>
                 </div>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-2.5 h-5 w-5 text-muted-foreground" />
+                <div className="relative flex items-center">
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
@@ -134,27 +134,28 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="pl-10 pr-10"
+                    className="pl-10 pr-11"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
                   >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
 
               {error && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3 text-sm text-red-500 bg-red-500/10 border border-red-500/20 rounded-lg">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3 text-xs sm:text-sm text-red-500 bg-red-500/10 border border-red-500/20 rounded-xl break-words">
                   {error}
                 </motion.div>
               )}
 
               <Button 
                 type="submit" 
-                className="w-full bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 text-white shadow-md shadow-pink-500/20 h-11 mt-4"
+                className="w-full bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 text-white shadow-md shadow-pink-500/20 h-11 mt-4 font-semibold"
                 disabled={loading}
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}

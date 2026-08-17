@@ -281,8 +281,6 @@ body[data-dashboard-style="calm"] .glass-card {
     transition: background-color 0.45s cubic-bezier(0.16, 1, 0.3, 1),
                 background-image 0.45s cubic-bezier(0.16, 1, 0.3, 1),
                 color 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-    transform: translateZ(0);
-    backface-visibility: hidden;
   }
 
   /* Apple iOS 18 Pro Max Signature Tactile Haptic Tap & Click Response */
@@ -554,11 +552,8 @@ body[data-dashboard-style="calm"] .glass-card {
 
 html, body {
   width: 100%;
-  max-width: 100vw;
   overflow-x: hidden;
   min-height: 100dvh;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
