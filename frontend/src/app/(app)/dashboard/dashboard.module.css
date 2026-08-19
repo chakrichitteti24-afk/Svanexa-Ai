@@ -82,21 +82,35 @@
 }
 
 .pageHeader {
-  margin-top: 24px;
+  margin-top: 16px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 12px;
+}
+
+@media (min-width: 640px) {
+  .pageHeader {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
 }
 
 .pageTitle {
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
   color: #FFFFFF;
   letter-spacing: -0.5px;
 }
 
+@media (min-width: 640px) {
+  .pageTitle {
+    font-size: 28px;
+  }
+}
+
 .pageSubtitle {
-  font-size: 15px;
+  font-size: 14px;
   color: #8C82A6;
   font-weight: 400;
 }
@@ -115,7 +129,7 @@
   background: rgba(18, 16, 28, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 24px;
-  padding: 24px;
+  padding: 20px;
   box-shadow:
     0 20px 50px -12px rgba(0, 0, 0, 0.35),
     0 0 0 1px rgba(255, 255, 255, 0.03) inset;
@@ -125,6 +139,12 @@
   overflow: hidden;
   flex-shrink: 0;
   transition: border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+@media (min-width: 640px) {
+  .premiumCard {
+    padding: 24px;
+  }
 }
 
 .premiumCard:hover {
@@ -156,8 +176,15 @@
 /* AI Wellness Snapshot */
 .snapshotGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+@media (min-width: 640px) {
+  .snapshotGrid {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 16px;
+  }
 }
 
 .snapshotItem {

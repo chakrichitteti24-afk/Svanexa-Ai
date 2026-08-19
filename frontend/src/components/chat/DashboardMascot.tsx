@@ -164,11 +164,11 @@ export function DashboardMascot() {
               initial={{ opacity: 0, y: 10, scale: 0.8 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              className="absolute -top-12 left-1/2 -translate-x-1/2 bg-card/95 backdrop-blur-md text-foreground text-[11px] font-semibold px-3.5 py-1.5 rounded-2xl shadow-2xl z-30 max-w-[150px] text-center break-words leading-snug flex items-center justify-center border border-pink-500/40 pointer-events-none"
-              style={{ boxShadow: '0 8px 20px rgba(236,72,153,0.25)' }}
+              className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 bg-card/95 backdrop-blur-xl text-foreground text-[11px] font-semibold px-3.5 py-2 rounded-2xl shadow-2xl z-30 w-max max-w-[220px] sm:max-w-[280px] text-center break-words leading-snug flex items-center justify-center border border-pink-500/40 pointer-events-none"
+              style={{ boxShadow: '0 8px 24px rgba(236,72,153,0.3)' }}
             >
               {message}
-              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-card rotate-45 border-b border-r border-pink-500/40" />
+              <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-card rotate-45 border-b border-r border-pink-500/40" />
             </motion.div>
           )}
         </AnimatePresence>

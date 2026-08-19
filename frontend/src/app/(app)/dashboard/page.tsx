@@ -398,7 +398,7 @@ export default function DashboardPage() {
         <Link
           href="/check-in"
           prefetch={true}
-          className="flex items-center justify-center gap-1.5 text-xs font-bold px-4 py-2.5 min-h-[44px] rounded-full transition-all active:scale-95 shadow-md shadow-pink-500/20 text-white"
+          className="flex items-center justify-center gap-1.5 text-xs font-bold px-5 py-2.5 min-h-[44px] rounded-full transition-all active:scale-95 shadow-md shadow-pink-500/20 text-white w-full sm:w-auto shrink-0"
           style={{ 
             background: allSlotsComplete 
               ? 'linear-gradient(135deg, #10B981, #14B8A6)' 
@@ -978,41 +978,43 @@ export default function DashboardPage() {
         </div>
       </motion.section>
 
-      {/* 🍵 HORMONE FOOD & CRAVING SOLVER SECTION 🍵 */}
-      <motion.section
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.45, duration: 0.5 }}
-      >
-        <HormoneFoodSolver currentPhase={cycleStatus} />
-      </motion.section>
+          {/* PROGRESS STATS */}
+          <motion.section
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.55, duration: 0.5 }}
+          >
+            <h2 className={styles.sectionTitle}>Your Progress</h2>
+            <div className={styles.statsGrid}>
+              <motion.div className={styles.statCard} whileHover={{ y: -2 }}>
+                <Flame className="w-5 h-5 text-[#FFB347] mb-2" />
+                <span className={styles.statValue}>{currentStreak}</span>
+                <span className={styles.statLabel}>Day Streak</span>
+              </motion.div>
+              <motion.div className={styles.statCard} whileHover={{ y: -2 }}>
+                <Calendar className="w-5 h-5 mb-2" style={{ color: 'var(--hs-violet)' }} />
+                <span className={styles.statValue}>{totalCheckIns}</span>
+                <span className={styles.statLabel}>Check-ins</span>
+              </motion.div>
+              <motion.div className={styles.statCard} whileHover={{ y: -2 }}>
+                <Droplets className="w-5 h-5 text-[#3B82F6] mb-2" />
+                <span className={styles.statValue}>{waterLogged >= waterTarget ? '✓' : `${Math.round(waterPct)}%`}</span>
+                <span className={styles.statLabel}>Water Goal</span>
+              </motion.div>
+            </div>
+          </motion.section>
+        </div>
+      </div>
 
-      {/* PROGRESS STATS */}
+      {/* 🍵 HORMONE FOOD & CRAVING SOLVER (FULL-WIDTH SECTION) 🍵 */}
       <motion.section
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.6, duration: 0.5 }}
+        className="w-full"
       >
-        <h2 className={styles.sectionTitle}>Your Progress</h2>
-        <div className={styles.statsGrid}>
-          <motion.div className={styles.statCard} whileHover={{ y: -2 }}>
-            <Flame className="w-5 h-5 text-[#FFB347] mb-2" />
-            <span className={styles.statValue}>{currentStreak}</span>
-            <span className={styles.statLabel}>Day Streak</span>
-          </motion.div>
-          <motion.div className={styles.statCard} whileHover={{ y: -2 }}>
-            <Calendar className="w-5 h-5 mb-2" style={{ color: 'var(--hs-violet)' }} />
-            <span className={styles.statValue}>{totalCheckIns}</span>
-            <span className={styles.statLabel}>Check-ins</span>
-          </motion.div>
-          <motion.div className={styles.statCard} whileHover={{ y: -2 }}>
-            <Droplets className="w-5 h-5 text-[#3B82F6] mb-2" />
-            <span className={styles.statValue}>{waterLogged >= waterTarget ? '✓' : `${Math.round(waterPct)}%`}</span>
-            <span className={styles.statLabel}>Water Goal</span>
-          </motion.div>
-        </div>
+        <HormoneFoodSolver currentPhase={cycleStatus} />
       </motion.section>
-      </div>
 
       {/* FLOATING LUNA AI REACTION BUBBLE */}
       <AnimatePresence>
@@ -1036,7 +1038,6 @@ export default function DashboardPage() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
     </div>
   );
 }
