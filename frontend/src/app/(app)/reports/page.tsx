@@ -3,17 +3,22 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { FileText, CalendarHeart, Droplets, Activity, Brain, Loader2 } from 'lucide-react';
+import { FileText, CalendarHeart, Droplets, Activity, Brain, Loader2, Stethoscope, Printer } from 'lucide-react';
 import { differenceInDays } from 'date-fns';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
+import { useHerSync } from '@/context/HerSyncContext';
+import { DoctorReportModal } from '@/components/reports/DoctorReportModal';
 
 export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [dailyLogs, setDailyLogs] = useState<any[]>([]);
   const [cycleLogs, setCycleLogs] = useState<any[]>([]);
   const [skinLogs, setSkinLogs] = useState<any[]>([]);
-  
+  const [showDoctorModal, setShowDoctorModal] = useState(false);
+  const [dob, setDob] = useState('');
+
+  const { userName, wellnessMode } = useHerSync();
   const supabase = createClient();
   const router = useRouter();
 
@@ -24,9 +29,10 @@ export default function ReportsPage() {
         router.push('/login');
         return;
       }
-      
+
       try {
         const [
+          { data: prof },
           { data: sleep },
           { data: water },
           { data: exercise },
@@ -35,6 +41,7 @@ export default function ReportsPage() {
           { data: skin },
           { data: cycle }
         ] = await Promise.all([
+          supabase.from('profiles').select('date_of_birth').eq('id', user.id).maybeSingle(),
           supabase.from('sleep_logs').select('*').eq('user_id', user.id).order('date', { ascending: true }),
           supabase.from('water_logs').select('*').eq('user_id', user.id).order('date', { ascending: true }),
           supabase.from('exercise_logs').select('*').eq('user_id', user.id).order('date', { ascending: true }),
@@ -43,6 +50,10 @@ export default function ReportsPage() {
           supabase.from('skin_logs').select('*').eq('user_id', user.id).order('log_date', { ascending: false }),
           supabase.from('cycle_logs').select('*').eq('user_id', user.id).order('start_date', { ascending: false })
         ]);
+
+        if (prof?.date_of_birth) {
+          setDob(prof.date_of_birth);
+        }
 
         // Aggregate by date
         const allDates = new Set([
@@ -93,10 +104,10 @@ export default function ReportsPage() {
   // Map data for charts
   const chartData = dailyLogs.map(log => {
     let moodVal = 3;
-    if (log.mood === 'happy') moodVal = 5;
-    if (log.mood === 'calm') moodVal = 4;
-    if (log.mood === 'anxious') moodVal = 2;
-    if (log.mood === 'sad' || log.mood === 'angry') moodVal = 1;
+    if (log.mood === 'happy' || log.mood === 'energized' || log.mood === 'great') moodVal = 5;
+    if (log.mood === 'calm' || log.mood === 'balanced') moodVal = 4;
+    if (log.mood === 'anxious' || log.mood === 'tired') moodVal = 2;
+    if (log.mood === 'sad' || log.mood === 'angry' || log.mood === 'crampy' || log.mood === 'stressed') moodVal = 1;
 
     return {
       date: new Date(log.log_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
@@ -127,10 +138,33 @@ export default function ReportsPage() {
 
   return (
     <div className="max-w-6xl mx-auto w-full space-y-6 pb-24 animate-in fade-in duration-500 md:py-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight mb-1">Health Reports</h1>
-        <p className="text-xs text-muted-foreground">Comprehensive logs analysis and historical patterns.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight mb-1">Health Reports & Clinical Records</h1>
+          <p className="text-xs text-muted-foreground">Comprehensive logs analysis, historical trends, and doctor export.</p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowDoctorModal(true)}
+          className="px-4 py-2.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 hover:opacity-95 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-pink-500/20 transition-all active:scale-95 cursor-pointer w-full sm:w-auto shrink-0"
+        >
+          <Stethoscope className="w-4 h-4" />
+          <span>Export Doctor-Ready Report</span>
+        </button>
       </div>
+
+      {/* Doctor Report Modal */}
+      <DoctorReportModal
+        isOpen={showDoctorModal}
+        onClose={() => setShowDoctorModal(false)}
+        userName={userName}
+        userMode={wellnessMode}
+        dob={dob}
+        dailyLogs={dailyLogs}
+        cycleLogs={cycleLogs}
+        skinLogs={skinLogs}
+      />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

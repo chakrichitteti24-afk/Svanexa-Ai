@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CoinBalanceBadge } from '@/components/ui/CoinBalanceBadge';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
+import { PrivacyToggle } from '@/components/ui/PrivacyToggle';
 
 const navItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -45,15 +47,19 @@ export function Sidebar({
         className
       )}
     >
-      {/* Logo + Coin Badge */}
-      <div className="h-16 flex items-center justify-between px-4 border-b border-[rgba(168,85,247,0.1)] shrink-0">
-        <Link href="/" onClick={onNavigate} className="flex items-center gap-2 group">
-          <div className="w-8 h-8 rounded-xl overflow-hidden shadow-lg shadow-violet-500/30 relative">
+      {/* Logo + Notification Bell + Privacy + Coin Badge */}
+      <div className="h-16 flex items-center justify-between px-3 border-b border-[rgba(168,85,247,0.1)] shrink-0 gap-1.5">
+        <Link href="/" onClick={onNavigate} className="flex items-center gap-2 group min-w-0">
+          <div className="w-8 h-8 rounded-xl overflow-hidden shadow-lg shadow-violet-500/30 relative shrink-0">
             <Image src="/logo.jpg" alt="Svanexa" fill className="object-cover" />
           </div>
-          <span className="text-xl font-bold gradient-text tracking-tight">Svanexa</span>
+          <span className="text-lg font-bold gradient-text tracking-tight truncate">Svanexa</span>
         </Link>
-        <CoinBalanceBadge />
+        <div className="flex items-center gap-1 shrink-0">
+          <PrivacyToggle />
+          <NotificationBell dropdownAlign="left" />
+          <CoinBalanceBadge />
+        </div>
       </div>
 
       {/* Navigation */}

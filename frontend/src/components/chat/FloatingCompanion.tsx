@@ -275,12 +275,10 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
     } else {
       const current = sessionList.find(s => s.id === activeSessionId);
       if (current && Array.isArray(current.messages) && current.messages.length === 0 && !isLoading) {
-        // eslint-disable-next-line react-hooks/exhaustive-deps
         fetchGreeting(current.id);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, profileLoading, sessions?.length, activeSessionId]);
+  }, [isOpen, profileLoading, sessions?.length, activeSessionId, fetchGreeting, startNewChat, activeSessionId, isLoading]);
 
   const activeSession = (Array.isArray(sessions) ? sessions : []).find(s => s.id === activeSessionId);
   const messages = Array.isArray(activeSession?.messages) ? activeSession.messages : [];

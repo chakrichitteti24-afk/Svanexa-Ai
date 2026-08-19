@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { HabitBadges } from '@/components/profile/HabitBadges';
+import { NotificationSettings } from '@/components/profile/NotificationSettings';
 import { useHerSync } from '@/context/HerSyncContext';
 
 type WellnessMode = 'general' | 'pcos' | 'pregnancy';
@@ -156,7 +157,7 @@ export default function ProfilePage() {
       setUserId(user.id);
       setEmail(user.email || '');
 
-      const [profileRes, pregRes] = await Promise.all([
+      const [profileRes, pregRes, prefRes] = await Promise.all([
         supabase
           .from('profiles')
           .select('first_name, last_name, username, date_of_birth, ai_name, active_theme')
@@ -169,14 +170,26 @@ export default function ProfilePage() {
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle(),
+        supabase
+          .from('user_preferences')
+          .select('theme')
+          .eq('user_id', user.id)
+          .maybeSingle(),
       ]);
+
+      const detectedUserMode: WellnessMode =
+        prefRes.data?.theme && ['general', 'pcos', 'pregnancy'].includes(prefRes.data.theme)
+          ? (prefRes.data.theme as WellnessMode)
+          : profileRes.data?.active_theme && ['general', 'pcos', 'pregnancy'].includes(profileRes.data.active_theme)
+          ? (profileRes.data.active_theme as WellnessMode)
+          : 'general';
 
       const initialData: ProfileData = {
         firstName: profileRes.data?.first_name || profileRes.data?.username || user.user_metadata?.first_name || user.user_metadata?.username || '',
         lastName: profileRes.data?.last_name || user.user_metadata?.last_name || '',
         dob: profileRes.data?.date_of_birth || '',
         companionName: profileRes.data?.ai_name || 'Luna',
-        userMode: (profileRes.data?.active_theme as WellnessMode) || 'general',
+        userMode: detectedUserMode,
         dueDate: pregRes.data?.due_date || '',
       };
 
@@ -197,7 +210,14 @@ export default function ProfilePage() {
   }, [router, supabase]);
 
   useEffect(() => {
-    loadProfile();
+    let isMounted = true;
+    const fetchUserData = async () => {
+      await loadProfile();
+    };
+    fetchUserData();
+    return () => {
+      isMounted = false;
+    };
   }, [loadProfile]);
 
   // Validation function
@@ -260,24 +280,45 @@ export default function ProfilePage() {
     setSaving(true);
 
     try {
-      // 1. Save Profile in Supabase
-      const profilePayload = {
+      // 1. Check existing store theme to prevent wiping it
+      const { data: curProf } = await supabase
+        .from('profiles')
+        .select('active_theme')
+        .eq('id', userId)
+        .maybeSingle();
+
+      const existingTheme = curProf?.active_theme;
+      const isStoreTheme = existingTheme && !['general', 'pcos', 'pregnancy'].includes(existingTheme);
+
+      const profilePayload: any = {
         id: userId,
         first_name: firstName.trim(),
         last_name: lastName.trim(),
         username: firstName.trim(),
         date_of_birth: dob || null,
         ai_name: companionName.trim(),
-        active_theme: userMode,
         updated_at: new Date().toISOString(),
       };
 
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert(profilePayload, { onConflict: 'id' });
+      if (isStoreTheme) {
+        profilePayload.active_theme = existingTheme;
+      }
 
-      if (profileError) {
-        throw profileError;
+      // Upsert profile and user_preferences in parallel
+      const [profileRes, prefRes] = await Promise.all([
+        supabase.from('profiles').upsert(profilePayload, { onConflict: 'id' }),
+        supabase.from('user_preferences').upsert(
+          {
+            user_id: userId,
+            theme: userMode,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' }
+        ),
+      ]);
+
+      if (profileRes.error) {
+        throw profileRes.error;
       }
 
       // 2. If pregnancy mode, save due date
@@ -770,12 +811,17 @@ export default function ProfilePage() {
         </div>
 
         {/* ───────────────────────────────────────────────────────────────────────
-            6. COLLECTIBLE HABIT BADGES
+            6. NOTIFICATION & SMART ALERTS PREFERENCES
+            ─────────────────────────────────────────────────────────────────────── */}
+        <NotificationSettings />
+
+        {/* ───────────────────────────────────────────────────────────────────────
+            7. COLLECTIBLE HABIT BADGES
             ─────────────────────────────────────────────────────────────────────── */}
         <HabitBadges />
 
         {/* ───────────────────────────────────────────────────────────────────────
-            7. DYNAMIC ACTIONS: [ Edit Profile ] VS [ Save Changes ] [ Cancel ]
+            8. DYNAMIC ACTIONS: [ Edit Profile ] VS [ Save Changes ] [ Cancel ]
             ─────────────────────────────────────────────────────────────────────── */}
         <div className="pt-2">
           {!isEditing ? (

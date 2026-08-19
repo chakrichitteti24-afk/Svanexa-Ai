@@ -63,7 +63,12 @@ export async function POST(req: Request) {
       supabase.from('mood_logs').select('mood, intensity').eq('user_id', userId).eq('date', today).maybeSingle(),
     ]);
 
-    const wellnessMode = profile?.active_theme || 'general';
+    const wellnessMode =
+      profile?.active_theme && ['general', 'pcos', 'pregnancy'].includes(profile.active_theme)
+        ? profile.active_theme
+        : pregnancyLog
+        ? 'pregnancy'
+        : 'general';
     const companionName = profile?.ai_name || 'Luna';
 
     // Parse today's slot data from daily_checkins.summary

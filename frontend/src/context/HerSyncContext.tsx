@@ -164,32 +164,71 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
   const supabase = createClient();
   const hasFetchedRef = useRef(false);
 
-  const [state, setState] = useState<HealthState>({
-    profile: null,
-    preferences: null,
-    todayLog: { sleep: null, water: null, mood: null, stress: null, exercise: null },
-    checkinSlots: {
-      morning: { completed: false, completedAt: null },
-      afternoon: { completed: false, completedAt: null },
-      evening: { completed: false, completedAt: null },
-    },
-    allSlotsComplete: false,
-    hasCheckedInToday: false,
-    totalCheckIns: 0,
-    currentStreak: 0,
-    cycleStatus: 'insufficient_data',
-    cycleHistory: [],
-    skinLogs: [],
-    wellnessTasks: [],
-    pregnancyDueDate: null,
-    coinBalance: 0,
-    unlockedItems: [],
-    activeTheme: 'default',
-    activeDashboardStyle: 'minimal',
-    activeCompanionStyle: 'friendly',
-    coinAnimation: null,
-    isLoading: true,
-    lastRefreshed: 0,
+  const [state, setState] = useState<HealthState>(() => {
+    const initialState: HealthState = {
+      profile: null,
+      preferences: null,
+      todayLog: { sleep: null, water: null, mood: null, stress: null, exercise: null },
+      checkinSlots: {
+        morning: { completed: false, completedAt: null },
+        afternoon: { completed: false, completedAt: null },
+        evening: { completed: false, completedAt: null },
+      },
+      allSlotsComplete: false,
+      hasCheckedInToday: false,
+      totalCheckIns: 0,
+      currentStreak: 0,
+      cycleStatus: 'insufficient_data',
+      cycleHistory: [],
+      skinLogs: [],
+      wellnessTasks: [],
+      pregnancyDueDate: null,
+      coinBalance: 0,
+      unlockedItems: [],
+      activeTheme: 'default',
+      activeDashboardStyle: 'minimal',
+      activeCompanionStyle: 'friendly',
+      coinAnimation: null,
+      isLoading: true,
+      lastRefreshed: 0,
+    };
+
+    if (typeof window !== 'undefined') {
+      try {
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
+        const cached = localStorage.getItem('svanexa_app_cache_v1');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          const isSameDate = parsed?.cacheDate === todayStr;
+
+          return {
+            ...initialState,
+            profile: parsed?.profile || null,
+            preferences: parsed?.preferences || null,
+            activeTheme: parsed?.activeTheme || 'default',
+            activeDashboardStyle: parsed?.activeDashboardStyle || 'minimal',
+            activeCompanionStyle: parsed?.activeCompanionStyle || 'friendly',
+            coinBalance: typeof parsed?.coinBalance === 'number' ? parsed.coinBalance : 0,
+            unlockedItems: Array.isArray(parsed?.unlockedItems) ? parsed.unlockedItems : [],
+            currentStreak: typeof parsed?.currentStreak === 'number' ? parsed.currentStreak : 0,
+            totalCheckIns: typeof parsed?.totalCheckIns === 'number' ? parsed.totalCheckIns : 0,
+            hasCheckedInToday: isSameDate ? (parsed?.hasCheckedInToday ?? false) : false,
+            checkinSlots: isSameDate && parsed?.checkinSlots ? parsed.checkinSlots : {
+              morning: { completed: false, completedAt: null },
+              afternoon: { completed: false, completedAt: null },
+              evening: { completed: false, completedAt: null },
+            },
+            todayLog: isSameDate && parsed?.todayLog ? parsed.todayLog : { sleep: null, water: null, mood: null, stress: null, exercise: null },
+            wellnessTasks: isSameDate && Array.isArray(parsed?.wellnessTasks) ? parsed.wellnessTasks : [],
+            isLoading: false,
+          };
+        }
+      } catch (err) {
+        console.warn('Cache restore warning:', err);
+      }
+    }
+
+    return initialState;
   });
 
   const triggerCoinAnimation = useCallback((amount: number) => {
@@ -233,42 +272,6 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       }
     } catch (err) {
       console.error('Error fetching coins balance', err);
-    }
-  }, []);
-
-  // Restore cache on mount with date validation to prevent yesterday's data from flashing
-  useEffect(() => {
-    try {
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
-      const cached = localStorage.getItem('svanexa_app_cache_v1');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        const isSameDate = parsed?.cacheDate === todayStr;
-
-        setState(prev => ({
-          ...prev,
-          profile: parsed?.profile || prev.profile,
-          preferences: parsed?.preferences || prev.preferences,
-          activeTheme: parsed?.activeTheme || prev.activeTheme,
-          activeDashboardStyle: parsed?.activeDashboardStyle || prev.activeDashboardStyle,
-          activeCompanionStyle: parsed?.activeCompanionStyle || prev.activeCompanionStyle,
-          coinBalance: typeof parsed?.coinBalance === 'number' ? parsed.coinBalance : prev.coinBalance,
-          unlockedItems: Array.isArray(parsed?.unlockedItems) ? parsed.unlockedItems : prev.unlockedItems,
-          currentStreak: typeof parsed?.currentStreak === 'number' ? parsed.currentStreak : prev.currentStreak,
-          totalCheckIns: typeof parsed?.totalCheckIns === 'number' ? parsed.totalCheckIns : prev.totalCheckIns,
-          hasCheckedInToday: isSameDate ? (parsed?.hasCheckedInToday ?? false) : false,
-          checkinSlots: isSameDate && parsed?.checkinSlots ? parsed.checkinSlots : {
-            morning: { completed: false, completedAt: null },
-            afternoon: { completed: false, completedAt: null },
-            evening: { completed: false, completedAt: null },
-          },
-          todayLog: isSameDate && parsed?.todayLog ? parsed.todayLog : { sleep: null, water: null, mood: null, stress: null, exercise: null },
-          wellnessTasks: isSameDate && Array.isArray(parsed?.wellnessTasks) ? parsed.wellnessTasks : [],
-          isLoading: false,
-        }));
-      }
-    } catch (err) {
-      console.warn('Cache restore warning:', err);
     }
   }, []);
 
@@ -532,6 +535,17 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
           activeCompanionStyle: itemType === 'companion_style' ? itemId : prev.activeCompanionStyle,
         }));
 
+        // Synchronize active customization to ensure database persistence
+        try {
+          await apiFetch('/api/coins/active', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ itemType, itemId }),
+          });
+        } catch (activeErr) {
+          console.warn('Auto-activate sync notice:', activeErr);
+        }
+
         return true;
       } catch (err) {
         throw err;
@@ -626,9 +640,11 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
   }, [fetchAll, state.lastRefreshed]);
 
   const wellnessMode: 'general' | 'pcos' | 'pregnancy' =
-    (state.preferences?.theme as 'general' | 'pcos' | 'pregnancy') ||
-    (state.profile?.active_theme as 'general' | 'pcos' | 'pregnancy') ||
-    'general';
+    (state.preferences?.theme && ['general', 'pcos', 'pregnancy'].includes(state.preferences.theme)
+      ? (state.preferences.theme as 'general' | 'pcos' | 'pregnancy')
+      : state.profile?.active_theme && ['general', 'pcos', 'pregnancy'].includes(state.profile.active_theme)
+      ? (state.profile.active_theme as 'general' | 'pcos' | 'pregnancy')
+      : 'general');
   const userName = state.profile?.first_name || 'there';
   const aiName = state.profile?.ai_name || 'Luna';
 

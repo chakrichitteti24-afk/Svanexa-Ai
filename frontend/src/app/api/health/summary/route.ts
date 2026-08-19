@@ -140,7 +140,11 @@ export async function GET(req: Request) {
     // Build preferences object from profile columns
     const userPreferences = {
       user_id: userId,
-      theme: (userProfile?.active_theme as 'general' | 'pcos' | 'pregnancy') || 'general',
+      theme: (userProfile?.active_theme && ['general', 'pcos', 'pregnancy'].includes(userProfile.active_theme)
+        ? (userProfile.active_theme as 'general' | 'pcos' | 'pregnancy')
+        : preg
+        ? 'pregnancy'
+        : 'general'),
       tracking_goals: null,
       language: 'en',
       communication_style: userProfile?.active_companion_style || 'friendly',

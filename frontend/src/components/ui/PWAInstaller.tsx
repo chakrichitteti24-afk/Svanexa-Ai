@@ -10,7 +10,12 @@ import { apiFetch } from '@/utils/api-client';
 export function PWAInstaller() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
-  const [isOffline, setIsOffline] = useState(false);
+  const [isOffline, setIsOffline] = useState(() => {
+    if (typeof navigator !== 'undefined') {
+      return !navigator.onLine;
+    }
+    return false;
+  });
 
   useEffect(() => {
     // Purge any stale service workers and clear CacheStorage across all mobile, tablet, and desktop clients
@@ -65,10 +70,6 @@ export function PWAInstaller() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      setIsOffline(true);
-    }
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);

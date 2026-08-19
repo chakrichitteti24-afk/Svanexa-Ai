@@ -163,8 +163,6 @@ function WellnessPlanContent() {
 
   // ── Load Plan ──
   const loadPlan = useCallback(async () => {
-    setLoading(true);
-    setIsError(false);
     try {
       const todayStr = format(new Date(), 'yyyy-MM-dd');
       const res = await apiFetch(`/api/wellness-plan?date=${todayStr}`);

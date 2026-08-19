@@ -73,11 +73,22 @@ export async function POST(req: Request) {
       );
     }
 
+    // Auto-fill answers if this is a 1-tap quick micro-log
     if (!data.answers || typeof data.answers !== 'object' || Object.keys(data.answers).length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'Check-in questionnaire answers are required.' },
-        { status: 400 }
-      );
+      if (data.water !== undefined || data.mood !== undefined || data.sleep !== undefined || data.stress !== undefined) {
+        data.answers = {
+          quick_log: true,
+          ...(data.water !== undefined ? { quick_water: data.water } : {}),
+          ...(data.mood !== undefined ? { quick_mood: data.mood } : {}),
+          ...(data.sleep !== undefined ? { quick_sleep: data.sleep } : {}),
+          ...(data.stress !== undefined ? { quick_stress: data.stress } : {}),
+        };
+      } else {
+        return NextResponse.json(
+          { success: false, error: 'Check-in questionnaire answers are required.' },
+          { status: 400 }
+        );
+      }
     }
 
     const completedAt = new Date().toISOString();
@@ -101,15 +112,20 @@ export async function POST(req: Request) {
     // ── Save to dedicated granular log tables safely ───────────────────────────
     try {
       // 1. Mood log
-      const moodState = data?.indicators?.mood?.state || data?.moodState;
-      const moodText =
-        moodState === 'Positive'
-          ? 'uplifted'
-          : moodState === 'Low'
-          ? 'down'
-          : 'neutral';
+      let moodText = 'neutral';
+      if (typeof data?.mood === 'string' && data.mood.trim()) {
+        moodText = data.mood.trim();
+      } else {
+        const moodState = data?.indicators?.mood?.state || data?.moodState;
+        moodText =
+          moodState === 'Positive'
+            ? 'uplifted'
+            : moodState === 'Low'
+            ? 'down'
+            : 'neutral';
+      }
 
-      const stressScore = data?.indicators?.stress?.score || data?.averageScore || 2.5;
+      const stressScore = data?.stress !== undefined ? data.stress : data?.indicators?.stress?.score || data?.averageScore || 2.5;
 
       await safeUpsert(
         supabase,
@@ -119,10 +135,13 @@ export async function POST(req: Request) {
       );
 
       // 2. Sleep log (if sleep rating provided)
-      const sleepScore = data?.indicators?.sleepRating || data?.sleep;
-      if (sleepScore) {
+      const sleepScore = data?.sleep !== undefined ? data.sleep : data?.indicators?.sleepRating;
+      if (sleepScore !== undefined && sleepScore !== null) {
+        const sleepNum = Number(sleepScore);
         const approxHours =
-          sleepScore === 5 ? 8.5 : sleepScore === 4 ? 7.5 : sleepScore === 3 ? 6.5 : sleepScore === 2 ? 5.0 : 4.0;
+          sleepNum > 10 ? sleepNum : sleepNum >= 1 && sleepNum <= 5
+            ? (sleepNum === 5 ? 8.5 : sleepNum === 4 ? 7.5 : sleepNum === 3 ? 6.5 : sleepNum === 2 ? 5.0 : 4.0)
+            : sleepNum;
 
         await safeUpsert(
           supabase,
@@ -132,10 +151,16 @@ export async function POST(req: Request) {
         );
       }
 
-      // 3. Water log (if hydration rating provided)
-      const hydrationScore = data?.indicators?.hydrationRating || data?.water;
-      if (hydrationScore) {
-        const approxMl = Number(hydrationScore) * 500;
+      // 3. Water log (if hydration provided)
+      let approxMl: number | null = null;
+      if (data?.water !== undefined && data?.water !== null) {
+        const wNum = Number(data.water);
+        approxMl = wNum >= 50 ? wNum : Math.round(wNum * 1000);
+      } else if (data?.indicators?.hydrationRating) {
+        approxMl = Number(data.indicators.hydrationRating) * 500;
+      }
+
+      if (approxMl !== null && approxMl >= 0) {
         await safeUpsert(
           supabase,
           'water_logs',

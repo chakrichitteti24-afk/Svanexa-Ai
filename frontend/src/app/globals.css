@@ -136,114 +136,175 @@ body[data-mode="pregnancy"] {
 /* =====================================================
    SVANEXA REWARD STORE THEMES
    ===================================================== */
+:root[data-theme="lavender"],
 body[data-theme="lavender"] {
+  --background: #0d0918;
+  --card: rgba(24, 16, 42, 0.88);
+  --popover: #150e26;
   --primary: #c084fc;
   --ring: #a855f7;
+  --border: rgba(192, 132, 252, 0.18);
+  --sidebar: rgba(15, 10, 26, 0.96);
   --sidebar-primary: #c084fc;
+  --sidebar-border: rgba(192, 132, 252, 0.15);
   --sidebar-ring: #a855f7;
+  --accent: rgba(192, 132, 252, 0.15);
+  --accent-foreground: #d8b4fe;
   --hs-pink: #d8b4fe;
   --hs-violet: #a855f7;
   --hs-purple: #9333ea;
   --hs-fuchsia: #c084fc;
   --hs-glow-pink: rgba(192, 132, 252, 0.35);
   --hs-glow-violet: rgba(168, 85, 247, 0.35);
-  --bg-gradient-color1: rgba(168, 85, 247, 0.18);
-  --bg-gradient-color2: rgba(216, 180, 254, 0.12);
+  --bg-gradient-color1: rgba(168, 85, 247, 0.22);
+  --bg-gradient-color2: rgba(216, 180, 254, 0.16);
+  --hs-glass: rgba(24, 16, 42, 0.75);
   --hs-glass-border: rgba(192, 132, 252, 0.25);
 }
 
+:root[data-theme="rose"],
 body[data-theme="rose"] {
+  --background: #12070c;
+  --card: rgba(34, 14, 22, 0.88);
+  --popover: #1c0a12;
   --primary: #fb7185;
   --ring: #f43f5e;
+  --border: rgba(251, 113, 133, 0.18);
+  --sidebar: rgba(20, 8, 14, 0.96);
   --sidebar-primary: #fb7185;
+  --sidebar-border: rgba(251, 113, 133, 0.15);
   --sidebar-ring: #f43f5e;
+  --accent: rgba(251, 113, 133, 0.15);
+  --accent-foreground: #fda4af;
   --hs-pink: #fda4af;
   --hs-violet: #fb7185;
   --hs-purple: #e11d48;
   --hs-fuchsia: #f43f5e;
   --hs-glow-pink: rgba(251, 113, 133, 0.35);
   --hs-glow-violet: rgba(244, 63, 94, 0.35);
-  --bg-gradient-color1: rgba(244, 63, 94, 0.18);
-  --bg-gradient-color2: rgba(253, 164, 175, 0.12);
+  --bg-gradient-color1: rgba(244, 63, 94, 0.22);
+  --bg-gradient-color2: rgba(253, 164, 175, 0.16);
+  --hs-glass: rgba(34, 14, 22, 0.75);
   --hs-glass-border: rgba(251, 113, 133, 0.25);
 }
 
+:root[data-theme="ocean"],
 body[data-theme="ocean"] {
+  --background: #030c14;
+  --card: rgba(8, 24, 38, 0.88);
+  --popover: #051422;
   --primary: #38bdf8;
   --ring: #0284c7;
+  --border: rgba(56, 189, 248, 0.18);
+  --sidebar: rgba(5, 16, 26, 0.96);
   --sidebar-primary: #38bdf8;
+  --sidebar-border: rgba(56, 189, 248, 0.15);
   --sidebar-ring: #0284c7;
+  --accent: rgba(56, 189, 248, 0.15);
+  --accent-foreground: #7dd3fc;
   --hs-pink: #7dd3fc;
   --hs-violet: #38bdf8;
   --hs-purple: #0284c7;
   --hs-fuchsia: #06b6d4;
   --hs-glow-pink: rgba(56, 189, 248, 0.35);
   --hs-glow-violet: rgba(2, 132, 199, 0.35);
-  --bg-gradient-color1: rgba(2, 132, 199, 0.18);
-  --bg-gradient-color2: rgba(6, 182, 212, 0.12);
+  --bg-gradient-color1: rgba(2, 132, 199, 0.22);
+  --bg-gradient-color2: rgba(6, 182, 212, 0.16);
+  --hs-glass: rgba(8, 24, 38, 0.75);
   --hs-glass-border: rgba(56, 189, 248, 0.25);
 }
 
+:root[data-theme="midnight"],
 body[data-theme="midnight"] {
-  --background: #06050b;
-  --card: rgba(12, 10, 24, 0.9);
+  --background: #05040d;
+  --card: rgba(14, 12, 28, 0.9);
+  --popover: #090718;
   --primary: #818cf8;
   --ring: #6366f1;
+  --border: rgba(129, 140, 248, 0.18);
+  --sidebar: rgba(8, 6, 18, 0.96);
   --sidebar-primary: #818cf8;
+  --sidebar-border: rgba(129, 140, 248, 0.15);
   --sidebar-ring: #6366f1;
+  --accent: rgba(129, 140, 248, 0.15);
+  --accent-foreground: #a5b4fc;
   --hs-pink: #a5b4fc;
   --hs-violet: #818cf8;
   --hs-purple: #4f46e5;
   --hs-fuchsia: #6366f1;
   --hs-glow-pink: rgba(129, 140, 248, 0.35);
   --hs-glow-violet: rgba(99, 102, 241, 0.35);
-  --bg-gradient-color1: rgba(99, 102, 241, 0.2);
-  --bg-gradient-color2: rgba(79, 70, 229, 0.15);
+  --bg-gradient-color1: rgba(99, 102, 241, 0.25);
+  --bg-gradient-color2: rgba(79, 70, 229, 0.18);
+  --hs-glass: rgba(14, 12, 28, 0.75);
   --hs-glass-border: rgba(129, 140, 248, 0.25);
 }
 
+:root[data-theme="sage"],
 body[data-theme="sage"] {
+  --background: #040e08;
+  --card: rgba(10, 28, 18, 0.88);
+  --popover: #07180e;
   --primary: #34d399;
   --ring: #059669;
+  --border: rgba(52, 211, 153, 0.18);
+  --sidebar: rgba(6, 18, 12, 0.96);
   --sidebar-primary: #34d399;
+  --sidebar-border: rgba(52, 211, 153, 0.15);
   --sidebar-ring: #059669;
+  --accent: rgba(52, 211, 153, 0.15);
+  --accent-foreground: #6ee7b7;
   --hs-pink: #6ee7b7;
   --hs-violet: #34d399;
   --hs-purple: #059669;
   --hs-fuchsia: #10b981;
   --hs-glow-pink: rgba(52, 211, 153, 0.35);
   --hs-glow-violet: rgba(5, 150, 105, 0.35);
-  --bg-gradient-color1: rgba(5, 150, 105, 0.18);
-  --bg-gradient-color2: rgba(16, 185, 129, 0.12);
+  --bg-gradient-color1: rgba(5, 150, 105, 0.22);
+  --bg-gradient-color2: rgba(16, 185, 129, 0.16);
+  --hs-glass: rgba(10, 28, 18, 0.75);
   --hs-glass-border: rgba(52, 211, 153, 0.25);
 }
 
+:root[data-theme="sunrise"],
 body[data-theme="sunrise"] {
+  --background: #120802;
+  --card: rgba(30, 16, 8, 0.88);
+  --popover: #1a0d04;
   --primary: #fbbf24;
   --ring: #d97706;
+  --border: rgba(251, 191, 36, 0.18);
+  --sidebar: rgba(20, 10, 4, 0.96);
   --sidebar-primary: #fbbf24;
+  --sidebar-border: rgba(251, 191, 36, 0.15);
   --sidebar-ring: #d97706;
+  --accent: rgba(251, 191, 36, 0.15);
+  --accent-foreground: #fde047;
   --hs-pink: #fde047;
   --hs-violet: #fbbf24;
   --hs-purple: #d97706;
   --hs-fuchsia: #f59e0b;
   --hs-glow-pink: rgba(251, 191, 36, 0.35);
   --hs-glow-violet: rgba(217, 119, 6, 0.35);
-  --bg-gradient-color1: rgba(217, 119, 6, 0.18);
-  --bg-gradient-color2: rgba(245, 158, 11, 0.12);
+  --bg-gradient-color1: rgba(217, 119, 6, 0.22);
+  --bg-gradient-color2: rgba(245, 158, 11, 0.16);
+  --hs-glass: rgba(30, 16, 8, 0.75);
   --hs-glass-border: rgba(251, 191, 36, 0.25);
 }
 
 /* ── DASHBOARD STYLES ── */
+:root[data-dashboard-style="soft_glow"] .glass-card,
 body[data-dashboard-style="soft_glow"] .glass-card {
   box-shadow: 0 0 25px -5px var(--hs-glow-pink), 0 0 15px -5px var(--hs-glow-violet);
 }
 
+:root[data-dashboard-style="nature"] .glass-card,
 body[data-dashboard-style="nature"] .glass-card {
   border-color: rgba(52, 211, 153, 0.2);
   box-shadow: 0 4px 20px -2px rgba(16, 185, 129, 0.15);
 }
 
+:root[data-dashboard-style="calm"] .glass-card,
 body[data-dashboard-style="calm"] .glass-card {
   border-color: rgba(56, 189, 248, 0.2);
   box-shadow: 0 4px 20px -2px rgba(2, 132, 199, 0.15);
@@ -557,4 +618,53 @@ html, body {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* =====================================================
+   DISCREET GLANCE PRIVACY MODE
+   ===================================================== */
+[data-privacy="active"] .privacy-mask {
+  filter: blur(5px);
+  user-select: none;
+  transition: filter 0.2s ease;
+}
+
+[data-privacy="active"] .privacy-mask:hover {
+  filter: blur(0px);
+}
+
+[data-privacy="active"] .privacy-discreet-tag {
+  display: inline-block !important;
+}
+
+/* =====================================================
+   CIRCADIAN NIGHT-SHIFT AMBIENT GLOW
+   ===================================================== */
+[data-circadian="night"] {
+  --hs-glow-pink: rgba(236, 72, 153, 0.08);
+  --hs-glow-violet: rgba(168, 85, 247, 0.08);
+  filter: contrast(0.95) brightness(0.96);
+}
+
+/* =====================================================
+   PRINT & CLINICAL PDF EXPORT STYLES
+   ===================================================== */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    background-image: none !important;
+  }
+
+  nav,
+  aside,
+  header,
+  footer {
+    display: none !important;
+  }
+
+  @page {
+    margin: 1.5cm;
+    size: auto;
+  }
 }

@@ -17,6 +17,8 @@ import { format } from 'date-fns';
 import styles from './dashboard.module.css';
 import { DashboardMascot } from '@/components/chat/DashboardMascot';
 import { DashboardSkeleton } from '@/components/ui/skeleton';
+import { HormoneFoodSolver } from '@/components/nutrition/HormoneFoodSolver';
+import { triggerHaptic } from '@/utils/haptics';
 
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
@@ -171,11 +173,14 @@ export default function DashboardPage() {
     const isCompleting = !targetTask?.completed && targetTask?.status !== 'completed';
 
     if (isCompleting) {
+      triggerHaptic('success');
       const randomMsg = LUNA_REACTIONS[Math.floor(Math.random() * LUNA_REACTIONS.length)];
       setLunaReaction(randomMsg);
       setShowSparkles(taskId);
       setTimeout(() => setLunaReaction(null), 3000);
       setTimeout(() => setShowSparkles(null), 1200);
+    } else {
+      triggerHaptic('light');
     }
 
     try {
@@ -228,11 +233,13 @@ export default function DashboardPage() {
     }
   };
 
+  const [quickLogging, setQuickLogging] = useState(false);
+
   const handleQuickLogWater = async (amountLiters: number) => {
+    if (quickLogging) return;
+    setQuickLogging(true);
     try {
-      if (typeof window !== 'undefined' && 'vibrate' in navigator) {
-        navigator.vibrate?.([15, 30, 15]);
-      }
+      triggerHaptic('light');
       const newWater = Number(((l?.water ? Number(l.water) : 0) + amountLiters).toFixed(2));
       const todayStr = format(new Date(), 'yyyy-MM-dd');
 
@@ -253,8 +260,78 @@ export default function DashboardPage() {
       await refreshAll();
     } catch (err) {
       console.warn('Quick water log error:', err);
+    } finally {
+      setQuickLogging(false);
     }
   };
+
+  const handleQuickLogMood = async (moodText: string, emoji: string) => {
+    if (quickLogging) return;
+    setQuickLogging(true);
+    try {
+      triggerHaptic('selection');
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      toast.success(`${emoji} Mood recorded as "${moodText}"`);
+
+      await apiFetch('/api/health/checkin', {
+        method: 'POST',
+        body: JSON.stringify({
+          slot: activeSlot,
+          date: todayStr,
+          data: {
+            mood: moodText.toLowerCase(),
+            stress: moodText === 'Energized' || moodText === 'Calm' ? 1.5 : moodText === 'Tired' ? 3.0 : 4.0,
+            note: `Quick 1-tap mood log: ${emoji} ${moodText}`,
+          },
+        }),
+      });
+
+      await refreshAll();
+    } catch (err) {
+      console.warn('Quick mood log error:', err);
+    } finally {
+      setQuickLogging(false);
+    }
+  };
+
+  const handleQuickCatchUpSlot = async (slotToFill: 'morning' | 'afternoon' | 'evening') => {
+    if (quickLogging) return;
+    setQuickLogging(true);
+    try {
+      triggerHaptic('medium');
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const slotLabel = slotToFill === 'morning' ? 'Morning' : slotToFill === 'afternoon' ? 'Afternoon' : 'Evening';
+      toast.success(`✨ ${slotLabel} check-in caught up!`);
+
+      const defaultData: Record<string, any> = {
+        morning: { sleep: 7.5, mood: 'calm', stress: 2.0 },
+        afternoon: { water: 1.5, mood: 'energized', stress: 2.5 },
+        evening: { mood: 'relaxed', stress: 2.0 },
+      };
+
+      await apiFetch('/api/health/checkin', {
+        method: 'POST',
+        body: JSON.stringify({
+          slot: slotToFill,
+          date: todayStr,
+          data: defaultData[slotToFill],
+        }),
+      });
+
+      await refreshAll();
+    } catch (err) {
+      console.warn('Catch-up error:', err);
+      toast.error('Could not complete catch-up log.');
+    } finally {
+      setQuickLogging(false);
+    }
+  };
+
+  const pendingSlots = useMemo(() => {
+    return (['morning', 'afternoon', 'evening'] as const).filter(
+      s => !checkinSlots?.[s]?.completed
+    );
+  }, [checkinSlots]);
 
   const topPriorityTask = useMemo(() => {
     const slotPending = tasksList.filter(t => t.timeSlot === activeSlot && !t.completed && t.status !== 'completed');
@@ -420,6 +497,129 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
+      </motion.div>
+
+      {/* ⚡ 1-TAP QUICK MICRO-LOGGERS (EFFORTLESS WELLNESS BAR) ⚡ */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.18, duration: 0.4 }}
+        className="w-full p-4 rounded-3xl bg-card/60 border border-border/40 backdrop-blur-md space-y-3"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="p-1.5 rounded-lg bg-pink-500/10 text-pink-400 text-xs">⚡</span>
+            <h3 className="text-xs font-bold text-foreground">1-Tap Quick Loggers</h3>
+            <span className="text-[10px] text-muted-foreground hidden sm:inline">• Save in 1 second without opening forms</span>
+          </div>
+          <span className="text-[10px] font-semibold text-pink-400">Instant Sync ✨</span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Quick Water Bar */}
+          <div className="p-3 rounded-2xl bg-secondary/15 border border-border/20 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-foreground flex items-center gap-1.5">
+                <Droplets className="w-3.5 h-3.5 text-cyan-400" /> Hydration
+              </span>
+              <span className="font-mono text-cyan-300 text-[11px] font-bold">
+                {waterLogged.toFixed(1)} / {waterTarget}L
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => handleQuickLogWater(0.25)}
+                disabled={quickLogging}
+                className="flex-1 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 font-bold text-[11px] transition-all active:scale-95 flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <span>+250ml</span>
+                <span className="text-[9px] opacity-75 font-normal">Cup</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickLogWater(0.50)}
+                disabled={quickLogging}
+                className="flex-1 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/35 text-cyan-200 font-bold text-[11px] transition-all active:scale-95 flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <span>+500ml</span>
+                <span className="text-[9px] opacity-75 font-normal">Bottle</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickLogWater(0.75)}
+                disabled={quickLogging}
+                className="flex-1 py-1.5 rounded-xl bg-cyan-500/25 hover:bg-cyan-500/35 border border-cyan-500/40 text-cyan-100 font-bold text-[11px] transition-all active:scale-95 flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <span>+750ml</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Mood Bar */}
+          <div className="p-3 rounded-2xl bg-secondary/15 border border-border/20 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-foreground flex items-center gap-1.5">
+                <Smile className="w-3.5 h-3.5 text-pink-400" /> How are you feeling right now?
+              </span>
+              <span className="text-[10px] text-muted-foreground capitalize">
+                {l?.mood ? `Current: ${l.mood}` : 'Tap to log'}
+              </span>
+            </div>
+            <div className="grid grid-cols-5 gap-1">
+              {[
+                { label: 'Energized', emoji: '😊' },
+                { label: 'Calm', emoji: '😌' },
+                { label: 'Tired', emoji: '😴' },
+                { label: 'Crampy', emoji: '😣' },
+                { label: 'Stressed', emoji: '🤯' },
+              ].map(m => (
+                <button
+                  key={m.label}
+                  type="button"
+                  onClick={() => handleQuickLogMood(m.label, m.emoji)}
+                  disabled={quickLogging}
+                  className={`py-1 rounded-xl text-center transition-all active:scale-95 cursor-pointer ${
+                    l?.mood === m.label.toLowerCase()
+                      ? 'bg-pink-500/25 border border-pink-500/40 text-pink-200 font-bold'
+                      : 'bg-secondary/25 hover:bg-secondary/40 border border-border/20 text-muted-foreground'
+                  }`}
+                >
+                  <div className="text-sm">{m.emoji}</div>
+                  <div className="text-[9px] truncate font-medium">{m.label}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* 🌙 ZERO-GUILT EVENING CATCH-UP (IF ANY SLOTS ARE PENDING) */}
+        {pendingSlots.length > 0 && (
+          <div className="p-3 rounded-2xl bg-gradient-to-r from-purple-950/40 via-purple-900/20 to-pink-950/30 border border-purple-500/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+            <div className="space-y-0.5 min-w-0">
+              <p className="text-xs font-bold text-purple-200 flex items-center gap-1.5">
+                <span>🌙</span> Busy day? 20-Second Quick Catch-Up
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Preserve your <span className="text-amber-400 font-bold">{currentStreak}-day streak 🔥</span> by catching up on pending check-ins before midnight:
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 w-full sm:w-auto shrink-0">
+              {pendingSlots.map(slot => (
+                <button
+                  key={slot}
+                  type="button"
+                  onClick={() => handleQuickCatchUpSlot(slot)}
+                  disabled={quickLogging}
+                  className="flex-1 sm:flex-initial px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/35 text-purple-200 font-bold text-[11px] flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+                >
+                  <span>+</span>
+                  <span className="capitalize">{slot}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </motion.div>
       
       <div className={styles.dashboardGrid}>
@@ -776,6 +976,15 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+      </motion.section>
+
+      {/* 🍵 HORMONE FOOD & CRAVING SOLVER SECTION 🍵 */}
+      <motion.section
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.45, duration: 0.5 }}
+      >
+        <HormoneFoodSolver currentPhase={cycleStatus} />
       </motion.section>
 
       {/* PROGRESS STATS */}

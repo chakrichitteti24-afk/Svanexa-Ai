@@ -57,7 +57,6 @@ const compressImageToBase64 = (file: File): Promise<string> => {
 export default function SkinTrackerPage() {
   const { skinLogs, refreshSkinLogs, wellnessMode } = useHerSync();
   const [userId, setUserId] = useState<string | null>(null);
-  const [localLogs, setLocalLogs] = useState<any[]>([]);
   
   const [acne, setAcne] = useState(5);
   const [oiliness, setOiliness] = useState(5);
@@ -67,6 +66,18 @@ export default function SkinTrackerPage() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [localLogs, setLocalLogs] = useState<any[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('svanexa_skin_scans');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  });
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
 
   const supabase = createClient();
@@ -75,16 +86,6 @@ export default function SkinTrackerPage() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) setUserId(user.id);
     });
-
-    try {
-      const stored = localStorage.getItem('svanexa_skin_scans');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          setLocalLogs(parsed);
-        }
-      }
-    } catch (e) {}
   }, [supabase]);
 
   const dbEntries = (Array.isArray(skinLogs) ? skinLogs : []).map(d => {
@@ -549,7 +550,7 @@ export default function SkinTrackerPage() {
                   <Sparkles className="w-8 h-8 text-violet-400 mb-3 animate-pulse" />
                   <p className="text-xs text-muted-foreground mb-1 font-semibold">Ready to Scan</p>
                   <p className="text-[11px] text-muted-foreground/75 max-w-xs leading-normal">
-                    Adjust your skin sliders, upload a selfie, and click "Analyze Skin Now" to generate your custom routine checks, active ingredients, and nutritional plan.
+                    Adjust your skin sliders, upload a selfie, and click &quot;Analyze Skin Now&quot; to generate your custom routine checks, active ingredients, and nutritional plan.
                   </p>
                 </div>
               )}

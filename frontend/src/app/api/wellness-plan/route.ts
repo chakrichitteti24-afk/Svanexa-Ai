@@ -21,7 +21,7 @@ export async function GET(req: Request) {
         .select('active_theme')
         .eq('id', user.id)
         .limit(1);
-      if (profile && profile.length > 0 && profile[0].active_theme) {
+      if (profile && profile.length > 0 && profile[0].active_theme && ['general', 'pcos', 'pregnancy'].includes(profile[0].active_theme)) {
         wellnessMode = profile[0].active_theme;
       }
     }
@@ -63,14 +63,14 @@ export async function POST(req: Request) {
       // Empty body is valid
     }
 
-    let wellnessMode = requestedMode || 'general';
+    let wellnessMode = requestedMode && ['general', 'pcos', 'pregnancy'].includes(requestedMode) ? requestedMode : 'general';
     if (user?.id && !requestedMode) {
       const { data: profile } = await supabase
         .from('profiles')
         .select('active_theme')
         .eq('id', user.id)
         .limit(1);
-      if (profile && profile.length > 0 && profile[0].active_theme) {
+      if (profile && profile.length > 0 && profile[0].active_theme && ['general', 'pcos', 'pregnancy'].includes(profile[0].active_theme)) {
         wellnessMode = profile[0].active_theme;
       }
     }

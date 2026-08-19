@@ -177,16 +177,27 @@ export function SvanexaStore() {
   const [loadingTx, setLoadingTx] = useState(false);
 
   useEffect(() => {
+    let ignore = false;
     if (activeTab === 'history') {
-      setLoadingTx(true);
-      fetch('/api/coins/transactions')
-        .then((res) => res.json())
-        .then((res) => {
-          if (res.success) setTransactions(res.data || []);
-        })
-        .catch((err) => console.error(err))
-        .finally(() => setLoadingTx(false));
+      const loadHistory = async () => {
+        setLoadingTx(true);
+        try {
+          const res = await fetch('/api/coins/transactions');
+          const data = await res.json();
+          if (!ignore && data.success) {
+            setTransactions(data.data || []);
+          }
+        } catch (err) {
+          console.error(err);
+        } finally {
+          if (!ignore) setLoadingTx(false);
+        }
+      };
+      loadHistory();
     }
+    return () => {
+      ignore = true;
+    };
   }, [activeTab]);
 
   const isUnlocked = (type: string, id: string) => {
@@ -195,9 +206,9 @@ export function SvanexaStore() {
   };
 
   const isActive = (type: string, id: string) => {
-    if (type === 'theme') return activeTheme === id;
-    if (type === 'dashboard_style') return activeDashboardStyle === id;
-    if (type === 'companion_style') return activeCompanionStyle === id;
+    if (type === 'theme') return (activeTheme || 'default') === id;
+    if (type === 'dashboard_style') return (activeDashboardStyle || 'minimal') === id;
+    if (type === 'companion_style') return (activeCompanionStyle || 'friendly') === id;
     return false;
   };
 
@@ -228,7 +239,7 @@ export function SvanexaStore() {
     try {
       const success = await purchaseItem(item.type, item.id, item.cost, item.name);
       if (success) {
-        toast.success(`🎉 ${item.name} unlocked!`);
+        toast.success(`🎉 ${item.name} unlocked & applied!`);
       }
     } catch (err: any) {
       toast.error(err.message || 'Purchase failed');

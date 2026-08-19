@@ -30,33 +30,40 @@ const MESSAGES = {
 
 export function DashboardMascot() {
   const { todayLog, checkinSlots, allSlotsComplete } = useHerSync();
-  const [mascotState, setMascotState] = useState<MascotState>('sitting');
+  
+  const [mascotState, setMascotState] = useState<MascotState>(() => {
+    if (allSlotsComplete) return 'cute';
+    const hour = new Date().getHours();
+    if ((hour >= 6 && hour < 12 && !checkinSlots?.morning?.completed) ||
+        (hour >= 12 && hour < 17 && !checkinSlots?.afternoon?.completed) ||
+        (hour >= 17 && hour < 23 && !checkinSlots?.evening?.completed)) {
+      return 'thinking';
+    }
+    return 'sitting';
+  });
+
   const [direction, setDirection] = useState<'left' | 'right'>('right');
   const [xPos, setXPos] = useState(20);
-  const [message, setMessage] = useState<string | null>(null);
+
+  const [message, setMessage] = useState<string | null>(() => {
+    const hour = new Date().getHours();
+    if (allSlotsComplete) return MESSAGES.all_completed;
+    if (hour >= 6 && hour < 12 && !checkinSlots?.morning?.completed) return MESSAGES.checkin_morning;
+    if (hour >= 12 && hour < 17 && !checkinSlots?.afternoon?.completed) return MESSAGES.checkin_afternoon;
+    if (hour >= 17 && hour < 23 && !checkinSlots?.evening?.completed) return MESSAGES.checkin_evening;
+    return null;
+  });
+
   const [isTapped, setIsTapped] = useState(false);
-  
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Time-aware reminder trigger on mount
+  // Time-aware reminder auto-dismiss
   useEffect(() => {
-    const hour = new Date().getHours();
-    if (allSlotsComplete) {
-      setMessage(MESSAGES.all_completed);
-      setMascotState('cute');
-    } else if (hour >= 6 && hour < 12 && !checkinSlots?.morning?.completed) {
-      setMessage(MESSAGES.checkin_morning);
-      setMascotState('thinking');
-    } else if (hour >= 12 && hour < 17 && !checkinSlots?.afternoon?.completed) {
-      setMessage(MESSAGES.checkin_afternoon);
-      setMascotState('thinking');
-    } else if (hour >= 17 && hour < 23 && !checkinSlots?.evening?.completed) {
-      setMessage(MESSAGES.checkin_evening);
-      setMascotState('thinking');
+    if (message) {
+      const timer = setTimeout(() => setMessage(null), 5000);
+      return () => clearTimeout(timer);
     }
-    const timer = setTimeout(() => setMessage(null), 5000);
-    return () => clearTimeout(timer);
-  }, [allSlotsComplete, checkinSlots]);
+  }, [message]);
 
   // AI Loop for roaming and spontaneous thoughts
   useEffect(() => {

@@ -1,0 +1,415 @@
+'use client';
+
+import React from 'react';
+import { motion } from 'framer-motion';
+import {
+  Bell,
+  Volume2,
+  Globe,
+  CalendarHeart,
+  CheckSquare,
+  Droplets,
+  Pill,
+  Sparkles,
+  Send,
+  ShieldCheck,
+  AlertCircle,
+  Play,
+} from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { useNotifications } from '@/context/NotificationContext';
+import { playWellnessChime } from '@/utils/sound-effects';
+
+export function NotificationSettings() {
+  const {
+    preferences,
+    updatePreferences,
+    permissionStatus,
+    requestPushPermission,
+    sendTestNotification,
+  } = useNotifications();
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.18 }}
+      className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border/40 shadow-sm space-y-6"
+    >
+      {/* ─────────────────────────────────────────────────────────────────
+          HEADER
+          ───────────────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between border-b border-border/30 pb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-xl bg-pink-500/10 border border-pink-500/20 text-pink-400">
+            <Bell className="w-4 h-4" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-foreground">Notification & Alert Settings</h2>
+            <p className="text-[11px] text-muted-foreground">
+              Customize cycle reminders, habit check-ins & health alerts
+            </p>
+          </div>
+        </div>
+
+        {/* Master Switch */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-muted-foreground hidden sm:inline">
+            {preferences.enabled ? 'Enabled' : 'Disabled'}
+          </span>
+          <Switch
+            checked={preferences.enabled}
+            onCheckedChange={checked => updatePreferences({ enabled: checked })}
+          />
+        </div>
+      </div>
+
+      {/* ─────────────────────────────────────────────────────────────────
+          BROWSER PUSH NOTIFICATIONS & SOUND CUES
+          ───────────────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        {/* Browser Push */}
+        <div className="p-4 rounded-2xl bg-secondary/20 border border-border/30 flex flex-col justify-between gap-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2 text-xs font-bold text-foreground">
+              <Globe className="w-4 h-4 text-violet-400" />
+              <span>Browser Push Alerts</span>
+            </div>
+            {permissionStatus === 'granted' ? (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3" /> Granted
+              </span>
+            ) : permissionStatus === 'denied' ? (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" /> Blocked
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={requestPushPermission}
+                className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-pink-500/20 text-pink-300 hover:bg-pink-500/30 border border-pink-500/30 transition-all cursor-pointer"
+              >
+                Enable Push
+              </button>
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            Receive reminders on your device even when this tab is running in the background.
+          </p>
+        </div>
+
+        {/* Audio Chime */}
+        <div className="p-4 rounded-2xl bg-secondary/20 border border-border/30 flex flex-col justify-between gap-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-xs font-bold text-foreground">
+              <Volume2 className="w-4 h-4 text-pink-400" />
+              <span>Wellness Sound Chime</span>
+            </div>
+            <Switch
+              checked={preferences.soundEnabled}
+              disabled={!preferences.enabled}
+              onCheckedChange={checked => updatePreferences({ soundEnabled: checked })}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Gentle harmonic chime for new health reminders.
+            </p>
+            <button
+              type="button"
+              onClick={playWellnessChime}
+              className="text-[10px] font-semibold text-pink-400 hover:text-pink-300 flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-pink-500/10 transition-colors shrink-0"
+            >
+              <Play className="w-2.5 h-2.5" /> Test Sound
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ─────────────────────────────────────────────────────────────────
+          GRANULAR CATEGORY TOGGLES
+          ───────────────────────────────────────────────────────────────── */}
+      <div className="space-y-3 pt-1">
+        <p className="text-xs font-bold text-foreground/90 uppercase tracking-wider text-[10px] text-muted-foreground">
+          Alert Categories
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Cycle Alerts */}
+          <div className="p-3.5 rounded-2xl bg-secondary/15 border border-border/25 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-pink-500/10 text-pink-400">
+                <CalendarHeart className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-foreground">Cycle & Period Forecasts</p>
+                <p className="text-[10px] text-muted-foreground">2-3 day period predictions & fertile window</p>
+              </div>
+            </div>
+            <Switch
+              checked={preferences.cycleAlerts}
+              disabled={!preferences.enabled}
+              onCheckedChange={checked => updatePreferences({ cycleAlerts: checked })}
+            />
+          </div>
+
+          {/* Daily Check-In & Streak */}
+          <div className="p-3.5 rounded-2xl bg-secondary/15 border border-border/25 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-violet-500/10 text-violet-400">
+                <CheckSquare className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-foreground">Daily Journal & Streak</p>
+                <p className="text-[10px] text-muted-foreground">Morning, midday & streak preservation alerts</p>
+              </div>
+            </div>
+            <Switch
+              checked={preferences.checkinAlerts}
+              disabled={!preferences.enabled}
+              onCheckedChange={checked => updatePreferences({ checkinAlerts: checked })}
+            />
+          </div>
+
+          {/* Hydration */}
+          <div className="p-3.5 rounded-2xl bg-secondary/15 border border-border/25 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400">
+                <Droplets className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-foreground">Hydration & Water Targets</p>
+                <p className="text-[10px] text-muted-foreground">Afternoon water intake progress reminders</p>
+              </div>
+            </div>
+            <Switch
+              checked={preferences.hydrationAlerts}
+              disabled={!preferences.enabled}
+              onCheckedChange={checked => updatePreferences({ hydrationAlerts: checked })}
+            />
+          </div>
+
+          {/* Supplements & Care Plan */}
+          <div className="p-3.5 rounded-2xl bg-secondary/15 border border-border/25 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
+                <Pill className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-foreground">PCOS & Prenatal Supplements</p>
+                <p className="text-[10px] text-muted-foreground">Inositol, Vitamin D, Spearmint & vitamins</p>
+              </div>
+            </div>
+            <Switch
+              checked={preferences.supplementAlerts}
+              disabled={!preferences.enabled}
+              onCheckedChange={checked => updatePreferences({ supplementAlerts: checked })}
+            />
+          </div>
+
+          {/* Skin Tracker */}
+          <div className="p-3.5 rounded-2xl bg-secondary/15 border border-border/25 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-rose-500/10 text-rose-400">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-foreground">Skin Health & Evening Routine</p>
+                <p className="text-[10px] text-muted-foreground">Evening flare-up & acne condition check-in</p>
+              </div>
+            </div>
+            <Switch
+              checked={preferences.skinAlerts}
+              disabled={!preferences.enabled}
+              onCheckedChange={checked => updatePreferences({ skinAlerts: checked })}
+            />
+          </div>
+
+          {/* AI Luna Insights */}
+          <div className="p-3.5 rounded-2xl bg-secondary/15 border border-border/25 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-foreground">Luna AI Proactive Insights</p>
+                <p className="text-[10px] text-muted-foreground">Correlations between stress, sleep & symptoms</p>
+              </div>
+            </div>
+            <Switch
+              checked={preferences.lunaInsights}
+              disabled={!preferences.enabled}
+              onCheckedChange={checked => updatePreferences({ lunaInsights: checked })}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ─────────────────────────────────────────────────────────────────
+          PERSONAL ROUTINE & CHECK-IN CLOCK
+          ───────────────────────────────────────────────────────────────── */}
+      <div className="space-y-3 pt-2 border-t border-border/30">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
+              <span>⏰</span> My Daily Routine & Reminder Clock
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              Personalize reminder times so notifications arrive when you are actually free
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Morning Routine */}
+          <div className="p-3.5 rounded-2xl bg-secondary/15 border border-border/25 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                🌅 Morning
+              </span>
+              <span className="text-[10px] text-muted-foreground">Wake-Up</span>
+            </div>
+            <input
+              type="time"
+              value={preferences.reminderSchedule?.morningTime || '08:30'}
+              disabled={!preferences.enabled}
+              onChange={e =>
+                updatePreferences({
+                  reminderSchedule: {
+                    ...preferences.reminderSchedule,
+                    morningTime: e.target.value,
+                  },
+                })
+              }
+              className="w-full bg-background/60 border border-border/40 rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-pink-500/50"
+            />
+            <div className="flex gap-1">
+              {['07:00', '08:30', '09:30'].map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() =>
+                    updatePreferences({
+                      reminderSchedule: { ...preferences.reminderSchedule, morningTime: t },
+                    })
+                  }
+                  className={`flex-1 py-1 rounded-lg text-[10px] font-medium transition-all ${
+                    preferences.reminderSchedule?.morningTime === t
+                      ? 'bg-pink-500/25 border border-pink-500/40 text-pink-300 font-bold'
+                      : 'bg-secondary/30 text-muted-foreground hover:bg-secondary/50'
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Midday Break */}
+          <div className="p-3.5 rounded-2xl bg-secondary/15 border border-border/25 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                ☀️ Afternoon
+              </span>
+              <span className="text-[10px] text-muted-foreground">Lunch Break</span>
+            </div>
+            <input
+              type="time"
+              value={preferences.reminderSchedule?.afternoonTime || '14:00'}
+              disabled={!preferences.enabled}
+              onChange={e =>
+                updatePreferences({
+                  reminderSchedule: {
+                    ...preferences.reminderSchedule,
+                    afternoonTime: e.target.value,
+                  },
+                })
+              }
+              className="w-full bg-background/60 border border-border/40 rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-violet-500/50"
+            />
+            <div className="flex gap-1">
+              {['12:30', '14:00', '15:30'].map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() =>
+                    updatePreferences({
+                      reminderSchedule: { ...preferences.reminderSchedule, afternoonTime: t },
+                    })
+                  }
+                  className={`flex-1 py-1 rounded-lg text-[10px] font-medium transition-all ${
+                    preferences.reminderSchedule?.afternoonTime === t
+                      ? 'bg-violet-500/25 border border-violet-500/40 text-violet-300 font-bold'
+                      : 'bg-secondary/30 text-muted-foreground hover:bg-secondary/50'
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Evening Wind-Down */}
+          <div className="p-3.5 rounded-2xl bg-secondary/15 border border-border/25 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                🌙 Evening
+              </span>
+              <span className="text-[10px] text-muted-foreground">Bedtime</span>
+            </div>
+            <input
+              type="time"
+              value={preferences.reminderSchedule?.eveningTime || '21:30'}
+              disabled={!preferences.enabled}
+              onChange={e =>
+                updatePreferences({
+                  reminderSchedule: {
+                    ...preferences.reminderSchedule,
+                    eveningTime: e.target.value,
+                  },
+                })
+              }
+              className="w-full bg-background/60 border border-border/40 rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-purple-500/50"
+            />
+            <div className="flex gap-1">
+              {['20:30', '21:30', '22:30'].map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() =>
+                    updatePreferences({
+                      reminderSchedule: { ...preferences.reminderSchedule, eveningTime: t },
+                    })
+                  }
+                  className={`flex-1 py-1 rounded-lg text-[10px] font-medium transition-all ${
+                    preferences.reminderSchedule?.eveningTime === t
+                      ? 'bg-purple-500/25 border border-purple-500/40 text-purple-300 font-bold'
+                      : 'bg-secondary/30 text-muted-foreground hover:bg-secondary/50'
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ─────────────────────────────────────────────────────────────────
+          TEST NOTIFICATION BUTTON
+          ───────────────────────────────────────────────────────────────── */}
+      <div className="pt-2 border-t border-border/30 flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">
+          Want to test how alerts look and sound?
+        </span>
+        <button
+          type="button"
+          onClick={sendTestNotification}
+          className="px-3.5 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+        >
+          <Send className="w-3 h-3" /> Send Test Alert
+        </button>
+      </div>
+    </motion.div>
+  );
+}
