@@ -3,16 +3,15 @@
 import { memo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, CheckSquare, CalendarHeart, Sparkles, ShoppingBag, User } from 'lucide-react';
+import { Sparkles, CalendarHeart, Award, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { triggerHaptic } from '@/utils/haptics';
 
 const mobileNavItems = [
-  { name: 'Home', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Today', href: '/dashboard', icon: Sparkles },
   { name: 'Cycle', href: '/cycle', icon: CalendarHeart },
-  { name: 'Journal', href: '/check-in', icon: CheckSquare },
-  { name: 'Wellness', href: '/wellness-plan', icon: Sparkles },
-  { name: 'Store', href: '/store', icon: ShoppingBag },
-  { name: 'Profile', href: '/profile', icon: User },
+  { name: 'Plan', href: '/wellness-plan', icon: Award },
+  { name: 'You', href: '/profile', icon: User },
 ];
 
 export const BottomNav = memo(function BottomNav() {
@@ -28,42 +27,52 @@ export const BottomNav = memo(function BottomNav() {
       aria-label="Mobile navigation"
       className={cn(
         'fixed bottom-0 left-0 right-0 z-40 md:hidden',
-        'bg-[#0a0812]/95 border-t border-purple-500/15',
-        'backdrop-blur-2xl shadow-lg shadow-black/50',
-        'h-[calc(3.75rem+env(safe-area-inset-bottom))]',
-        'pb-[max(0.35rem,env(safe-area-inset-bottom))]',
-        'w-full max-w-full overflow-hidden'
+        'bg-[rgba(10,8,18,0.92)] border-t border-[rgba(168,85,247,0.15)]',
+        'backdrop-blur-2xl shadow-[0_-8px_25px_rgba(0,0,0,0.5)]',
+        'h-[calc(4rem+env(safe-area-inset-bottom,0px))]',
+        'pb-[max(0.35rem,env(safe-area-inset-bottom,0px))]',
+        'w-full max-w-full'
       )}
     >
-      <div className="grid grid-cols-6 items-center justify-items-center h-full w-full max-w-lg mx-auto px-1">
+      <div className="grid grid-cols-4 items-center justify-items-center h-full w-full max-w-md mx-auto px-2">
         {mobileNavItems.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive =
+            pathname === item.href ||
+            (item.href === '/dashboard' && pathname === '/') ||
+            (item.href !== '/dashboard' && pathname.startsWith(item.href));
+
           return (
             <Link
               key={item.name}
               href={item.href}
+              prefetch={true}
+              onClick={() => triggerHaptic('selection')}
               className={cn(
-                'flex flex-col items-center justify-center w-full h-full min-h-[44px] gap-0.5 px-0.5 py-1 transition-all duration-200 select-none',
-                isActive ? 'text-pink-500 font-bold' : 'text-[#7c739d] hover:text-[#b4a9d9] font-medium'
+                'flex flex-col items-center justify-center w-full h-full min-h-[48px] gap-1 px-1 py-1 rounded-2xl transition-all duration-200 select-none relative group cursor-pointer',
+                isActive ? 'text-white font-bold' : 'text-muted-foreground hover:text-foreground font-medium'
               )}
             >
-              <div
-                className={cn(
-                  'flex items-center justify-center w-9 h-6 rounded-full transition-all duration-200',
-                  isActive ? 'bg-pink-500/15 text-pink-500 shadow-sm shadow-pink-500/10' : 'bg-transparent'
-                )}
-              >
+              {/* Active Ambient Pill Glow */}
+              {isActive && (
+                <div className="absolute inset-x-2 inset-y-1.5 bg-gradient-to-tr from-pink-500/20 via-violet-500/15 to-transparent rounded-2xl -z-10 border border-pink-500/25 shadow-[0_0_12px_rgba(236,72,153,0.2)]" />
+              )}
+
+              <div className="relative">
                 <item.icon
                   className={cn(
-                    'h-4.5 w-4.5 transition-transform duration-200',
-                    isActive ? 'scale-110 stroke-[2.2px]' : 'stroke-[1.8px]'
+                    'h-5 w-5 transition-transform duration-200',
+                    isActive ? 'text-pink-400 scale-110' : 'text-muted-foreground group-hover:text-violet-300'
                   )}
                 />
+                {isActive && (
+                  <span className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-pink-400 rounded-full shadow-[0_0_6px_#ec4899]" />
+                )}
               </div>
+
               <span
                 className={cn(
-                  'text-[9px] leading-none tracking-tight truncate max-w-full',
-                  isActive ? 'text-pink-400 font-bold' : 'text-[#7c739d]'
+                  'text-[11px] leading-none tracking-tight font-medium transition-colors',
+                  isActive ? 'text-white font-bold' : 'text-muted-foreground'
                 )}
               >
                 {item.name}
