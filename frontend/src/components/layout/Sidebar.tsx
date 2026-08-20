@@ -75,19 +75,19 @@ export function Sidebar({
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group',
                   isActive
-                    ? 'bg-gradient-to-r from-pink-500/20 to-violet-500/15 text-white border border-pink-500/20'
-                    : 'text-[#7c71a4] hover:text-white hover:bg-white/5'
+                    ? 'bg-gradient-to-r from-pink-500/20 to-violet-500/15 text-white border border-pink-500/20 shadow-sm'
+                    : 'text-muted-foreground hover:text-white hover:bg-white/5'
                 )}
               >
                 <item.icon
                   className={cn(
-                    'h-4.5 w-4.5 shrink-0',
-                    isActive ? 'text-pink-400' : 'text-[#7c71a4] group-hover:text-violet-400'
+                    'h-4.5 w-4.5 shrink-0 transition-colors',
+                    isActive ? 'text-pink-400' : 'text-muted-foreground group-hover:text-violet-300'
                   )}
                 />
                 <span className="flex-1 truncate">{item.name}</span>
                 {isActive && (
-                  <div className="w-1 h-1 rounded-full bg-pink-400" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-pink-400 shadow-sm shadow-pink-400" />
                 )}
               </Link>
             );
@@ -97,7 +97,7 @@ export function Sidebar({
 
       {/* Footer */}
       <div className="px-4 py-4 border-t border-[rgba(168,85,247,0.1)] shrink-0">
-        <p className="text-[10px] text-[#7c71a4] text-center leading-relaxed">
+        <p className="text-[11px] text-muted-foreground/80 text-center leading-relaxed">
           Svanexa AI is not medical advice.
         </p>
       </div>

@@ -62,7 +62,7 @@
   --secondary: rgba(255, 255, 255, 0.06);
   --secondary-foreground: #f0eeff;
   --muted: rgba(255, 255, 255, 0.04);
-  --muted-foreground: #7c71a4;
+  --muted-foreground: #9d93c4;
   --accent: rgba(168, 85, 247, 0.15);
   --accent-foreground: #c084fc;
   --destructive: #ef4444;
@@ -92,6 +92,12 @@
   --hs-glass-border: rgba(168, 85, 247, 0.15);
   --bg-gradient-color1: rgba(139, 92, 246, 0.12);
   --bg-gradient-color2: rgba(236, 72, 153, 0.08);
+
+  /* Biological Menstrual & Endocrinology Phase Semantic Tokens */
+  --phase-menstrual: #f43f5e;
+  --phase-follicular: #c084fc;
+  --phase-ovulatory: #fbbf24;
+  --phase-luteal: #818cf8;
 }
 
 /* ── PCOS MODE (Pink, Purple, Rose) ── */
