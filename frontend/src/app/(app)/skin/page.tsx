@@ -11,6 +11,7 @@ import ReactMarkdown from 'react-markdown';
 import { format } from 'date-fns';
 import { createClient } from '@/utils/supabase/client';
 import { useHerSync } from '@/context/HerSyncContext';
+import { WeatherWidget } from '@/components/weather/WeatherWidget';
 
 type SkinEntry = {
   id: string;
@@ -265,6 +266,9 @@ export default function SkinTrackerPage() {
           New Glow Check 🧴
         </Button>
       </div>
+
+      {/* ☀️ LIVE WEATHER & UV SKIN PROTECTION ALERT ☀️ */}
+      <WeatherWidget showSkinFocus={true} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-6">

@@ -18,6 +18,7 @@ import styles from './dashboard.module.css';
 import { DashboardMascot } from '@/components/chat/DashboardMascot';
 import { DashboardSkeleton } from '@/components/ui/skeleton';
 import { HormoneFoodSolver } from '@/components/nutrition/HormoneFoodSolver';
+import { WeatherWidget } from '@/components/weather/WeatherWidget';
 import { triggerHaptic } from '@/utils/haptics';
 
 export default function DashboardPage() {
@@ -40,12 +41,15 @@ export default function DashboardPage() {
     refreshAll,
     toggleTask,
     setWellnessTasks,
+    updateTodayLogLocally,
+    updateCheckinSlotLocally,
   } = useHerSync();
   const [showWelcome, setShowWelcome] = useState(false);
   const [togglingTask, setTogglingTask] = useState<string | null>(null);
   const [lunaReaction, setLunaReaction] = useState<string | null>(null);
   const [showSparkles, setShowSparkles] = useState<string | null>(null);
   const [isRefreshingPlan, setIsRefreshingPlan] = useState(false);
+  const [activeDashboardTab, setActiveDashboardTab] = useState<'focus' | 'nutrition' | 'insights'>('focus');
 
   useEffect(() => {
     setMounted(true);
@@ -184,27 +188,8 @@ export default function DashboardPage() {
     }
 
     try {
-      // Optimistic update in global context (instant UI toggle!)
-      toggleTask(taskId);
-
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
-      const res = await apiFetch('/api/wellness-plan/toggle', {
-        method: 'POST',
-        body: JSON.stringify({ taskId, planId: planId || '', status: isCompleting ? 'completed' : 'pending', date: todayStr }),
-      });
-      if (res.ok) {
-        const body = await res.json();
-        if (body.tasks) {
-          setWellnessTasks(body.tasks);
-        }
-      } else {
-        // Revert on error
-        toggleTask(taskId);
-        toast.error('Failed to update task');
-      }
+      await toggleTask(taskId);
     } catch {
-      // Revert on error
-      toggleTask(taskId);
       toast.error('Failed to update task');
     } finally {
       setTogglingTask(null);
@@ -233,20 +218,17 @@ export default function DashboardPage() {
     }
   };
 
-  const [quickLogging, setQuickLogging] = useState(false);
-  const [activeDashboardTab, setActiveDashboardTab] = useState<'focus' | 'nutrition' | 'insights'>('focus');
-
-  const handleQuickLogWater = async (amountLiters: number) => {
-    if (quickLogging) return;
-    setQuickLogging(true);
+  const handleQuickLogWater = (amountLiters: number) => {
     try {
       triggerHaptic('light');
-      const newWater = Number(((l?.water ? Number(l.water) : 0) + amountLiters).toFixed(2));
+      const currentWater = l?.water ? Number(l.water) : 0;
+      const newWater = Number((currentWater + amountLiters).toFixed(2));
       const todayStr = format(new Date(), 'yyyy-MM-dd');
 
+      updateTodayLogLocally({ water: newWater });
       toast.success(`+${Math.round(amountLiters * 1000)}ml water logged 💧`);
 
-      await apiFetch('/api/health/checkin', {
+      apiFetch('/api/health/checkin', {
         method: 'POST',
         body: JSON.stringify({
           slot: activeSlot,
@@ -256,52 +238,48 @@ export default function DashboardPage() {
             note: `Quick hydration log (+${Math.round(amountLiters * 1000)}ml)`,
           },
         }),
-      });
-
-      await refreshAll();
+      }).catch(err => console.warn('Background water sync notice:', err));
     } catch (err) {
       console.warn('Quick water log error:', err);
-    } finally {
-      setQuickLogging(false);
     }
   };
 
-  const handleQuickLogMood = async (moodText: string, emoji: string) => {
-    if (quickLogging) return;
-    setQuickLogging(true);
+  const handleQuickLogMood = (moodText: string, emoji: string) => {
     try {
       triggerHaptic('selection');
       const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const stressScore = moodText === 'Energized' || moodText === 'Calm' ? 1.5 : moodText === 'Tired' ? 3.0 : 4.0;
+
+      updateTodayLogLocally({
+        mood: moodText.toLowerCase(),
+        stress: stressScore,
+      });
       toast.success(`${emoji} Mood recorded as "${moodText}"`);
 
-      await apiFetch('/api/health/checkin', {
+      apiFetch('/api/health/checkin', {
         method: 'POST',
         body: JSON.stringify({
           slot: activeSlot,
           date: todayStr,
           data: {
             mood: moodText.toLowerCase(),
-            stress: moodText === 'Energized' || moodText === 'Calm' ? 1.5 : moodText === 'Tired' ? 3.0 : 4.0,
+            stress: stressScore,
             note: `Quick 1-tap mood log: ${emoji} ${moodText}`,
           },
         }),
-      });
-
-      await refreshAll();
+      }).catch(err => console.warn('Background mood sync notice:', err));
     } catch (err) {
       console.warn('Quick mood log error:', err);
-    } finally {
-      setQuickLogging(false);
     }
   };
 
-  const handleQuickCatchUpSlot = async (slotToFill: 'morning' | 'afternoon' | 'evening') => {
-    if (quickLogging) return;
-    setQuickLogging(true);
+  const handleQuickCatchUpSlot = (slotToFill: 'morning' | 'afternoon' | 'evening') => {
     try {
       triggerHaptic('medium');
       const todayStr = format(new Date(), 'yyyy-MM-dd');
       const slotLabel = slotToFill === 'morning' ? 'Morning' : slotToFill === 'afternoon' ? 'Afternoon' : 'Evening';
+
+      updateCheckinSlotLocally(slotToFill, true);
       toast.success(`✨ ${slotLabel} check-in caught up!`);
 
       const defaultData: Record<string, any> = {
@@ -310,21 +288,17 @@ export default function DashboardPage() {
         evening: { mood: 'relaxed', stress: 2.0 },
       };
 
-      await apiFetch('/api/health/checkin', {
+      apiFetch('/api/health/checkin', {
         method: 'POST',
         body: JSON.stringify({
           slot: slotToFill,
           date: todayStr,
           data: defaultData[slotToFill],
         }),
-      });
-
-      await refreshAll();
+      }).catch(err => console.warn('Catch-up background sync notice:', err));
     } catch (err) {
       console.warn('Catch-up error:', err);
       toast.error('Could not complete catch-up log.');
-    } finally {
-      setQuickLogging(false);
     }
   };
 
@@ -529,6 +503,9 @@ export default function DashboardPage() {
             </div>
           </motion.div>
 
+          {/* ☀️ LIVE WEATHER & WELLNESS INTELLIGENCE ☀️ */}
+          <WeatherWidget />
+
           {/* ⚡ 1-TAP QUICK MICRO-LOGGERS (EFFORTLESS WELLNESS BAR) ⚡ */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -560,7 +537,6 @@ export default function DashboardPage() {
                   <button
                     type="button"
                     onClick={() => handleQuickLogWater(0.25)}
-                    disabled={quickLogging}
                     className="flex-1 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 font-bold text-[11px] transition-all active:scale-95 flex items-center justify-center gap-1 cursor-pointer"
                   >
                     <span>+250ml</span>
@@ -569,7 +545,6 @@ export default function DashboardPage() {
                   <button
                     type="button"
                     onClick={() => handleQuickLogWater(0.50)}
-                    disabled={quickLogging}
                     className="flex-1 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/35 text-cyan-200 font-bold text-[11px] transition-all active:scale-95 flex items-center justify-center gap-1 cursor-pointer"
                   >
                     <span>+500ml</span>
@@ -578,7 +553,6 @@ export default function DashboardPage() {
                   <button
                     type="button"
                     onClick={() => handleQuickLogWater(0.75)}
-                    disabled={quickLogging}
                     className="flex-1 py-1.5 rounded-xl bg-cyan-500/25 hover:bg-cyan-500/35 border border-cyan-500/40 text-cyan-100 font-bold text-[11px] transition-all active:scale-95 flex items-center justify-center gap-1 cursor-pointer"
                   >
                     <span>+750ml</span>
@@ -608,7 +582,6 @@ export default function DashboardPage() {
                       key={m.label}
                       type="button"
                       onClick={() => handleQuickLogMood(m.label, m.emoji)}
-                      disabled={quickLogging}
                       className={`py-1 rounded-xl text-center transition-all active:scale-95 cursor-pointer ${
                         l?.mood === m.label.toLowerCase()
                           ? 'bg-pink-500/25 border border-pink-500/40 text-pink-200 font-bold'
@@ -640,7 +613,6 @@ export default function DashboardPage() {
                       key={slot}
                       type="button"
                       onClick={() => handleQuickCatchUpSlot(slot)}
-                      disabled={quickLogging}
                       className="flex-1 sm:flex-initial px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/35 text-purple-200 font-bold text-[11px] flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
                     >
                       <span>+</span>

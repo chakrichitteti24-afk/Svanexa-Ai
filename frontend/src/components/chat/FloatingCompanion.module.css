@@ -7,14 +7,14 @@
   width: 56px;
   height: 56px;
   border-radius: 9999px;
-  background: linear-gradient(135deg, #8B5CF6, #EC4899);
-  box-shadow: 0 10px 30px rgba(236, 72, 153, 0.45), 0 0 20px rgba(139, 92, 246, 0.35);
+  background: linear-gradient(135deg, #a78bfa, #f472b6);
+  box-shadow: 0 8px 24px rgba(167, 139, 250, 0.25);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
   cursor: pointer;
-  border: 2px solid rgba(255, 255, 255, 0.85);
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
   outline: none;
   padding: 0;
   overflow: hidden;
@@ -24,14 +24,15 @@
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
   touch-action: manipulation;
+  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.16s ease;
 }
 
 @media (min-width: 768px) {
   .fab {
     bottom: 1.5rem;
     right: 1.5rem;
-    width: 64px;
-    height: 64px;
+    width: 60px;
+    height: 60px;
   }
 }
 
@@ -48,19 +49,20 @@
 
 .fabGlowRing {
   position: absolute;
-  inset: -3px;
+  inset: -2px;
   border-radius: 9999px;
-  background: conic-gradient(from 0deg, #EC4899, #8B5CF6, #3B82F6, #EC4899);
-  opacity: 0.85;
+  background: linear-gradient(135deg, rgba(244, 114, 182, 0.4), rgba(167, 139, 250, 0.4));
+  opacity: 0.8;
   z-index: 0;
 }
 
 .fab:hover {
-  box-shadow: 0 14px 36px rgba(236, 72, 153, 0.65), 0 0 25px rgba(139, 92, 246, 0.5);
+  box-shadow: 0 10px 28px rgba(167, 139, 250, 0.35);
+  transform: translateY(-1px) translate3d(0, 0, 0);
 }
 
 .fab:active {
-  transform: scale(0.94);
+  transform: scale(0.95) translate3d(0, 0, 0);
 }
 
 /* Pulse ring on FAB */
@@ -69,20 +71,20 @@
   inset: 0;
   border-radius: 9999px;
   background: linear-gradient(135deg, var(--hs-violet), var(--hs-pink));
-  opacity: 0.4;
-  animation: fabPulseAnim 2.5s ease-in-out infinite;
+  opacity: 0.25;
+  animation: fabPulseAnim 3s ease-in-out infinite;
 }
 
 @keyframes fabPulseAnim {
-  0%, 100% { transform: scale(1); opacity: 0.4; }
-  50% { transform: scale(1.35); opacity: 0; }
+  0%, 100% { transform: scale(1); opacity: 0.25; }
+  50% { transform: scale(1.2); opacity: 0; }
 }
 
 /* Chat Overlay */
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   z-index: 100;
@@ -94,13 +96,14 @@
   z-index: 101;
   display: flex;
   flex-direction: column;
-  background: rgba(15, 12, 28, 0.88);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 30px rgba(139, 92, 246, 0.15);
+  background: rgba(14, 11, 24, 0.92);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 20px rgba(167, 139, 250, 0.08);
   overflow: hidden;
   will-change: transform, opacity;
+  transform: translateZ(0);
   transform-origin: bottom right;
 }
 

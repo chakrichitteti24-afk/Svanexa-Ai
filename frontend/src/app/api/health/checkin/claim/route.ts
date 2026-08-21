@@ -15,23 +15,7 @@ async function awardCoinsHelper(
   refId: string,
   description: string
 ): Promise<{ awarded: boolean; newBalance: number }> {
-  try {
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('award_user_coins', {
-      p_user_id: userId,
-      p_amount: amount,
-      p_type: type,
-      p_reference_id: refId,
-      p_description: description,
-    });
-
-    if (!rpcError && rpcResult !== null && rpcResult !== undefined) {
-      return { awarded: true, newBalance: Number(rpcResult) };
-    }
-  } catch (rpcErr) {
-    console.warn('[award_user_coins RPC fallback]', rpcErr);
-  }
-
-  // ── Manual Fallback if RPC function does not exist ───────────────────────
+  // 1. Check if already claimed / awarded
   try {
     const { data: existingTx } = await supabase
       .from('user_coin_transactions')
@@ -47,37 +31,73 @@ async function awardCoinsHelper(
         .select('balance')
         .eq('user_id', userId)
         .maybeSingle();
-      return { awarded: false, newBalance: balRow?.balance || 0 };
+      const currentBalance = typeof balRow?.balance === 'number' ? balRow.balance : 0;
+      return { awarded: false, newBalance: currentBalance };
     }
+  } catch (checkErr) {
+    console.warn('[awardCoinsHelper check warning]', checkErr);
+  }
 
+  // 2. Try PostgreSQL RPC award_user_coins
+  try {
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('award_user_coins', {
+      p_user_id: userId,
+      p_amount: amount,
+      p_type: type,
+      p_ref_id: refId,
+      p_description: description,
+    });
+
+    if (!rpcError && rpcResult !== null && rpcResult !== undefined) {
+      if (typeof rpcResult === 'object') {
+        const parsedBalance = typeof rpcResult.new_balance === 'number' ? rpcResult.new_balance : Number(rpcResult.new_balance ?? 0);
+        return { awarded: rpcResult.awarded !== false, newBalance: isNaN(parsedBalance) ? amount : parsedBalance };
+      }
+      const numBal = Number(rpcResult);
+      return { awarded: true, newBalance: isNaN(numBal) ? amount : numBal };
+    }
+  } catch (rpcErr) {
+    console.warn('[award_user_coins RPC fallback]', rpcErr);
+  }
+
+  // 3. Resilient Direct Table Operations Fallback
+  try {
     const { data: curBal } = await supabase
       .from('user_coin_balances')
-      .select('balance, total_earned')
+      .select('balance')
       .eq('user_id', userId)
       .maybeSingle();
 
-    const currentBalance = curBal?.balance || 0;
-    const currentTotal = curBal?.total_earned || 0;
+    const currentBalance = typeof curBal?.balance === 'number' ? curBal.balance : 0;
     const newBalance = currentBalance + amount;
-    const newTotal = currentTotal + amount;
 
     await supabase.from('user_coin_balances').upsert(
       {
         user_id: userId,
         balance: newBalance,
-        total_earned: newTotal,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'user_id' }
     );
 
-    await supabase.from('user_coin_transactions').insert({
+    // Try standard transaction_type column first, then fallback to type column
+    const { error: txErr } = await supabase.from('user_coin_transactions').insert({
       user_id: userId,
       amount,
-      type,
+      transaction_type: type,
       reference_id: refId,
       description,
     });
+
+    if (txErr) {
+      await supabase.from('user_coin_transactions').insert({
+        user_id: userId,
+        amount,
+        type,
+        reference_id: refId,
+        description,
+      });
+    }
 
     return { awarded: true, newBalance };
   } catch (directErr) {

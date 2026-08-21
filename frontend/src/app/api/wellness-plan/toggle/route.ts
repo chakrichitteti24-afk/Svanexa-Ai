@@ -42,27 +42,121 @@ export async function POST(req: Request) {
 
     const isTaskCompleted = status === 'completed' || result?.tasks?.find((t: any) => t.id === taskId)?.completed;
 
-    // Atomically award +5 coins if task status is completed
     if (isTaskCompleted) {
-      try {
-        const taskRef = `task:${todayStr}:${taskId}`;
-        const { data: coinRes } = await supabase.rpc('award_user_coins', {
-          p_user_id: userId,
-          p_amount: 5,
-          p_type: 'wellness_task',
-          p_ref_id: taskRef,
-          p_description: 'Wellness task completed',
-        });
+      const taskRef = `task:${todayStr}:${taskId}`;
+      const TASK_COIN_AMOUNT = 5;
 
-        if (coinRes?.awarded) {
-          coinsEarned = coinRes.amount;
-          newBalance = coinRes.new_balance;
-        } else {
-          newBalance = coinRes?.new_balance ?? 0;
+      // 1. Check if already awarded for this task
+      let alreadyAwarded = false;
+      try {
+        const { data: existingTx } = await supabase
+          .from('user_coin_transactions')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('reference_id', taskRef)
+          .limit(1)
+          .maybeSingle();
+
+        if (existingTx) {
+          alreadyAwarded = true;
         }
-      } catch (coinErr) {
-        console.warn('Skipping task coin award:', coinErr);
+      } catch (checkErr) {
+        console.warn('[task coin check warning]', checkErr);
       }
+
+      if (!alreadyAwarded) {
+        // 2. Try PostgreSQL RPC
+        let rpcSuccess = false;
+        try {
+          const { data: coinRes, error: coinErr } = await supabase.rpc('award_user_coins', {
+            p_user_id: userId,
+            p_amount: TASK_COIN_AMOUNT,
+            p_type: 'wellness_task',
+            p_ref_id: taskRef,
+            p_description: 'Wellness task completed',
+          });
+
+          if (!coinErr && coinRes !== null && coinRes !== undefined) {
+            if (typeof coinRes === 'object') {
+              if (coinRes.awarded) {
+                coinsEarned = typeof coinRes.amount === 'number' ? coinRes.amount : TASK_COIN_AMOUNT;
+              }
+              newBalance = typeof coinRes.new_balance === 'number' ? coinRes.new_balance : 0;
+              rpcSuccess = true;
+            } else if (typeof coinRes === 'number') {
+              coinsEarned = TASK_COIN_AMOUNT;
+              newBalance = coinRes;
+              rpcSuccess = true;
+            }
+          }
+        } catch (rpcErr) {
+          console.warn('[award_user_coins task RPC fallback]', rpcErr);
+        }
+
+        // 3. Resilient Direct Table Operations Fallback
+        if (!rpcSuccess) {
+          try {
+            const { data: curBal } = await supabase
+              .from('user_coin_balances')
+              .select('balance')
+              .eq('user_id', userId)
+              .maybeSingle();
+
+            const currentBalance = typeof curBal?.balance === 'number' ? curBal.balance : 0;
+            newBalance = currentBalance + TASK_COIN_AMOUNT;
+            coinsEarned = TASK_COIN_AMOUNT;
+
+            await supabase.from('user_coin_balances').upsert(
+              {
+                user_id: userId,
+                balance: newBalance,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: 'user_id' }
+            );
+
+            const { error: txErr } = await supabase.from('user_coin_transactions').insert({
+              user_id: userId,
+              amount: TASK_COIN_AMOUNT,
+              transaction_type: 'wellness_task',
+              reference_id: taskRef,
+              description: 'Wellness task completed',
+            });
+
+            if (txErr) {
+              await supabase.from('user_coin_transactions').insert({
+                user_id: userId,
+                amount: TASK_COIN_AMOUNT,
+                type: 'wellness_task',
+                reference_id: taskRef,
+                description: 'Wellness task completed',
+              });
+            }
+          } catch (directErr) {
+            console.warn('[direct task coin award fallback warning]', directErr);
+          }
+        }
+      } else {
+        // Fetch current balance
+        try {
+          const { data: balRow } = await supabase
+            .from('user_coin_balances')
+            .select('balance')
+            .eq('user_id', userId)
+            .maybeSingle();
+          newBalance = typeof balRow?.balance === 'number' ? balRow.balance : 0;
+        } catch {}
+      }
+    } else {
+      // Task unchecked or pending, get current balance
+      try {
+        const { data: balRow } = await supabase
+          .from('user_coin_balances')
+          .select('balance')
+          .eq('user_id', userId)
+          .maybeSingle();
+        newBalance = typeof balRow?.balance === 'number' ? balRow.balance : 0;
+      } catch {}
     }
 
     return NextResponse.json({

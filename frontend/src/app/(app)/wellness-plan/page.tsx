@@ -148,7 +148,7 @@ function getCurrentSlot(): TimeSlot {
 }
 
 function WellnessPlanContent() {
-  const { aiName, setWellnessTasks, refreshAll, checkinSlots } = useHerSync();
+  const { aiName, setWellnessTasks, refreshAll, checkinSlots, updateCoinBalanceLocally } = useHerSync();
 
   const [loading, setLoading]       = useState(true);
   const [isError, setIsError]       = useState(false);
@@ -242,6 +242,10 @@ function WellnessPlanContent() {
         setWellnessTasks(body.tasks || []);
         if (body.wellnessScore !== undefined || body.score !== undefined) {
           setAnimScore(body.wellnessScore ?? body.score);
+        }
+
+        if (body.coinsEarned && body.coinsEarned > 0 && typeof body.newBalance === 'number') {
+          updateCoinBalanceLocally(body.newBalance, body.coinsEarned);
         }
 
         if (targetStatus === 'completed') toast.success('Task complete! Keep going 🌸');

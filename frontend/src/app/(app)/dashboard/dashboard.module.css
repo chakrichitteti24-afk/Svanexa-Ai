@@ -57,12 +57,13 @@
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--hs-pink) 0%, var(--hs-violet) 100%);
+  background: linear-gradient(135deg, var(--hs-violet) 0%, var(--hs-pink) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 24px;
-  box-shadow: 0 12px 30px var(--hs-glow-violet);
+  box-shadow: 0 8px 24px rgba(167, 139, 250, 0.25);
+  transform: translateZ(0);
 }
 
 .welcomeGreeting {
@@ -126,19 +127,21 @@
 }
 
 .premiumCard {
-  background: rgba(18, 16, 28, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(18, 16, 26, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 24px;
   padding: 20px;
   box-shadow:
-    0 20px 50px -12px rgba(0, 0, 0, 0.35),
+    0 12px 36px -8px rgba(0, 0, 0, 0.35),
     0 0 0 1px rgba(255, 255, 255, 0.03) inset;
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   position: relative;
   overflow: hidden;
   flex-shrink: 0;
-  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 @media (min-width: 640px) {
@@ -148,10 +151,10 @@
 }
 
 .premiumCard:hover {
-  border-color: rgba(139, 92, 246, 0.2);
+  border-color: rgba(192, 132, 252, 0.2);
   box-shadow:
-    0 20px 50px -12px rgba(0, 0, 0, 0.35),
-    0 0 30px rgba(139, 92, 246, 0.06);
+    0 16px 40px -8px rgba(0, 0, 0, 0.35),
+    0 0 20px rgba(167, 139, 250, 0.06);
 }
 
 .emptyStateContainer {

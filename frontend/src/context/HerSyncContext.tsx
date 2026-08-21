@@ -144,6 +144,9 @@ interface HerSyncContextValue extends HealthState {
   refreshCoins: () => Promise<void>;
   triggerCoinAnimation: (amount: number) => void;
   updateCoinBalanceLocally: (newBalance: number, earnedAmount?: number) => void;
+  /** Instant local optimistic sync methods */
+  updateTodayLogLocally: (partialLog: Partial<TodayLog>) => void;
+  updateCheckinSlotLocally: (slot: 'morning' | 'afternoon' | 'evening', completed: boolean) => void;
   /** Derived helpers */
   wellnessMode: 'general' | 'pcos' | 'pregnancy';
   userName: string;
@@ -244,10 +247,25 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updateCoinBalanceLocally = useCallback((newBalance: number, earnedAmount?: number) => {
-    setState(prev => ({
-      ...prev,
-      coinBalance: newBalance,
-    }));
+    if (typeof newBalance !== 'number' || isNaN(newBalance)) return;
+
+    setState(prev => {
+      // Synchronize localStorage cache as well
+      try {
+        const cached = localStorage.getItem('svanexa_app_cache_v1');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          parsed.coinBalance = newBalance;
+          localStorage.setItem('svanexa_app_cache_v1', JSON.stringify(parsed));
+        }
+      } catch {}
+
+      return {
+        ...prev,
+        coinBalance: newBalance,
+      };
+    });
+
     if (earnedAmount && earnedAmount > 0) {
       triggerCoinAnimation(earnedAmount);
     }
@@ -273,6 +291,52 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error('Error fetching coins balance', err);
     }
+  }, []);
+
+  const updateTodayLogLocally = useCallback((partialLog: Partial<TodayLog>) => {
+    setState(prev => {
+      const updatedLog = { ...prev.todayLog, ...partialLog };
+      try {
+        const cached = localStorage.getItem('svanexa_app_cache_v1');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          parsed.todayLog = updatedLog;
+          parsed.hasCheckedInToday = true;
+          localStorage.setItem('svanexa_app_cache_v1', JSON.stringify(parsed));
+        }
+      } catch {}
+      return {
+        ...prev,
+        todayLog: updatedLog,
+        hasCheckedInToday: true,
+      };
+    });
+  }, []);
+
+  const updateCheckinSlotLocally = useCallback((slot: 'morning' | 'afternoon' | 'evening', completed: boolean) => {
+    setState(prev => {
+      const updatedSlots = {
+        ...prev.checkinSlots,
+        [slot]: { completed, completedAt: completed ? new Date().toISOString() : null },
+      };
+      const allComplete = Object.values(updatedSlots).every(s => s.completed);
+      try {
+        const cached = localStorage.getItem('svanexa_app_cache_v1');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          parsed.checkinSlots = updatedSlots;
+          parsed.allSlotsComplete = allComplete;
+          parsed.hasCheckedInToday = true;
+          localStorage.setItem('svanexa_app_cache_v1', JSON.stringify(parsed));
+        }
+      } catch {}
+      return {
+        ...prev,
+        checkinSlots: updatedSlots,
+        allSlotsComplete: allComplete,
+        hasCheckedInToday: true,
+      };
+    });
   }, []);
 
   const fetchAll = useCallback(async (options: { skipCycleHistory?: boolean } = {}) => {
@@ -662,6 +726,8 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       refreshCoins,
       triggerCoinAnimation,
       updateCoinBalanceLocally,
+      updateTodayLogLocally,
+      updateCheckinSlotLocally,
       wellnessMode,
       userName,
       aiName,
@@ -679,6 +745,8 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       refreshCoins,
       triggerCoinAnimation,
       updateCoinBalanceLocally,
+      updateTodayLogLocally,
+      updateCheckinSlotLocally,
       wellnessMode,
       userName,
       aiName,
@@ -729,6 +797,8 @@ const defaultContextValue: HerSyncContextValue = {
   refreshCoins: async () => {},
   triggerCoinAnimation: () => {},
   updateCoinBalanceLocally: () => {},
+  updateTodayLogLocally: () => {},
+  updateCheckinSlotLocally: () => {},
   wellnessMode: 'general',
   userName: 'there',
   aiName: 'Luna',

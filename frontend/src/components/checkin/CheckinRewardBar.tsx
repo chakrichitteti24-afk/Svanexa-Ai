@@ -120,7 +120,6 @@ export function CheckinRewardBar({
 
         if (result.data.awarded && result.data.coinsEarned > 0) {
           updateCoinBalanceLocally(result.data.newBalance, result.data.coinsEarned);
-          triggerCoinAnimation(result.data.coinsEarned);
         }
 
         // Clear justClaimed after animation finishes
@@ -139,7 +138,7 @@ export function CheckinRewardBar({
     } finally {
       claimingRef.current[slot] = false;
     }
-  }, [updateCoinBalanceLocally, triggerCoinAnimation]);
+  }, [updateCoinBalanceLocally]);
 
   const claimBonus = useCallback(async () => {
     if (claimingRef.current['bonus']) return;
@@ -168,7 +167,6 @@ export function CheckinRewardBar({
 
       if (result.data.bonusAwarded && result.data.coinsEarned > 0) {
         updateCoinBalanceLocally(result.data.newBalance, result.data.coinsEarned);
-        triggerCoinAnimation(result.data.coinsEarned);
       }
 
       setTimeout(() => {
@@ -183,7 +181,7 @@ export function CheckinRewardBar({
     } finally {
       claimingRef.current['bonus'] = false;
     }
-  }, [updateCoinBalanceLocally, triggerCoinAnimation]);
+  }, [updateCoinBalanceLocally]);
 
   // Determine if bonus should be shown
   const allSlotsClaimed = (Object.keys(SLOT_CONFIG) as Slot[]).every(s => slotStates[s].claimed);
