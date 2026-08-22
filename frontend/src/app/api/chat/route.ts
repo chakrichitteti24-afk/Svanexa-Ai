@@ -45,6 +45,7 @@ export async function POST(req: Request) {
       { data: todayPlan },
       { data: sleepLog },
       { data: moodLog },
+      { data: userPref },
     ] = await Promise.all([
       supabase.from('profiles').select('first_name, ai_name, active_theme').eq('id', userId).maybeSingle(),
       // Today's check-in slot data
@@ -61,10 +62,14 @@ export async function POST(req: Request) {
       supabase.from('sleep_logs').select('duration_hours').eq('user_id', userId).eq('date', today).maybeSingle(),
       // Today's mood log
       supabase.from('mood_logs').select('mood, intensity').eq('user_id', userId).eq('date', today).maybeSingle(),
+      // User preferences
+      supabase.from('user_preferences').select('theme').eq('user_id', userId).maybeSingle(),
     ]);
 
     const wellnessMode =
-      profile?.active_theme && ['general', 'pcos', 'pregnancy'].includes(profile.active_theme)
+      userPref?.theme && ['general', 'pcos', 'pregnancy'].includes(userPref.theme)
+        ? userPref.theme
+        : profile?.active_theme && ['general', 'pcos', 'pregnancy'].includes(profile.active_theme)
         ? profile.active_theme
         : pregnancyLog
         ? 'pregnancy'

@@ -42,15 +42,15 @@ export function Sidebar({
     <div
       className={cn(
         'w-64 flex flex-col h-full',
-        'bg-[rgba(10,8,18,0.96)] border-r border-[rgba(168,85,247,0.1)]',
-        'backdrop-blur-2xl',
+        'bg-sidebar border-r border-sidebar-border',
+        'backdrop-blur-2xl transition-colors duration-300',
         className
       )}
     >
       {/* Logo + Notification Bell + Privacy + Coin Badge */}
-      <div className="h-16 flex items-center justify-between px-3 border-b border-[rgba(168,85,247,0.1)] shrink-0 gap-1.5">
+      <div className="h-16 flex items-center justify-between px-3 border-b border-sidebar-border shrink-0 gap-1.5">
         <Link href="/" onClick={onNavigate} className="flex items-center gap-2 group min-w-0">
-          <div className="w-8 h-8 rounded-xl overflow-hidden shadow-lg shadow-violet-500/30 relative shrink-0">
+          <div className="w-8 h-8 rounded-xl overflow-hidden shadow-lg shadow-primary/20 relative shrink-0">
             <Image src="/logo.jpg" alt="Svanexa" fill className="object-cover" />
           </div>
           <span className="text-lg font-bold gradient-text tracking-tight truncate">Svanexa</span>
@@ -75,19 +75,19 @@ export function Sidebar({
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group',
                   isActive
-                    ? 'bg-gradient-to-r from-pink-500/20 to-violet-500/15 text-white border border-pink-500/20 shadow-sm'
-                    : 'text-muted-foreground hover:text-white hover:bg-white/5'
+                    ? 'bg-primary/15 text-primary-foreground text-white border border-primary/30 shadow-xs ring-1 ring-primary/20'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
                 )}
               >
                 <item.icon
                   className={cn(
                     'h-4.5 w-4.5 shrink-0 transition-colors',
-                    isActive ? 'text-pink-400' : 'text-muted-foreground group-hover:text-violet-300'
+                    isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-primary'
                   )}
                 />
                 <span className="flex-1 truncate">{item.name}</span>
                 {isActive && (
-                  <div className="w-1.5 h-1.5 rounded-full bg-pink-400 shadow-sm shadow-pink-400" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary shadow-xs shadow-primary" />
                 )}
               </Link>
             );
@@ -96,7 +96,7 @@ export function Sidebar({
       </div>
 
       {/* Footer */}
-      <div className="px-4 py-4 border-t border-[rgba(168,85,247,0.1)] shrink-0">
+      <div className="px-4 py-4 border-t border-sidebar-border shrink-0">
         <p className="text-[11px] text-muted-foreground/80 text-center leading-relaxed">
           Svanexa AI is not medical advice.
         </p>

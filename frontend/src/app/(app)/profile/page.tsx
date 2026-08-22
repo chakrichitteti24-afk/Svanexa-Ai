@@ -300,8 +300,8 @@ export default function ProfilePage() {
         updated_at: new Date().toISOString(),
       };
 
-      if (isStoreTheme) {
-        profilePayload.active_theme = existingTheme;
+      if (existingTheme) {
+        profilePayload.active_theme = isStoreTheme ? existingTheme : 'default';
       }
 
       // Upsert profile and user_preferences in parallel

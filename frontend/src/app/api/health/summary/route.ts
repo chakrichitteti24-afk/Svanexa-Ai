@@ -27,7 +27,8 @@ export async function GET(req: Request) {
       { data: waterRows },
       { data: moodRows },
       { data: exerciseRows },
-      { data: todayPlanRows }
+      { data: todayPlanRows },
+      { data: userPrefRows }
     ] = await Promise.all([
       supabase.from('profiles').select('id, first_name, last_name, username, ai_name, active_theme, active_dashboard_style, active_companion_style').eq('id', userId).limit(1),
       supabase.from('daily_checkins').select('summary').eq('user_id', userId).eq('date', today).limit(1),
@@ -40,6 +41,7 @@ export async function GET(req: Request) {
       supabase.from('mood_logs').select('mood, intensity').eq('user_id', userId).eq('date', today).limit(1),
       supabase.from('exercise_logs').select('duration_minutes').eq('user_id', userId).eq('date', today).limit(1),
       supabase.from('wellness_plans').select('content').eq('user_id', userId).eq('title', today).limit(1),
+      supabase.from('user_preferences').select('*').eq('user_id', userId).limit(1),
     ]);
 
     const profile = profileRows && profileRows.length > 0 ? profileRows[0] : null;
@@ -51,6 +53,7 @@ export async function GET(req: Request) {
     const mood = moodRows && moodRows.length > 0 ? moodRows[0] : null;
     const exercise = exerciseRows && exerciseRows.length > 0 ? exerciseRows[0] : null;
     const todayPlan = todayPlanRows && todayPlanRows.length > 0 ? todayPlanRows[0] : null;
+    const userPref = userPrefRows && userPrefRows.length > 0 ? userPrefRows[0] : null;
 
     let userProfile = profile;
     if (!userProfile) {
@@ -62,7 +65,7 @@ export async function GET(req: Request) {
           last_name: meta.last_name || '',
           email: user.email,
           ai_name: meta.ai_name || 'Luna',
-          active_theme: 'general',
+          active_theme: 'default',
           active_dashboard_style: 'minimal',
           active_companion_style: 'friendly',
           updated_at: new Date().toISOString(),
@@ -74,7 +77,7 @@ export async function GET(req: Request) {
           last_name: meta.last_name || '',
           username: meta.username || 'User',
           ai_name: meta.ai_name || 'Luna',
-          active_theme: 'general',
+          active_theme: 'default',
           active_dashboard_style: 'minimal',
           active_companion_style: 'friendly',
         };
@@ -85,7 +88,7 @@ export async function GET(req: Request) {
           last_name: meta.last_name || '',
           username: meta.username || 'User',
           ai_name: meta.ai_name || 'Luna',
-          active_theme: 'general',
+          active_theme: 'default',
           active_dashboard_style: 'minimal',
           active_companion_style: 'friendly',
         };
@@ -105,6 +108,8 @@ export async function GET(req: Request) {
       }
     }
 
+    const totalCheckins = checkinsCount !== null ? checkinsCount : 0;
+    
     // Parse slot meta from daily_checkins.summary
     let slotMeta: Record<string, any> = {};
     if (todayCheckin?.summary) {
@@ -137,20 +142,23 @@ export async function GET(req: Request) {
       else cycle_status = 'luteal_phase';
     }
 
-    // Build preferences object from profile columns
-    const userPreferences = {
-      user_id: userId,
-      theme: (userProfile?.active_theme && ['general', 'pcos', 'pregnancy'].includes(userProfile.active_theme)
-        ? (userProfile.active_theme as 'general' | 'pcos' | 'pregnancy')
+    // Build preferences object from preferences table or pregnancy status
+    const resolvedWellnessMode: 'general' | 'pcos' | 'pregnancy' =
+      userPref?.theme && ['general', 'pcos', 'pregnancy'].includes(userPref.theme)
+        ? (userPref.theme as 'general' | 'pcos' | 'pregnancy')
         : preg
         ? 'pregnancy'
-        : 'general'),
-      tracking_goals: null,
-      language: 'en',
-      communication_style: userProfile?.active_companion_style || 'friendly',
-      emoji_preference: true,
-      response_length: 'concise',
-      notifications_enabled: true,
+        : 'general';
+
+    const userPreferences = {
+      user_id: userId,
+      theme: resolvedWellnessMode,
+      tracking_goals: userPref?.tracking_goals || null,
+      language: userPref?.language || 'en',
+      communication_style: userProfile?.active_companion_style || userPref?.communication_style || 'friendly',
+      emoji_preference: userPref?.emoji_preference ?? true,
+      response_length: userPref?.response_length || 'concise',
+      notifications_enabled: userPref?.notifications_enabled ?? true,
     };
 
     const today_log = {
@@ -167,7 +175,7 @@ export async function GET(req: Request) {
         date: today,
         profile: userProfile,
         preferences: userPreferences,
-        total_logs_count: checkinsCount || 0,
+        total_logs_count: totalCheckins,
         has_checked_in_today: hasCheckedInToday,
         current_streak: currentStreak,
         cycle_status,

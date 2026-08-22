@@ -142,8 +142,54 @@ body[data-mode="pregnancy"] {
 /* =====================================================
    SVANEXA REWARD STORE THEMES (SOFT, MATTE, LUXURY WELLNESS)
    ===================================================== */
+:root[data-theme="default"],
+body[data-theme="default"],
+[data-theme="default"] {
+  --background: #09080e;
+  --foreground: #f2effa;
+  --card: rgba(18, 16, 26, 0.82);
+  --card-foreground: #f2effa;
+  --popover: #12101a;
+  --popover-foreground: #f2effa;
+  --primary: #c084fc;
+  --primary-foreground: #09080e;
+  --secondary: rgba(255, 255, 255, 0.05);
+  --secondary-foreground: #f2effa;
+  --muted: rgba(255, 255, 255, 0.04);
+  --muted-foreground: #988fb8;
+  --accent: rgba(192, 132, 252, 0.12);
+  --accent-foreground: #d8b4fe;
+  --destructive: #f87171;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.06);
+  --ring: #a78bfa;
+
+  /* Sidebar */
+  --sidebar: rgba(12, 10, 18, 0.95);
+  --sidebar-foreground: #f2effa;
+  --sidebar-primary: #c084fc;
+  --sidebar-primary-foreground: #09080e;
+  --sidebar-accent: rgba(192, 132, 252, 0.1);
+  --sidebar-accent-foreground: #d8b4fe;
+  --sidebar-border: rgba(255, 255, 255, 0.07);
+  --sidebar-ring: #a78bfa;
+
+  /* Svanexa Brand Tokens */
+  --hs-pink: #f472b6;
+  --hs-violet: #a78bfa;
+  --hs-purple: #818cf8;
+  --hs-fuchsia: #c084fc;
+  --hs-glow-pink: rgba(244, 114, 182, 0.12);
+  --hs-glow-violet: rgba(167, 139, 250, 0.12);
+  --hs-glass: rgba(18, 16, 26, 0.75);
+  --hs-glass-border: rgba(255, 255, 255, 0.08);
+  --bg-gradient-color1: rgba(167, 139, 250, 0.06);
+  --bg-gradient-color2: rgba(244, 114, 182, 0.04);
+}
+
 :root[data-theme="lavender"],
-body[data-theme="lavender"] {
+body[data-theme="lavender"],
+[data-theme="lavender"] {
   --background: #0a0714;
   --card: rgba(20, 15, 34, 0.85);
   --popover: #120c20;
@@ -169,7 +215,8 @@ body[data-theme="lavender"] {
 }
 
 :root[data-theme="rose"],
-body[data-theme="rose"] {
+body[data-theme="rose"],
+[data-theme="rose"] {
   --background: #0e060a;
   --card: rgba(26, 12, 18, 0.85);
   --popover: #160810;
@@ -195,7 +242,8 @@ body[data-theme="rose"] {
 }
 
 :root[data-theme="ocean"],
-body[data-theme="ocean"] {
+body[data-theme="ocean"],
+[data-theme="ocean"] {
   --background: #020910;
   --card: rgba(6, 18, 30, 0.85);
   --popover: #04101a;
@@ -221,7 +269,8 @@ body[data-theme="ocean"] {
 }
 
 :root[data-theme="midnight"],
-body[data-theme="midnight"] {
+body[data-theme="midnight"],
+[data-theme="midnight"] {
   --background: #04030a;
   --card: rgba(12, 10, 22, 0.88);
   --popover: #070512;
@@ -247,7 +296,8 @@ body[data-theme="midnight"] {
 }
 
 :root[data-theme="sage"],
-body[data-theme="sage"] {
+body[data-theme="sage"],
+[data-theme="sage"] {
   --background: #030a06;
   --card: rgba(8, 22, 14, 0.85);
   --popover: #05120a;
@@ -273,7 +323,8 @@ body[data-theme="sage"] {
 }
 
 :root[data-theme="sunrise"],
-body[data-theme="sunrise"] {
+body[data-theme="sunrise"],
+[data-theme="sunrise"] {
   --background: #0e0602;
   --card: rgba(24, 12, 6, 0.85);
   --popover: #140803;

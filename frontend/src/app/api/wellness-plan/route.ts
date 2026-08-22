@@ -13,16 +13,16 @@ export async function GET(req: Request) {
     const userId = user?.id || 'guest-session';
     const todayStr = extractDateFromRequest(req);
 
-    // Get wellness mode from profile active_theme or default to general
+    // Get wellness mode from user_preferences theme or fallback to general
     let wellnessMode = 'general';
     if (user?.id) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('active_theme')
-        .eq('id', user.id)
+      const { data: pref } = await supabase
+        .from('user_preferences')
+        .select('theme')
+        .eq('user_id', user.id)
         .limit(1);
-      if (profile && profile.length > 0 && profile[0].active_theme && ['general', 'pcos', 'pregnancy'].includes(profile[0].active_theme)) {
-        wellnessMode = profile[0].active_theme;
+      if (pref && pref.length > 0 && pref[0].theme && ['general', 'pcos', 'pregnancy'].includes(pref[0].theme)) {
+        wellnessMode = pref[0].theme;
       }
     }
 
@@ -41,7 +41,6 @@ export async function POST(req: Request) {
     const { supabase, user } = await getAuthenticatedUser(req);
 
     const userId = user?.id || 'guest-session';
-
     let todayStr = extractDateFromRequest(req);
     let slot: TaskTimeSlot | undefined = undefined;
     let forceRegenerate = false;
@@ -65,13 +64,13 @@ export async function POST(req: Request) {
 
     let wellnessMode = requestedMode && ['general', 'pcos', 'pregnancy'].includes(requestedMode) ? requestedMode : 'general';
     if (user?.id && !requestedMode) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('active_theme')
-        .eq('id', user.id)
+      const { data: pref } = await supabase
+        .from('user_preferences')
+        .select('theme')
+        .eq('user_id', user.id)
         .limit(1);
-      if (profile && profile.length > 0 && profile[0].active_theme && ['general', 'pcos', 'pregnancy'].includes(profile[0].active_theme)) {
-        wellnessMode = profile[0].active_theme;
+      if (pref && pref.length > 0 && pref[0].theme && ['general', 'pcos', 'pregnancy'].includes(pref[0].theme)) {
+        wellnessMode = pref[0].theme;
       }
     }
 

@@ -588,6 +588,30 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
           throw new Error(data.error || data.message || 'Purchase failed');
         }
 
+        // Instantaneous DOM attribute application
+        if (typeof document !== 'undefined') {
+          if (itemType === 'theme') {
+            document.documentElement.setAttribute('data-theme', itemId);
+            document.body.setAttribute('data-theme', itemId);
+          } else if (itemType === 'dashboard_style') {
+            document.documentElement.setAttribute('data-dashboard-style', itemId);
+            document.body.setAttribute('data-dashboard-style', itemId);
+          }
+        }
+
+        // Cache update
+        try {
+          const cached = localStorage.getItem('svanexa_app_cache_v1');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (itemType === 'theme') parsed.activeTheme = itemId;
+            if (itemType === 'dashboard_style') parsed.activeDashboardStyle = itemId;
+            if (itemType === 'companion_style') parsed.activeCompanionStyle = itemId;
+            if (typeof data.newBalance === 'number') parsed.coinBalance = data.newBalance;
+            localStorage.setItem('svanexa_app_cache_v1', JSON.stringify(parsed));
+          }
+        } catch {}
+
         setState(prev => ({
           ...prev,
           coinBalance: data.newBalance ?? prev.coinBalance,
@@ -625,6 +649,29 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       activeCompanionStyle: 'friendly',
     };
 
+    // Instantaneous DOM attribute application
+    if (typeof document !== 'undefined') {
+      if (itemType === 'theme') {
+        document.documentElement.setAttribute('data-theme', itemId);
+        document.body.setAttribute('data-theme', itemId);
+      } else if (itemType === 'dashboard_style') {
+        document.documentElement.setAttribute('data-dashboard-style', itemId);
+        document.body.setAttribute('data-dashboard-style', itemId);
+      }
+    }
+
+    // Cache update
+    try {
+      const cached = localStorage.getItem('svanexa_app_cache_v1');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (itemType === 'theme') parsed.activeTheme = itemId;
+        if (itemType === 'dashboard_style') parsed.activeDashboardStyle = itemId;
+        if (itemType === 'companion_style') parsed.activeCompanionStyle = itemId;
+        localStorage.setItem('svanexa_app_cache_v1', JSON.stringify(parsed));
+      }
+    } catch {}
+
     // Optimistic UI update
     setState(prev => {
       previousStyle = {
@@ -653,6 +700,15 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error('Error updating active customization', err);
       // Revert on error
+      if (typeof document !== 'undefined') {
+        if (itemType === 'theme') {
+          document.documentElement.setAttribute('data-theme', previousStyle.activeTheme);
+          document.body.setAttribute('data-theme', previousStyle.activeTheme);
+        } else if (itemType === 'dashboard_style') {
+          document.documentElement.setAttribute('data-dashboard-style', previousStyle.activeDashboardStyle);
+          document.body.setAttribute('data-dashboard-style', previousStyle.activeDashboardStyle);
+        }
+      }
       setState(prev => ({
         ...prev,
         ...previousStyle,

@@ -14,10 +14,10 @@ export function Navbar() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="h-14 flex items-center justify-between px-4 sticky top-0 z-40 md:hidden bg-[rgba(10,8,18,0.88)] backdrop-blur-2xl border-b border-[rgba(168,85,247,0.1)] shrink-0">
+    <header className="h-14 flex items-center justify-between px-4 sticky top-0 z-40 md:hidden bg-background/90 backdrop-blur-2xl border-b border-border/40 shrink-0 transition-colors duration-300">
       {/* Brand */}
       <Link href="/" className="flex items-center gap-2 group">
-        <div className="w-7 h-7 rounded-lg overflow-hidden shadow-md shadow-violet-500/30 relative">
+        <div className="w-7 h-7 rounded-lg overflow-hidden shadow-md shadow-primary/20 relative">
           <Image src="/logo.jpg" alt="Svanexa" fill className="object-cover" />
         </div>
         <span className="text-base font-bold gradient-text tracking-tight">Svanexa</span>
@@ -35,7 +35,7 @@ export function Navbar() {
 
         {/* Hamburger → Slide-in Sidebar with Auto-Close on Item Select */}
         <Sheet open={open} onOpenChange={setOpen}>
-          <SheetTrigger className="inline-flex items-center justify-center w-9 h-9 rounded-xl hover:bg-white/5 text-[#9d91c4] transition-colors cursor-pointer">
+          <SheetTrigger className="inline-flex items-center justify-center w-9 h-9 rounded-xl hover:bg-white/5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
             <Menu className="h-5 w-5" />
           </SheetTrigger>
           <SheetContent
