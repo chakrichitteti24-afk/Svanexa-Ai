@@ -8,7 +8,6 @@ import {
 import {
   getCheckinQuestions,
   calculateCheckinIndicators,
-  getCurrentSlot,
 } from '../questions/checkin-questions';
 import { differenceInDays, format, addDays } from 'date-fns';
 

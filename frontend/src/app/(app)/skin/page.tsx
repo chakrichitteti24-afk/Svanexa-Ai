@@ -1,27 +1,71 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { Image as ImageIcon, Trash2, Loader2, Camera, X, Sparkles, Plus, History } from 'lucide-react';
+import { 
+  Image as ImageIcon, 
+  Trash2, 
+  Loader2, 
+  Camera, 
+  X, 
+  Sparkles, 
+  Plus, 
+  History, 
+  ShieldAlert, 
+  CheckCircle2, 
+  AlertTriangle, 
+  Droplets, 
+  Flame, 
+  Sparkle,
+  RefreshCw,
+  Upload,
+  CircleDot
+} from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { format } from 'date-fns';
 import { createClient } from '@/utils/supabase/client';
 import { useHerSync } from '@/context/HerSyncContext';
 import { WeatherWidget } from '@/components/weather/WeatherWidget';
+import { isNonSkinImageAlert } from '@/lib/utils/skin-helpers';
 
 type SkinEntry = {
   id: string;
   date: string;
   condition: string;
   notes: string;
-  parsedNotes?: { oiliness: number; dryness: number; text: string; photoUrl?: string; aiReport?: string };
+  parsedNotes?: { 
+    oiliness: number; 
+    dryness: number; 
+    skinType?: string;
+    concerns?: string[];
+    text: string; 
+    photoUrl?: string; 
+    aiReport?: string 
+  };
 };
 
-// Helper to compress image and convert to Base64 data URL
+const SKIN_TYPES = [
+  { id: 'Combination', label: 'Combination', desc: 'Oily T-zone, normal/dry cheeks' },
+  { id: 'Oily', label: 'Oily', desc: 'Excess sebum, visible shine all over' },
+  { id: 'Dry', label: 'Dry', desc: 'Tight, flaky, low moisture' },
+  { id: 'Sensitive', label: 'Sensitive', desc: 'Prone to stinging, redness, reactive' },
+  { id: 'Normal', label: 'Balanced / Normal', desc: 'Comfortable, neither dry nor oily' },
+];
+
+const AVAILABLE_CONCERNS = [
+  { id: 'Hormonal Breakouts', label: 'Hormonal Breakouts 🌸' },
+  { id: 'Clogged Pores', label: 'Clogged Pores / Blackheads 🔍' },
+  { id: 'Active Acne Flare-up', label: 'Active Acne / Blemishes 💥' },
+  { id: 'Redness & Irritation', label: 'Redness & Sensitivity 🌡️' },
+  { id: 'Dark Spots / PIH', label: 'Dark Spots & Acne Marks ✨' },
+  { id: 'Dry Flakes', label: 'Dry Flakes & Tight Barrier 💧' },
+];
+
+// Helper to compress image and convert to Base64 data URL (higher resolution 1200px, 0.85 quality for pore/lesion clarity)
 const compressImageToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -31,7 +75,7 @@ const compressImageToBase64 = (file: File): Promise<string> => {
       img.src = event.target?.result as string;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 600;
+        const MAX_WIDTH = 1200;
         const scale = MAX_WIDTH / img.width;
         
         if (img.width > MAX_WIDTH) {
@@ -45,8 +89,8 @@ const compressImageToBase64 = (file: File): Promise<string> => {
         const ctx = canvas.getContext('2d');
         ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
         
-        // Compress to JPEG with 0.7 quality
-        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+        // Compress to JPEG with 0.85 quality
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
         resolve(compressedBase64);
       };
       img.onerror = (err) => reject(err);
@@ -62,11 +106,22 @@ export default function SkinTrackerPage() {
   const [acne, setAcne] = useState(5);
   const [oiliness, setOiliness] = useState(5);
   const [dryness, setDryness] = useState(2);
+  const [skinType, setSkinType] = useState('Combination');
+  const [concerns, setConcerns] = useState<string[]>(['Active Acne Flare-up']);
   const [notes, setNotes] = useState('');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+
+  // Live Camera States
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraFacing, setCameraFacing] = useState<'user' | 'environment'>('user');
+  const [cameraLoading, setCameraLoading] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const [localLogs, setLocalLogs] = useState<any[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -89,8 +144,111 @@ export default function SkinTrackerPage() {
     });
   }, [supabase]);
 
+  // Clean up camera stream when closing or unmounting
+  useEffect(() => {
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [cameraStream]);
+
+  // Ensure video element gets stream attached when camera opens
+  useEffect(() => {
+    if (isCameraOpen && cameraStream && videoRef.current) {
+      videoRef.current.srcObject = cameraStream;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [isCameraOpen, cameraStream]);
+
+  const startLiveCamera = async (facing: 'user' | 'environment' = cameraFacing) => {
+    setCameraLoading(true);
+    try {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((track) => track.stop());
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: facing,
+          width: { ideal: 1280 },
+          height: { ideal: 1280 }
+        },
+        audio: false
+      });
+      setCameraStream(stream);
+      setCameraFacing(facing);
+      setIsCameraOpen(true);
+    } catch (err: any) {
+      console.error('Camera open failed:', err);
+      toast.error('Unable to access camera', {
+        description: 'Please grant camera permission in your browser or select a photo from your gallery.'
+      });
+      setIsCameraOpen(false);
+    } finally {
+      setCameraLoading(false);
+    }
+  };
+
+  const stopLiveCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop());
+      setCameraStream(null);
+    }
+    setIsCameraOpen(false);
+  };
+
+  const switchCameraFacing = () => {
+    const nextFacing = cameraFacing === 'user' ? 'environment' : 'user';
+    startLiveCamera(nextFacing);
+  };
+
+  const capturePhotoFromCamera = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    const width = video.videoWidth || 640;
+    const height = video.videoHeight || 480;
+
+    const MAX_WIDTH = 1200;
+    const scale = width > MAX_WIDTH ? MAX_WIDTH / width : 1;
+    canvas.width = width * scale;
+    canvas.height = height * scale;
+
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      if (cameraFacing === 'user') {
+        // Mirror horizontally for natural selfie perspective
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+      }
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    }
+
+    const base64Data = canvas.toDataURL('image/jpeg', 0.85);
+    setPhotoPreview(base64Data);
+
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const file = new File([blob], `skin-scan-${Date.now()}.jpg`, { type: 'image/jpeg' });
+        setPhotoFile(file);
+      }
+    }, 'image/jpeg', 0.85);
+
+    stopLiveCamera();
+    toast.success('Selfie captured! Ready for clinical AI inspection.');
+  };
+
+
   const dbEntries = (Array.isArray(skinLogs) ? skinLogs : []).map(d => {
-    let parsedNotes = { oiliness: 5, dryness: 2, text: d.notes || '', photoUrl: '', aiReport: '' };
+    let parsedNotes = { 
+      oiliness: 5, 
+      dryness: 2, 
+      skinType: 'Combination',
+      concerns: [] as string[],
+      text: d.notes || '', 
+      photoUrl: '', 
+      aiReport: '' 
+    };
     try {
       if (d.notes && typeof d.notes === 'string' && d.notes.startsWith('{')) {
         parsedNotes = JSON.parse(d.notes);
@@ -109,11 +267,19 @@ export default function SkinTrackerPage() {
   const filteredLocal = (Array.isArray(localLogs) ? localLogs : []).filter(l => l && !dbDates.has(l.date));
   const entries = [...dbEntries, ...filteredLocal];
 
-
   const selectedEntry = entries.find(e => e.id === selectedEntryId);
+
+  const toggleConcern = (concernId: string) => {
+    if (concerns.includes(concernId)) {
+      setConcerns(concerns.filter(c => c !== concernId));
+    } else {
+      setConcerns([...concerns, concernId]);
+    }
+  };
 
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
+      stopLiveCamera();
       const file = e.target.files[0];
       setPhotoFile(file);
       setPhotoPreview(URL.createObjectURL(file));
@@ -121,11 +287,14 @@ export default function SkinTrackerPage() {
   };
 
   const handleStartNewScan = () => {
+    stopLiveCamera();
     setSelectedEntryId(null);
     setAnalysis(null);
     setAcne(5);
     setOiliness(5);
     setDryness(2);
+    setSkinType('Combination');
+    setConcerns(['Active Acne Flare-up']);
     setNotes('');
     setPhotoFile(null);
     setPhotoPreview(null);
@@ -157,11 +326,11 @@ export default function SkinTrackerPage() {
     try {
       let photoBase64 = '';
       if (photoFile) {
-        toast.info('Encoding and compressing skin photo...', { duration: 1500 });
+        toast.info('Preparing high-resolution skin photo for clinical inspection...', { duration: 1500 });
         photoBase64 = await compressImageToBase64(photoFile);
       }
 
-      toast.info('Analyzing skin conditions with AI...', { duration: 3000 });
+      toast.info('Analyzing skin barrier & verifying visual metrics with AI...', { duration: 3500 });
       const response = await fetch('/api/skin-analysis', {
         method: 'POST',
         headers: {
@@ -171,6 +340,8 @@ export default function SkinTrackerPage() {
           acne,
           oiliness,
           dryness,
+          skinType,
+          concerns,
           notes,
           photoBase64
         })
@@ -183,6 +354,8 @@ export default function SkinTrackerPage() {
         const complexNotes = JSON.stringify({ 
           oiliness, 
           dryness, 
+          skinType,
+          concerns,
           text: notes, 
           photoUrl: photoBase64, 
           aiReport: data.analysis 
@@ -224,6 +397,8 @@ export default function SkinTrackerPage() {
             parsedNotes: {
               oiliness,
               dryness,
+              skinType,
+              concerns,
               text: notes,
               photoUrl: photoBase64,
               aiReport: data.analysis
@@ -237,7 +412,11 @@ export default function SkinTrackerPage() {
           }
         } catch (localErr) {}
 
-        toast.success('AI Skin Analysis complete and saved to history!');
+        if (data.isImageInvalid) {
+          toast.warning('Non-skin image detected', { description: 'Please upload a clear photo of your skin or face for visual grading.' });
+        } else {
+          toast.success('Clinical AI Skin Analysis complete!');
+        }
       } else {
         toast.error('Failed to run AI Analysis', { description: data.message || data.error });
       }
@@ -248,13 +427,14 @@ export default function SkinTrackerPage() {
     }
   };
 
+  const isInvalidImage = analysis ? isNonSkinImageAlert(analysis) : false;
 
   return (
     <div className="max-w-6xl mx-auto w-full space-y-6 pb-24 animate-in fade-in duration-500 md:py-8">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight mb-1">Skin Care & Glow</h1>
-          <p className="text-xs text-muted-foreground">Personalized AI skin analysis, glow care & nutritional tips.</p>
+          <h1 className="text-2xl font-bold tracking-tight mb-1">Clinical Skin Care & Glow</h1>
+          <p className="text-xs text-muted-foreground">Authentic AI skin diagnostics, active ingredient protocols & hormonal nutrition.</p>
         </div>
         <Button 
           onClick={handleStartNewScan}
@@ -274,30 +454,85 @@ export default function SkinTrackerPage() {
         <div className="space-y-6">
           <Card className="border-border/40 bg-card/60 backdrop-blur-xs shadow-sm h-fit">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold">{"Real-time Skin Scanner"}</CardTitle>
-              <CardDescription className="text-[10px]">Enter current skin parameters for analysis</CardDescription>
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Sparkle className="w-4 h-4 text-violet-400" />
+                Dermatological Input & Scanner
+              </CardTitle>
+              <CardDescription className="text-[10px]">Provide accurate parameters for authentic clinical analysis</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-5">
+
+              {/* Skin Type Selection */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Your Skin Type</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {SKIN_TYPES.map((type) => {
+                    const isSelected = skinType === type.id;
+                    return (
+                      <button
+                        key={type.id}
+                        type="button"
+                        onClick={() => setSkinType(type.id)}
+                        className={`p-2 rounded-xl text-left border transition-all text-xs ${
+                          isSelected
+                            ? 'bg-violet-600/20 border-violet-500 text-foreground font-semibold shadow-xs'
+                            : 'bg-secondary/20 border-border/40 hover:bg-secondary/40 text-muted-foreground'
+                        }`}
+                      >
+                        <p className="text-xs">{type.label}</p>
+                        <p className="text-[9px] opacity-75 font-normal truncate">{type.desc}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Primary Skin Concerns */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Primary Concerns Today</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {AVAILABLE_CONCERNS.map((c) => {
+                    const isSelected = concerns.includes(c.id);
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => toggleConcern(c.id)}
+                        className={`px-2.5 py-1 rounded-full text-[11px] border transition-all ${
+                          isSelected
+                            ? 'bg-violet-600 text-white font-medium border-violet-500 shadow-xs'
+                            : 'bg-secondary/30 text-muted-foreground border-border/40 hover:border-border/80'
+                        }`}
+                      >
+                        {c.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
               {/* Acne Counter */}
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between pt-1 border-t border-border/20">
                 <div className="space-y-0.5">
-                  <span className="text-sm font-semibold flex items-center gap-1.5">Acne Severity</span>
-                  <p className="text-[10px] text-muted-foreground">Scale of 1-10</p>
+                  <span className="text-xs font-semibold flex items-center gap-1.5">
+                    <Flame className="w-3.5 h-3.5 text-pink-500" />
+                    Acne Severity Feeling
+                  </span>
+                  <p className="text-[10px] text-muted-foreground">Self-perceived rating (1 = Clear, 10 = Severe)</p>
                 </div>
                 <div className="flex items-center gap-3 bg-secondary/20 p-1.5 rounded-full border border-border/30">
                   <button
                     type="button"
                     onClick={() => setAcne(Math.max(1, acne - 1))}
-                    className="w-10 h-10 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-sm"
+                    className="w-8 h-8 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-xs"
                   >
                     -
                   </button>
-                  <span className="w-8 text-center text-sm font-bold">{acne}</span>
+                  <span className="w-6 text-center text-xs font-bold">{acne}</span>
                   <button
                     type="button"
                     onClick={() => setAcne(Math.min(10, acne + 1))}
-                    className="w-10 h-10 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-sm"
+                    className="w-8 h-8 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-xs"
                   >
                     +
                   </button>
@@ -307,22 +542,25 @@ export default function SkinTrackerPage() {
               {/* Oiliness Counter */}
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <span className="text-sm font-semibold flex items-center gap-1.5">Oiliness</span>
-                  <p className="text-[10px] text-muted-foreground">Scale of 1-10</p>
+                  <span className="text-xs font-semibold flex items-center gap-1.5">
+                    <Droplets className="w-3.5 h-3.5 text-blue-400" />
+                    Sebum / Oiliness
+                  </span>
+                  <p className="text-[10px] text-muted-foreground">Surface shine (1 = Matte, 10 = High sebum)</p>
                 </div>
                 <div className="flex items-center gap-3 bg-secondary/20 p-1.5 rounded-full border border-border/30">
                   <button
                     type="button"
                     onClick={() => setOiliness(Math.max(1, oiliness - 1))}
-                    className="w-10 h-10 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-sm"
+                    className="w-8 h-8 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-xs"
                   >
                     -
                   </button>
-                  <span className="w-8 text-center text-sm font-bold">{oiliness}</span>
+                  <span className="w-6 text-center text-xs font-bold">{oiliness}</span>
                   <button
                     type="button"
                     onClick={() => setOiliness(Math.min(10, oiliness + 1))}
-                    className="w-10 h-10 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-sm"
+                    className="w-8 h-8 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-xs"
                   >
                     +
                   </button>
@@ -332,62 +570,202 @@ export default function SkinTrackerPage() {
               {/* Dryness Counter */}
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <span className="text-sm font-semibold flex items-center gap-1.5">Dryness / Flakiness</span>
-                  <p className="text-[10px] text-muted-foreground">Scale of 1-10</p>
+                  <span className="text-xs font-semibold flex items-center gap-1.5">
+                    Dryness / Tightness
+                  </span>
+                  <p className="text-[10px] text-muted-foreground">Moisture deficit (1 = Hydrated, 10 = Flaking)</p>
                 </div>
                 <div className="flex items-center gap-3 bg-secondary/20 p-1.5 rounded-full border border-border/30">
                   <button
                     type="button"
                     onClick={() => setDryness(Math.max(1, dryness - 1))}
-                    className="w-10 h-10 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-sm"
+                    className="w-8 h-8 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-xs"
                   >
                     -
                   </button>
-                  <span className="w-8 text-center text-sm font-bold">{dryness}</span>
+                  <span className="w-6 text-center text-xs font-bold">{dryness}</span>
                   <button
                     type="button"
                     onClick={() => setDryness(Math.min(10, dryness + 1))}
-                    className="w-10 h-10 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-sm"
+                    className="w-8 h-8 rounded-full flex items-center justify-center bg-background border border-border/50 text-foreground active:scale-90 font-bold transition-transform text-xs"
                   >
                     +
                   </button>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Notes</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Notes & Triggers</Label>
                 <Textarea 
-                  placeholder="Tried a new cleanser? Eaten something different?" 
+                  placeholder="e.g. Ate dairy/spicy food, tested new AHA serum, feeling pre-period flare..." 
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
+                  className="text-xs min-h-[60px]"
                 />
               </div>
               
-              {/* Photo Upload */}
+              {/* Photo Input with Live Camera Viewfinder & File Upload */}
               <div className="space-y-2">
-                <Label>Upload Photo (Optional)</Label>
-                {!photoPreview ? (
-                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-border/50 rounded-2xl cursor-pointer bg-secondary/20 hover:bg-secondary/40 transition-colors">
-                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                      <Camera className="w-8 h-8 mb-2 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground font-medium">Tap to upload a selfie</p>
+                <div className="flex justify-between items-center">
+                  <Label className="text-xs font-semibold flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5 text-violet-400" />
+                    Facial Photo (Camera & Vision Scan)
+                  </Label>
+                  <span className="text-[10px] text-muted-foreground">Human skin only</span>
+                </div>
+
+                {/* Hidden file input */}
+                <input 
+                  type="file" 
+                  ref={fileInputRef}
+                  className="hidden" 
+                  accept="image/*" 
+                  capture="user"
+                  onChange={handlePhotoSelect} 
+                />
+
+                {/* State 1: Live Camera Viewfinder Active */}
+                {isCameraOpen ? (
+                  <div className="relative w-full rounded-2xl overflow-hidden border-2 border-violet-500 bg-black shadow-lg animate-in fade-in zoom-in-95 duration-200">
+                    <div className="relative w-full h-64 sm:h-72 bg-black flex items-center justify-center">
+                      <video
+                        ref={videoRef}
+                        playsInline
+                        muted
+                        autoPlay
+                        className={`w-full h-full object-cover ${cameraFacing === 'user' ? '-scale-x-100' : ''}`}
+                      />
+                      
+                      {/* Face Positioning Oval Guide */}
+                      <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                        <div className="w-36 h-48 sm:w-44 sm:h-56 rounded-[50%] border-2 border-dashed border-white/60 shadow-[0_0_20px_rgba(0,0,0,0.5)] flex items-center justify-center">
+                          <p className="text-[9px] text-white/80 bg-black/60 px-2 py-0.5 rounded-full backdrop-blur-xs">
+                            Align face here
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Top Bar Controls */}
+                      <div className="absolute top-2.5 inset-x-2.5 flex justify-between items-center pointer-events-auto">
+                        <span className="bg-black/60 backdrop-blur-md text-[10px] text-white px-2 py-1 rounded-md flex items-center gap-1 font-medium">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                          Live Camera
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={switchCameraFacing}
+                            className="bg-black/60 hover:bg-black/80 p-2 rounded-full text-white backdrop-blur-md transition-colors"
+                            title="Flip camera"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={stopLiveCamera}
+                            className="bg-black/60 hover:bg-black/80 p-2 rounded-full text-white backdrop-blur-md transition-colors"
+                            title="Close camera"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Bottom Capture Button Bar */}
+                      <div className="absolute bottom-3 inset-x-0 flex flex-col items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          onClick={capturePhotoFromCamera}
+                          className="w-14 h-14 rounded-full bg-white text-violet-600 flex items-center justify-center shadow-xl shadow-black/40 border-4 border-violet-500/40 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                          title="Snap selfie"
+                        >
+                          <CircleDot className="w-7 h-7 text-violet-600 animate-pulse" />
+                        </button>
+                        <span className="text-[10px] font-semibold text-white bg-black/50 px-2 py-0.5 rounded-md backdrop-blur-xs">
+                          Tap to Capture Selfie
+                        </span>
+                      </div>
                     </div>
-                    <input type="file" className="hidden" accept="image/*" onChange={handlePhotoSelect} />
-                  </label>
+                  </div>
+                ) : photoPreview ? (
+                  /* State 2: Photo Loaded & Verified */
+                  <div className="relative w-full rounded-2xl overflow-hidden border border-border bg-black/20">
+                    <div className="relative w-full h-48 overflow-hidden">
+                      <img src={photoPreview} alt="Skin Preview" className="w-full h-full object-cover" />
+                      <button 
+                        type="button"
+                        onClick={() => { setPhotoPreview(null); setPhotoFile(null); }}
+                        className="absolute top-2 right-2 bg-black/60 p-1.5 rounded-full text-white hover:bg-black/80 backdrop-blur-md transition-colors cursor-pointer"
+                        title="Remove photo"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                      <div className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-md px-2.5 py-1 rounded-lg text-[10px] text-white flex items-center gap-1.5 border border-white/10">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Selfie Ready for AI Diagnosis</span>
+                      </div>
+                    </div>
+                    
+                    {/* Action buttons under photo preview */}
+                    <div className="p-2 bg-secondary/30 flex items-center justify-between gap-2 border-t border-border/30">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => startLiveCamera('user')}
+                        className="flex-1 h-8 text-[11px] font-medium bg-background/50 hover:bg-background border-border/60"
+                      >
+                        <Camera className="w-3.5 h-3.5 mr-1.5 text-violet-400" />
+                        Retake Camera
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex-1 h-8 text-[11px] font-medium bg-background/50 hover:bg-background border-border/60"
+                      >
+                        <Upload className="w-3.5 h-3.5 mr-1.5 text-blue-400" />
+                        Upload Different
+                      </Button>
+                    </div>
+                  </div>
                 ) : (
-                  <div className="relative w-full h-48 rounded-2xl overflow-hidden border border-border">
-                    <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
-                    <button 
-                      onClick={() => { setPhotoPreview(null); setPhotoFile(null); }}
-                      className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full text-white hover:bg-black/70 backdrop-blur-md"
+                  /* State 3: Dual Camera & File Upload Options */
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => startLiveCamera('user')}
+                      disabled={cameraLoading}
+                      className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-violet-500/40 hover:border-violet-500 rounded-2xl bg-violet-600/10 hover:bg-violet-600/20 transition-all text-center group cursor-pointer"
                     >
-                      <X className="w-4 h-4" />
+                      {cameraLoading ? (
+                        <Loader2 className="w-6 h-6 mb-1 text-violet-400 animate-spin" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-violet-600/20 flex items-center justify-center mb-1 group-hover:scale-110 transition-transform">
+                          <Camera className="w-5 h-5 text-violet-400" />
+                        </div>
+                      )}
+                      <p className="text-xs font-semibold text-foreground">Take Live Selfie</p>
+                      <p className="text-[9px] text-muted-foreground">Open front camera to snap photo</p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-border/50 hover:border-border/80 rounded-2xl bg-secondary/20 hover:bg-secondary/40 transition-all text-center group cursor-pointer"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-secondary/60 flex items-center justify-center mb-1 group-hover:scale-110 transition-transform">
+                        <Upload className="w-5 h-5 text-muted-foreground" />
+                      </div>
+                      <p className="text-xs font-semibold text-foreground">Upload from Gallery</p>
+                      <p className="text-[9px] text-muted-foreground">Select saved photo from device</p>
                     </button>
                   </div>
                 )}
               </div>
 
-              <div className="pt-4">
+              <div className="pt-2">
                 <Button 
                   type="button"
                   className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:opacity-90 text-white font-semibold shadow-md shadow-violet-500/20" 
@@ -397,12 +775,12 @@ export default function SkinTrackerPage() {
                   {analyzing ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                      Analyzing Skin Selfie...
+                      Performing Clinical Skin Diagnostic...
                     </>
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4 mr-2 text-yellow-300 fill-yellow-300 animate-pulse" />
-                      Analyze Skin Now
+                      Run Clinical AI Analysis
                     </>
                   )}
                 </Button>
@@ -416,7 +794,7 @@ export default function SkinTrackerPage() {
               <div>
                 <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
                   <History className="w-4 h-4 text-violet-400" />
-                  Scan History
+                  Scan History & Records
                 </CardTitle>
                 <CardDescription className="text-[10px]">Select a past report to load</CardDescription>
               </div>
@@ -426,7 +804,7 @@ export default function SkinTrackerPage() {
                 </span>
               )}
             </CardHeader>
-            <CardContent className="max-h-[300px] overflow-y-auto space-y-2 pr-1">
+            <CardContent className="max-h-[260px] overflow-y-auto space-y-2 pr-1">
               {entries.length === 0 ? (
                 <div className="text-center py-6 text-muted-foreground/60 text-xs">
                   No scan history found. Run your first analysis above to start logging.
@@ -444,6 +822,8 @@ export default function SkinTrackerPage() {
                           setAcne(Number(entry.condition || 5));
                           setOiliness(entry.parsedNotes.oiliness || 5);
                           setDryness(entry.parsedNotes.dryness || 2);
+                          if (entry.parsedNotes.skinType) setSkinType(entry.parsedNotes.skinType);
+                          if (Array.isArray(entry.parsedNotes.concerns)) setConcerns(entry.parsedNotes.concerns);
                           setNotes(entry.parsedNotes.text || '');
                           setPhotoPreview(entry.parsedNotes.photoUrl || null);
                           setPhotoFile(null);
@@ -472,13 +852,14 @@ export default function SkinTrackerPage() {
                             {new Date(entry.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                           </p>
                           <p className="text-[10px] text-muted-foreground/80 leading-none mt-0.5">
-                            Acne Severity: {entry.condition}/10
+                            Acne: {entry.condition}/10 • {entry.parsedNotes?.skinType || 'Custom'}
                           </p>
                         </div>
                       </div>
                       <button
                         onClick={(e) => handleDeleteEntry(entry.id, e)}
                         className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-500/10 text-muted-foreground hover:text-red-500 rounded-md shrink-0"
+                        title="Delete scan entry"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -501,12 +882,12 @@ export default function SkinTrackerPage() {
                 <div>
                   <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                     <Sparkles className="w-4 h-4 text-yellow-400 fill-yellow-400 animate-pulse" />
-                    AI Skin & Wellness Insights
+                    AI Skin Diagnostics & Treatment Guide
                   </CardTitle>
                   <CardDescription className="text-[10px]">
                     {selectedEntry 
                       ? `Viewing saved report from ${new Date(selectedEntry.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}` 
-                      : 'Comprehensive analysis report based on Svanexa AI.'}
+                      : 'Authentic dermatological insights calibrated to your skin and lifestyle.'}
                   </CardDescription>
                 </div>
                 {selectedEntry && (
@@ -533,10 +914,20 @@ export default function SkinTrackerPage() {
                 </div>
               )}
               {analysis ? (
-                <div className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground leading-relaxed bg-black/40 p-4 rounded-xl border border-border/50 text-xs flex-1">
+                <div className={`prose prose-sm dark:prose-invert max-w-none text-muted-foreground leading-relaxed p-4 rounded-xl border text-xs flex-1 ${
+                  isInvalidImage 
+                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-100' 
+                    : 'bg-black/40 border-border/50'
+                }`}>
+                  {isInvalidImage && (
+                    <div className="flex items-center gap-2 p-2.5 mb-3 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-200 font-medium text-xs">
+                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>Non-skin photo detected. Please follow the guidance below to capture a valid selfie.</span>
+                    </div>
+                  )}
                   <ReactMarkdown>{analysis}</ReactMarkdown>
                   <div className="mt-3 pt-2.5 border-t border-border/20 flex justify-between items-center text-[9px] text-muted-foreground/60">
-                    <span>Scan Engine: {selectedEntry ? 'Historical Log' : 'Real-time'}</span>
+                    <span>Engine: {selectedEntry ? 'Historical Log' : 'Clinical Multimodal AI'}</span>
                     <Button 
                       variant="ghost" 
                       size="sm" 
@@ -554,7 +945,7 @@ export default function SkinTrackerPage() {
                   <Sparkles className="w-8 h-8 text-violet-400 mb-3 animate-pulse" />
                   <p className="text-xs text-muted-foreground mb-1 font-semibold">Ready to Scan</p>
                   <p className="text-[11px] text-muted-foreground/75 max-w-xs leading-normal">
-                    Adjust your skin sliders, upload a selfie, and click &quot;Analyze Skin Now&quot; to generate your custom routine checks, active ingredients, and nutritional plan.
+                    Select your skin type, concerns, upload an optional facial selfie, and click &quot;Run Clinical AI Analysis&quot; to generate your scientific skincare routine and active ingredients.
                   </p>
                 </div>
               )}
@@ -565,3 +956,4 @@ export default function SkinTrackerPage() {
     </div>
   );
 }
+

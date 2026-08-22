@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { processSkinLogsData } from '../../../lib/utils/skin-helpers';
+import { processSkinLogsData, isNonSkinImageAlert } from '../../../lib/utils/skin-helpers';
 
 describe('Skin Logs Data Processor', () => {
   it('should handle empty logs list gracefully', () => {
@@ -7,6 +7,8 @@ describe('Skin Logs Data Processor', () => {
     expect(result.avgAcne).toBe('0.0');
     expect(result.avgOil).toBe('0.0');
     expect(result.avgDry).toBe('0.0');
+    expect(result.skinType).toBe('Combination');
+    expect(result.concerns).toEqual([]);
     expect(result.notesSummary).toEqual([]);
     expect(result.latestPhotoBase64).toBe('');
   });
@@ -21,17 +23,20 @@ describe('Skin Logs Data Processor', () => {
     expect(result.avgAcne).toBe('5.0');
     expect(result.avgOil).toBe('5.0'); // defaults
     expect(result.avgDry).toBe('2.0'); // defaults
+    expect(result.skinType).toBe('Combination');
     expect(result.notesSummary).toEqual(['Felt a bit stressed today.', 'Skin is clean!']);
     expect(result.latestPhotoBase64).toBe('');
   });
 
-  it('should process complex JSON-structured notes skin logs correctly and extract the latest Base64 photo', () => {
+  it('should process complex JSON-structured notes skin logs correctly and extract skinType, concerns, and latest photo', () => {
     const logs = [
       { 
         condition: 8, 
         notes: JSON.stringify({ 
           oiliness: 8, 
           dryness: 1, 
+          skinType: 'Oily',
+          concerns: ['Hormonal Breakouts', 'Clogged Pores'],
           text: 'Acne flare up on forehead.', 
           photoUrl: 'data:image/jpeg;base64,mock1' 
         }) 
@@ -41,6 +46,8 @@ describe('Skin Logs Data Processor', () => {
         notes: JSON.stringify({ 
           oiliness: 4, 
           dryness: 3, 
+          skinType: 'Oily',
+          concerns: ['Redness & Irritation'],
           text: 'Better today.', 
           photoUrl: 'data:image/jpeg;base64,mock2' 
         }) 
@@ -51,7 +58,27 @@ describe('Skin Logs Data Processor', () => {
     expect(result.avgAcne).toBe('6.0'); // (8+4)/2
     expect(result.avgOil).toBe('6.0');  // (8+4)/2
     expect(result.avgDry).toBe('2.0');  // (1+3)/2
+    expect(result.skinType).toBe('Oily');
+    expect(result.concerns).toContain('Hormonal Breakouts');
+    expect(result.concerns).toContain('Clogged Pores');
+    expect(result.concerns).toContain('Redness & Irritation');
     expect(result.notesSummary).toEqual(['Acne flare up on forehead.', 'Better today.']);
-    expect(result.latestPhotoBase64).toBe('data:image/jpeg;base64,mock1'); // takes the latest (first in list)
+    expect(result.latestPhotoBase64).toBe('data:image/jpeg;base64,mock1');
+  });
+
+  describe('Non-Skin Image Alert Detector', () => {
+    it('should detect non-skin image rejection responses correctly', () => {
+      const nonSkinAlert = `# ⚠️ Image Verification Failed\n\n## 🚫 Non-Skin Image Detected\n- **Image Analysis Result:** The uploaded photo contains a chair rather than human skin.`;
+      expect(isNonSkinImageAlert(nonSkinAlert)).toBe(true);
+
+      const nonSkinAlert2 = `Visual diagnostics cannot be performed on non-human or non-skin photos.`;
+      expect(isNonSkinImageAlert(nonSkinAlert2)).toBe(true);
+    });
+
+    it('should return false for valid clinical reports', () => {
+      const validReport = `# 🩺 Svanexa AI Skin Diagnostics Report\n\n## 🌟 Clinical Skin State Analysis\n- **AI Visual Grading:** Clear skin verified.`;
+      expect(isNonSkinImageAlert(validReport)).toBe(false);
+    });
   });
 });
+
