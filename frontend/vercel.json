@@ -44,6 +44,26 @@
       "path": "/api/cron/checkin-reminder?slot=streak",
       "schedule": "30 16 * * *",
       "comment": "10:00 PM IST — Streak preservation alert before midnight"
+    },
+    {
+      "path": "/api/cron/re-engagement",
+      "schedule": "30 4 * * *",
+      "comment": "10:00 AM IST — Re-engagement for users inactive 2, 5, or 14 days"
+    },
+    {
+      "path": "/api/cron/streak-milestone",
+      "schedule": "0 17 * * *",
+      "comment": "10:30 PM IST — Streak milestone celebrations (3/7/14/21/30/50/100) and broken streak alerts"
+    },
+    {
+      "path": "/api/cron/weekly-report",
+      "schedule": "30 3 * * 0",
+      "comment": "9:00 AM IST every Sunday — Weekly wellness report summary"
+    },
+    {
+      "path": "/api/cron/weekly-report?type=monthly",
+      "schedule": "30 3 1 * *",
+      "comment": "9:00 AM IST on 1st of every month — Monthly wellness report summary"
     }
   ]
 }
