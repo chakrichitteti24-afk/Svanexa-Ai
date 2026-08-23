@@ -26,6 +26,7 @@ interface NotificationContextValue {
   unreadCount: number;
   preferences: NotificationPreferences;
   permissionStatus: NotificationPermission | 'unsupported';
+  isPushSubscribed: boolean;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   dismissNotification: (id: string) => void;
@@ -33,6 +34,8 @@ interface NotificationContextValue {
   updatePreferences: (newPrefs: Partial<NotificationPreferences>) => void;
   requestPushPermission: () => Promise<boolean>;
   sendTestNotification: () => void;
+  sendDeviceTestPush: () => Promise<void>;
+  simulateMissedCheckinAlert: (slot?: 'morning' | 'afternoon' | 'evening' | 'streak') => Promise<void>;
   addCustomNotification: (item: Omit<NotificationItem, 'id' | 'timestamp' | 'read'>) => void;
 }
 
@@ -42,6 +45,17 @@ const STORAGE_KEY_PREFS = 'svanexa_notif_prefs_v1';
 const STORAGE_KEY_READ = 'svanexa_notif_read_v1';
 const STORAGE_KEY_DISMISSED = 'svanexa_notif_dismissed_v1';
 const STORAGE_KEY_CUSTOM = 'svanexa_custom_notifs_v1';
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const {
@@ -106,15 +120,18 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     return [];
   });
 
-  const [permissionStatus, setPermissionStatus] = useState<NotificationPermission | 'unsupported'>(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      return Notification.permission;
-    }
-    return 'default';
-  });
+  const [permissionStatus, setPermissionStatus] = useState<NotificationPermission | 'unsupported'>('default');
+  const [isPushSubscribed, setIsPushSubscribed] = useState<boolean>(false);
 
   const hasLoadedRef = useRef(true);
   const previousUnreadCountRef = useRef(0);
+
+  // Sync client-side permission status on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setPermissionStatus(Notification.permission);
+    }
+  }, []);
 
   // 2. Save preferences
   const updatePreferences = useCallback((newPrefs: Partial<NotificationPreferences>) => {
@@ -134,6 +151,83 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // Register Web Push subscription to Service Worker & Supabase
+  const registerPushSubscription = useCallback(async (): Promise<boolean> => {
+    if (
+      typeof window === 'undefined' ||
+      !('serviceWorker' in navigator) ||
+      !('PushManager' in window)
+    ) {
+      return false;
+    }
+
+    try {
+      const reg = await navigator.serviceWorker.register('/sw.js');
+      await navigator.serviceWorker.ready;
+
+      // Get public VAPID key from API
+      let vapidKey = '';
+      try {
+        const res = await fetch('/api/notifications/vapid-key');
+        const data = await res.json();
+        if (data.success && data.publicKey) {
+          vapidKey = data.publicKey;
+        }
+      } catch (e) {
+        console.warn('Could not fetch vapid key from API:', e);
+      }
+
+      if (!vapidKey) {
+        vapidKey =
+          process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
+          'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U';
+      }
+
+      const applicationServerKey = urlBase64ToUint8Array(vapidKey);
+
+      let subscription = await reg.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey,
+        });
+      }
+
+      if (subscription) {
+        const subJson = subscription.toJSON();
+        if (subJson.keys?.p256dh && subJson.keys?.auth) {
+          await fetch('/api/notifications/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              endpoint: subscription.endpoint,
+              keys: subJson.keys,
+              userAgent: navigator.userAgent,
+            }),
+          });
+          setIsPushSubscribed(true);
+          return true;
+        }
+      }
+      return false;
+    } catch (err) {
+      console.error('Error registering push subscription:', err);
+      return false;
+    }
+  }, []);
+
+  // Auto-sync push registration if already granted
+  useEffect(() => {
+    if (
+      typeof window !== 'undefined' &&
+      'Notification' in window &&
+      Notification.permission === 'granted' &&
+      preferences.browserPush
+    ) {
+      registerPushSubscription().catch(() => {});
+    }
+  }, [preferences.browserPush, registerPushSubscription]);
+
   // 3. Browser Push Permission Handler
   const requestPushPermission = useCallback(async (): Promise<boolean> => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -147,10 +241,16 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       setPermissionStatus(result);
       if (result === 'granted') {
         updatePreferences({ browserPush: true });
-        toast.success('Push notifications enabled successfully!');
+        const registered = await registerPushSubscription();
+        if (registered) {
+          toast.success('Push alerts enabled! Device registered for background check-in reminders.');
+        } else {
+          toast.success('Push notifications enabled!');
+        }
         return true;
       } else if (result === 'denied') {
         updatePreferences({ browserPush: false });
+        setIsPushSubscribed(false);
         toast.error('Notifications were blocked. Please enable them in browser site settings.');
         return false;
       }
@@ -159,7 +259,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       console.error('Error requesting notification permission:', err);
       return false;
     }
-  }, [updatePreferences]);
+  }, [updatePreferences, registerPushSubscription]);
 
   // 4. Generate dynamic smart alerts based on health context
   const dynamicAlerts = useMemo(() => {
@@ -178,7 +278,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     const afternoonParts = (sched.afternoonTime || '14:00').split(':').map(Number);
     const eveningParts = (sched.eveningTime || '21:30').split(':').map(Number);
 
-    const morningDecimal = morningParts[0] + (morningParts[1] || 0) / 60;
     const afternoonDecimal = afternoonParts[0] + (afternoonParts[1] || 0) / 60;
     const eveningDecimal = eveningParts[0] + (eveningParts[1] || 0) / 60;
 
@@ -428,7 +527,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     return allNotifications.filter(n => !n.read).length;
   }, [allNotifications]);
 
-  // Dispatch Browser Notification and Audio chime when new notifications arrive
+  // Dispatch Audio chime when new notifications arrive
   useEffect(() => {
     if (!hasLoadedRef.current) return;
 
@@ -520,8 +619,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         try {
           new Notification(newItem.title, {
             body: newItem.message,
-            icon: '/icon.jpg',
-            badge: '/icon.jpg',
+            icon: '/logo.jpg',
+            badge: '/logo.jpg',
           });
         } catch (pushErr) {
           console.warn('Browser push error:', pushErr);
@@ -545,22 +644,54 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       actionLabel: 'Open Dashboard',
     });
 
-    if (
-      preferences.browserPush &&
-      typeof window !== 'undefined' &&
-      'Notification' in window &&
-      Notification.permission === 'granted'
-    ) {
-      try {
-        new Notification('✨ Svanexa AI Wellness Alert', {
-          body: `Hello ${userName}! Your browser push alerts are active and running.`,
-          icon: '/icon.jpg',
-        });
-      } catch (e) {}
+    toast.success('In-app test notification sent!');
+  }, [preferences.soundEnabled, addCustomNotification, userName]);
+
+  // Send real background push notification to phone device
+  const sendDeviceTestPush = useCallback(async () => {
+    if (permissionStatus !== 'granted') {
+      const granted = await requestPushPermission();
+      if (!granted) return;
     }
 
-    toast.success('Test notification sent!');
-  }, [preferences.soundEnabled, preferences.browserPush, addCustomNotification, userName]);
+    const toastId = toast.loading('Sending test push to your phone/device...');
+    try {
+      const res = await fetch('/api/notifications/test-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(
+          data.message || 'Push alert sent! Lock phone or check system tray.',
+          { id: toastId }
+        );
+      } else {
+        toast.error(data.error || 'Failed to dispatch test push.', { id: toastId });
+      }
+    } catch (err: any) {
+      toast.error('Network error testing push alert.', { id: toastId });
+    }
+  }, [permissionStatus, requestPushPermission]);
+
+  // Trigger check-in missed simulation
+  const simulateMissedCheckinAlert = useCallback(async (slot: 'morning' | 'afternoon' | 'evening' | 'streak' = 'morning') => {
+    const toastId = toast.loading(`Checking incomplete check-ins for ${slot}...`);
+    try {
+      const res = await fetch(`/api/cron/checkin-reminder?slot=${slot}`);
+      const data = await res.json();
+      if (data.success) {
+        toast.success(
+          `Missed check-in check completed: ${data.incompleteUsers} user(s) pending, ${data.remindersSent} alert(s) sent!`,
+          { id: toastId }
+        );
+      } else {
+        toast.error(data.error || 'Check-in reminder simulation failed', { id: toastId });
+      }
+    } catch (err: any) {
+      toast.error('Network error during check-in reminder check.', { id: toastId });
+    }
+  }, []);
 
   const value = useMemo(
     () => ({
@@ -568,6 +699,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       unreadCount,
       preferences,
       permissionStatus,
+      isPushSubscribed,
       markAsRead,
       markAllAsRead,
       dismissNotification,
@@ -575,6 +707,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       updatePreferences,
       requestPushPermission,
       sendTestNotification,
+      sendDeviceTestPush,
+      simulateMissedCheckinAlert,
       addCustomNotification,
     }),
     [
@@ -582,6 +716,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       unreadCount,
       preferences,
       permissionStatus,
+      isPushSubscribed,
       markAsRead,
       markAllAsRead,
       dismissNotification,
@@ -589,6 +724,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       updatePreferences,
       requestPushPermission,
       sendTestNotification,
+      sendDeviceTestPush,
+      simulateMissedCheckinAlert,
       addCustomNotification,
     ]
   );

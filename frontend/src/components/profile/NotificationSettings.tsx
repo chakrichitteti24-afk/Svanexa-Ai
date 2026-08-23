@@ -15,6 +15,8 @@ import {
   ShieldCheck,
   AlertCircle,
   Play,
+  Smartphone,
+  BellRing,
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useNotifications } from '@/context/NotificationContext';
@@ -25,8 +27,11 @@ export function NotificationSettings() {
     preferences,
     updatePreferences,
     permissionStatus,
+    isPushSubscribed,
     requestPushPermission,
     sendTestNotification,
+    sendDeviceTestPush,
+    simulateMissedCheckinAlert,
   } = useNotifications();
 
   return (
@@ -47,7 +52,7 @@ export function NotificationSettings() {
           <div>
             <h2 className="text-sm font-bold text-foreground">Notification & Alert Settings</h2>
             <p className="text-[11px] text-muted-foreground">
-              Customize cycle reminders, habit check-ins & health alerts
+              Customize cycle reminders, habit check-ins & background phone alerts
             </p>
           </div>
         </div>
@@ -65,19 +70,19 @@ export function NotificationSettings() {
       </div>
 
       {/* ─────────────────────────────────────────────────────────────────
-          BROWSER PUSH NOTIFICATIONS & SOUND CUES
+          BROWSER & PHONE PUSH NOTIFICATIONS & SOUND CUES
           ───────────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-        {/* Browser Push */}
+        {/* Browser & Phone Push */}
         <div className="p-4 rounded-2xl bg-secondary/20 border border-border/30 flex flex-col justify-between gap-3">
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-2 text-xs font-bold text-foreground">
               <Globe className="w-4 h-4 text-violet-400" />
-              <span>Browser Push Alerts</span>
+              <span>Phone & Background Push</span>
             </div>
             {permissionStatus === 'granted' ? (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3" /> Granted
+                <ShieldCheck className="w-3 h-3" /> Active
               </span>
             ) : permissionStatus === 'denied' ? (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 flex items-center gap-1">
@@ -94,8 +99,13 @@ export function NotificationSettings() {
             )}
           </div>
           <p className="text-[11px] text-muted-foreground leading-relaxed">
-            Receive reminders on your device even when this tab is running in the background.
+            Delivers alerts to your phone lock screen & tray even when the app is completely closed.
           </p>
+          {permissionStatus === 'granted' && (
+            <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-medium pt-1 border-t border-border/20">
+              <Smartphone className="w-3 h-3" /> Device registered for background streak reminders
+            </div>
+          )}
         </div>
 
         {/* Audio Chime */}
@@ -135,6 +145,24 @@ export function NotificationSettings() {
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Daily Check-In & Streak */}
+          <div className="p-3.5 rounded-2xl bg-secondary/15 border border-border/25 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-violet-500/10 text-violet-400">
+                <CheckSquare className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-foreground">Daily Check-In & Streak Protection</p>
+                <p className="text-[10px] text-muted-foreground">Reminds you when daily check-in is pending</p>
+              </div>
+            </div>
+            <Switch
+              checked={preferences.checkinAlerts}
+              disabled={!preferences.enabled}
+              onCheckedChange={checked => updatePreferences({ checkinAlerts: checked })}
+            />
+          </div>
+
           {/* Cycle Alerts */}
           <div className="p-3.5 rounded-2xl bg-secondary/15 border border-border/25 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -150,24 +178,6 @@ export function NotificationSettings() {
               checked={preferences.cycleAlerts}
               disabled={!preferences.enabled}
               onCheckedChange={checked => updatePreferences({ cycleAlerts: checked })}
-            />
-          </div>
-
-          {/* Daily Check-In & Streak */}
-          <div className="p-3.5 rounded-2xl bg-secondary/15 border border-border/25 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-violet-500/10 text-violet-400">
-                <CheckSquare className="w-4 h-4" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-foreground">Daily Journal & Streak</p>
-                <p className="text-[10px] text-muted-foreground">Morning, midday & streak preservation alerts</p>
-              </div>
-            </div>
-            <Switch
-              checked={preferences.checkinAlerts}
-              disabled={!preferences.enabled}
-              onCheckedChange={checked => updatePreferences({ checkinAlerts: checked })}
             />
           </div>
 
@@ -396,19 +406,46 @@ export function NotificationSettings() {
       </div>
 
       {/* ─────────────────────────────────────────────────────────────────
-          TEST NOTIFICATION BUTTON
+          LIVE TESTING & MISSED CHECK-IN ALERT SIMULATION
           ───────────────────────────────────────────────────────────────── */}
-      <div className="pt-2 border-t border-border/30 flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">
-          Want to test how alerts look and sound?
-        </span>
-        <button
-          type="button"
-          onClick={sendTestNotification}
-          className="px-3.5 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-        >
-          <Send className="w-3 h-3" /> Send Test Alert
-        </button>
+      <div className="pt-3 border-t border-border/30 space-y-3">
+        <div>
+          <h3 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+            <BellRing className="w-3.5 h-3.5 text-pink-400" /> Test Real Phone & Background Alerts
+          </h3>
+          <p className="text-[11px] text-muted-foreground">
+            Verify how push notifications appear on your phone lock screen when the app is closed.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Test Real Phone Push */}
+          <button
+            type="button"
+            onClick={sendDeviceTestPush}
+            className="px-3.5 py-2 rounded-xl bg-pink-500/15 hover:bg-pink-500/25 border border-pink-500/30 text-pink-300 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
+          >
+            <Smartphone className="w-3.5 h-3.5" /> Send Phone Push Alert
+          </button>
+
+          {/* Simulate Missed Check-In Alert */}
+          <button
+            type="button"
+            onClick={() => simulateMissedCheckinAlert('streak')}
+            className="px-3.5 py-2 rounded-xl bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 text-violet-300 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
+          >
+            <CheckSquare className="w-3.5 h-3.5" /> Simulate Missed Check-In Trigger
+          </button>
+
+          {/* In-App Test */}
+          <button
+            type="button"
+            onClick={sendTestNotification}
+            className="px-3 py-2 rounded-xl bg-secondary/30 hover:bg-secondary/50 border border-border/40 text-muted-foreground hover:text-foreground text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+          >
+            <Send className="w-3 h-3" /> In-App Alert
+          </button>
+        </div>
       </div>
     </motion.div>
   );
