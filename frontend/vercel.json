@@ -21,6 +21,18 @@
       "schedule": "30 8 * * *"
     },
     {
+      "path": "/api/cron/hydration-reminder",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/checkin-reminder?slot=afternoon",
+      "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/cron/weather-wellness",
+      "schedule": "30 12 * * *"
+    },
+    {
       "path": "/api/cron/cycle-reminder",
       "schedule": "30 2 * * *"
     },
