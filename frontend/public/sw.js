@@ -1,6 +1,6 @@
 // Svanexa AI — Service Worker
 // Handles background push notifications from server AND local scheduling
-const CACHE_NAME = 'svanexa-sw-v2';
+const CACHE_NAME = 'svanexa-sw-v3';
 
 // ─── Install & Activate ───────────────────────────────────────────────────────
 self.addEventListener('install', () => {
@@ -20,71 +20,47 @@ self.addEventListener('activate', (event) => {
 // ─── Background Push Event ────────────────────────────────────────────────────
 // Fires when phone receives push from server (even if app is closed / phone locked)
 self.addEventListener('push', (event) => {
-  if (!event.data) {
-    // Fallback: no data - show generic reminder
-    event.waitUntil(
-      self.registration.showNotification('🌸 Svanexa AI Wellness Reminder', {
-        body: "Time for your daily health and wellness check-in!",
-        icon: '/logo.jpg',
-        badge: '/logo.jpg',
-        tag: 'svanexa-generic',
-        data: { url: '/check-in' },
-        vibrate: [200, 100, 200],
-      })
-    );
-    return;
-  }
+  let title = '🌸 Svanexa AI Wellness Reminder';
+  let body = 'Time for your daily health and wellness check-in!';
+  let targetUrl = '/check-in';
+  let tag = 'svanexa-reminder-' + Date.now();
 
-  let payload = {
-    title: '🌸 Svanexa AI Wellness Reminder',
-    message: 'Time for your daily health and wellness check-in!',
-    url: '/check-in',
-    tag: 'svanexa-checkin-reminder',
-    icon: '/logo.jpg',
-    badge: '/logo.jpg',
-  };
-
-  try {
-    const json = event.data.json();
-    payload = { ...payload, ...json };
-  } catch {
+  if (event.data) {
     try {
-      payload.message = event.data.text() || payload.message;
-    } catch {}
+      const json = event.data.json();
+      if (json.title) title = json.title;
+      if (json.message || json.body) body = json.message || json.body;
+      if (json.url || json.actionUrl) targetUrl = json.url || json.actionUrl;
+      if (json.tag) tag = json.tag;
+    } catch {
+      try {
+        const text = event.data.text();
+        if (text) body = text;
+      } catch {}
+    }
   }
 
   const notificationOptions = {
-    body: payload.message || payload.body || payload.title,
-    icon: payload.icon || '/logo.jpg',
-    badge: payload.badge || '/logo.jpg',
-    tag: payload.tag || 'svanexa-notification',
+    body,
+    icon: '/logo.jpg',
+    badge: '/logo.jpg',
+    tag,
     renotify: true,
-    vibrate: [200, 100, 200],
-    requireInteraction: false,
-    silent: false,
-    data: {
-      url: payload.url || payload.actionUrl || '/check-in',
-    },
+    vibrate: [300, 100, 300],
+    data: { url: targetUrl },
     actions: [
-      {
-        action: 'open',
-        title: payload.actionLabel || 'Complete Check-In ✅',
-      },
-      {
-        action: 'dismiss',
-        title: 'Remind Later',
-      },
-    ],
+      { action: 'open', title: 'Open Svanexa 🌸' }
+    ]
   };
 
   event.waitUntil(
     self.registration
-      .showNotification(payload.title, notificationOptions)
-      .catch((err) => {
-        console.warn('[SW] push showNotification fallback:', err);
-        return self.registration.showNotification(payload.title, {
-          body: payload.message || payload.body || payload.title,
-          data: { url: payload.url || '/check-in' },
+      .showNotification(title, notificationOptions)
+      .catch(() => {
+        // Fallback with minimal options if actions/icons fail on device
+        return self.registration.showNotification(title, {
+          body,
+          data: { url: targetUrl },
         });
       })
   );

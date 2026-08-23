@@ -233,31 +233,28 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // On mount: re-hydrate isPushSubscribed by checking for an existing browser subscription.
-  // Do NOT unsubscribe/re-subscribe on every page load — only register fresh if none exists.
+  // On mount: ensure Service Worker is registered & re-hydrate isPushSubscribed.
   useEffect(() => {
     if (
       typeof window === 'undefined' ||
-      !('serviceWorker' in navigator) ||
-      !('PushManager' in window) ||
-      !('Notification' in window)
+      !('serviceWorker' in navigator)
     ) return;
-
-    if (Notification.permission !== 'granted') return;
 
     (async () => {
       try {
-        const reg = await navigator.serviceWorker.ready;
-        const existingSub = await reg.pushManager.getSubscription();
-        if (existingSub) {
-          // Subscription already exists — mark as subscribed without touching it
-          setIsPushSubscribed(true);
-        } else {
-          // No subscription found — register fresh (first time or after browser cleared it)
-          await registerPushSubscription();
+        const reg = await navigator.serviceWorker.register('/sw.js');
+        await navigator.serviceWorker.ready;
+
+        if ('PushManager' in window && 'Notification' in window && Notification.permission === 'granted') {
+          const existingSub = await reg.pushManager.getSubscription();
+          if (existingSub) {
+            setIsPushSubscribed(true);
+          } else {
+            await registerPushSubscription();
+          }
         }
       } catch (err) {
-        console.warn('Push subscription re-hydration warning:', err);
+        console.warn('Service worker registration or push re-hydration warning:', err);
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
