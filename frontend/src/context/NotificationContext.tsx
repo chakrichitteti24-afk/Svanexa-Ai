@@ -186,17 +186,24 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       const applicationServerKey = urlBase64ToUint8Array(vapidKey);
 
       let subscription = await reg.pushManager.getSubscription();
-      if (!subscription) {
-        subscription = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey,
-        });
+      if (subscription) {
+        // Cleanly unsubscribe previous subscription to ensure latest VAPID key is bound
+        try {
+          await subscription.unsubscribe();
+        } catch (e) {
+          console.warn('Could not unsubscribe previous push subscription:', e);
+        }
       }
+
+      subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey,
+      });
 
       if (subscription) {
         const subJson = subscription.toJSON();
         if (subJson.keys?.p256dh && subJson.keys?.auth) {
-          await fetch('/api/notifications/subscribe', {
+          const res = await fetch('/api/notifications/subscribe', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -205,13 +212,25 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
               userAgent: navigator.userAgent,
             }),
           });
-          setIsPushSubscribed(true);
-          return true;
+          const resJson = await res.json().catch(() => ({}));
+          if (res.ok && resJson.success) {
+            setIsPushSubscribed(true);
+            return true;
+          } else {
+            console.error('Failed to save push subscription to backend:', resJson);
+            if (res.status === 401) {
+              toast.error('Please log in first to enable push notifications on this device.');
+            } else {
+              toast.error(resJson.error || 'Failed to register push device with server.');
+            }
+            return false;
+          }
         }
       }
       return false;
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error registering push subscription:', err);
+      toast.error(`Push subscription error: ${err.message || 'Unknown error'}`);
       return false;
     }
   }, []);
@@ -324,10 +343,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         const registered = await registerPushSubscription();
         if (registered) {
           toast.success('Push alerts enabled! Device registered for background check-in reminders.');
-        } else {
-          toast.success('Push notifications enabled!');
+          return true;
         }
-        return true;
+        return false;
       } else if (result === 'denied') {
         updatePreferences({ browserPush: false });
         setIsPushSubscribed(false);
