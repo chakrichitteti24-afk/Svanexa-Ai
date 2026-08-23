@@ -729,12 +729,23 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   // Send real background push notification to phone device
   const sendDeviceTestPush = useCallback(async () => {
-    if (permissionStatus !== 'granted') {
+    // First ensure this device is registered
+    if (permissionStatus !== 'granted' || !isPushSubscribed) {
+      const toastId = toast.loading('Registering this device first...');
       const granted = await requestPushPermission();
-      if (!granted) return;
+      if (!granted) {
+        toast.error(
+          '❌ Could not register device. Please allow notifications in your browser settings.',
+          { id: toastId, duration: 6000 }
+        );
+        return;
+      }
+      toast.success('✅ Device registered! Sending test push now...', { id: toastId });
+      // Small delay to let registration save to Supabase
+      await new Promise((r) => setTimeout(r, 1500));
     }
 
-    const toastId = toast.loading('Sending test push to your phone/device...');
+    const toastId = toast.loading('Sending test push to your phone...');
     try {
       const res = await fetch('/api/notifications/test-push', {
         method: 'POST',
@@ -743,16 +754,21 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       const data = await res.json();
       if (data.success) {
         toast.success(
-          data.message || 'Push alert sent! Lock phone or check system tray.',
-          { id: toastId }
+          data.message || '✅ Push sent! Lock your phone and check the notification tray.',
+          { id: toastId, duration: 6000 }
+        );
+      } else if (data.error === 'NO_DEVICE_REGISTERED') {
+        toast.error(
+          '❌ Phone not registered yet.\n\nTap the purple "Register This Phone" button above, allow notifications, then try again.',
+          { id: toastId, duration: 8000 }
         );
       } else {
-        toast.error(data.error || 'Failed to dispatch test push.', { id: toastId });
+        toast.error(data.error || 'Failed to dispatch test push.', { id: toastId, duration: 6000 });
       }
     } catch (err: any) {
-      toast.error('Network error testing push alert.', { id: toastId });
+      toast.error('Network error. Is the app server running?', { id: toastId });
     }
-  }, [permissionStatus, requestPushPermission]);
+  }, [permissionStatus, isPushSubscribed, requestPushPermission]);
 
   // Trigger check-in missed simulation
   const simulateMissedCheckinAlert = useCallback(async (slot: 'morning' | 'afternoon' | 'evening' | 'streak' = 'morning') => {

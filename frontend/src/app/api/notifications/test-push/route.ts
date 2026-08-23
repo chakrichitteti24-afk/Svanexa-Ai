@@ -43,8 +43,16 @@ export async function POST(req: Request) {
     if (!subscriptions || subscriptions.length === 0) {
       return NextResponse.json({
         success: false,
-        error: 'No registered devices found. Please enable Push Notifications in Settings first.',
+        error: 'NO_DEVICE_REGISTERED',
         deviceCount: 0,
+        message:
+          '❌ This phone is not registered yet.\n\n' +
+          'To fix this:\n' +
+          '1. Stay on this page (Profile → Notifications)\n' +
+          '2. Tap the purple "Register This Phone" button\n' +
+          '3. Tap "Allow" when browser asks for permission\n' +
+          '4. Wait for the badge to show "Registered ✅"\n' +
+          '5. Then tap "Send Phone Push Alert" again',
       });
     }
 

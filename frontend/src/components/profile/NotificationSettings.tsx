@@ -70,6 +70,31 @@ export function NotificationSettings() {
       </div>
 
       {/* ─────────────────────────────────────────────────────────────────
+          PHONE REGISTRATION BANNER
+          ───────────────────────────────────────────────────────────────── */}
+      {permissionStatus !== 'granted' && (
+        <div className="p-4 rounded-2xl bg-violet-500/10 border border-violet-500/30 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <Smartphone className="w-4 h-4 text-violet-400 shrink-0" />
+            <p className="text-xs font-bold text-violet-300">
+              Register THIS Phone to Receive Notifications
+            </p>
+          </div>
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            Push notifications go to <strong>this specific device</strong>. You must click the button below on
+            <strong> each phone or browser</strong> you want to receive reminders on.
+          </p>
+          <button
+            type="button"
+            onClick={requestPushPermission}
+            className="w-full py-2.5 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/40 text-violet-200 text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer"
+          >
+            <Smartphone className="w-4 h-4" /> 📱 Register This Phone for Push Alerts
+          </button>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────
           BROWSER & PHONE PUSH NOTIFICATIONS & SOUND CUES
           ───────────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -82,29 +107,39 @@ export function NotificationSettings() {
             </div>
             {permissionStatus === 'granted' ? (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3" /> Active
+                <ShieldCheck className="w-3 h-3" /> Registered ✅
               </span>
             ) : permissionStatus === 'denied' ? (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" /> Blocked
+                <AlertCircle className="w-3 h-3" /> Blocked in Browser
               </span>
             ) : (
-              <button
-                type="button"
-                onClick={requestPushPermission}
-                className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-pink-500/20 text-pink-300 hover:bg-pink-500/30 border border-pink-500/30 transition-all cursor-pointer"
-              >
-                Enable Push
-              </button>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" /> Not Yet Registered
+              </span>
             )}
           </div>
           <p className="text-[11px] text-muted-foreground leading-relaxed">
-            Delivers alerts to your phone lock screen & tray even when the app is completely closed.
+            Delivers alerts to <strong>this phone's</strong> lock screen & tray even when the app is completely closed.
           </p>
-          {permissionStatus === 'granted' && (
+          {permissionStatus === 'granted' && isPushSubscribed && (
             <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-medium pt-1 border-t border-border/20">
-              <Smartphone className="w-3 h-3" /> Device registered for background streak reminders
+              <ShieldCheck className="w-3 h-3" /> This device will receive daily check-in reminders
             </div>
+          )}
+          {permissionStatus === 'granted' && !isPushSubscribed && (
+            <button
+              type="button"
+              onClick={requestPushPermission}
+              className="mt-1 text-[10px] font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer"
+            >
+              <Smartphone className="w-3 h-3" /> Re-register this device
+            </button>
+          )}
+          {permissionStatus === 'denied' && (
+            <p className="text-[10px] text-rose-400 pt-1 border-t border-border/20">
+              ⚠️ Blocked in browser settings. Go to browser Site Settings → Notifications → Allow for this site.
+            </p>
           )}
         </div>
 
