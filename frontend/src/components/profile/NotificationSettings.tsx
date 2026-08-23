@@ -19,6 +19,9 @@ import {
   BellRing,
   Timer,
   Clock,
+  CheckCircle2,
+  XCircle,
+  RefreshCw,
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useNotifications } from '@/context/NotificationContext';
@@ -36,6 +39,33 @@ export function NotificationSettings() {
     scheduleReminderPush,
     simulateMissedCheckinAlert,
   } = useNotifications();
+
+  const [countdown, setCountdown] = React.useState<number | null>(null);
+  const [isSecure, setIsSecure] = React.useState<boolean>(true);
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsSecure(window.isSecureContext);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (countdown === null || countdown <= 0) {
+      if (countdown === 0) {
+        setCountdown(null);
+      }
+      return;
+    }
+    const timer = setTimeout(() => {
+      setCountdown(prev => (prev !== null && prev > 0 ? prev - 1 : null));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [countdown]);
+
+  const handleStartCountdown = (seconds: number) => {
+    setCountdown(seconds);
+    scheduleReminderPush(seconds);
+  };
 
   return (
     <motion.div
@@ -498,9 +528,59 @@ export function NotificationSettings() {
             <BellRing className="w-3.5 h-3.5 text-pink-400" /> Test Phone Push Notifications
           </h3>
           <p className="text-[11px] text-muted-foreground">
-            Verify how gentle reminder notifications appear on your phone lock screen when you don't open the app.
+            Verify how gentle reminder notifications appear on your phone lock screen when you don&apos;t open the app.
           </p>
         </div>
+
+        {/* Warning if on plain HTTP on mobile */}
+        {!isSecure && (
+          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-amber-300">
+                ⚠️ Mobile Browser HTTPS Required
+              </p>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Mobile browsers (Chrome, Safari) require a secure <strong>HTTPS connection</strong> to display notifications. If you are testing over local Wi-Fi HTTP, please test on your computer browser or deploy to your Vercel HTTPS URL (<strong>https://...vercel.app</strong>) on your phone.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Active Live Countdown Banner */}
+        {countdown !== null && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="p-4 rounded-2xl bg-gradient-to-r from-violet-500/20 via-purple-500/20 to-pink-500/20 border border-violet-500/40 flex items-center justify-between gap-3 shadow-lg"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-violet-500/30 text-violet-200 animate-pulse">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-violet-200 flex items-center gap-1.5">
+                  ⏱️ Reminder Armed & Counting Down!
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Lock your phone now! Notification arriving in:
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-lg font-black text-pink-300 bg-background/60 px-3 py-1 rounded-xl border border-pink-500/30">
+                {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, '0')}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCountdown(null)}
+                className="text-[10px] text-muted-foreground hover:text-foreground px-2 py-1"
+              >
+                Cancel
+              </button>
+            </div>
+          </motion.div>
+        )}
 
         {/* 5-minute explanation card */}
         <div className="p-3 rounded-2xl bg-violet-500/10 border border-violet-500/25 flex items-start gap-2.5">
@@ -522,7 +602,7 @@ export function NotificationSettings() {
           {/* Test in 5 minutes */}
           <button
             type="button"
-            onClick={() => scheduleReminderPush(300)}
+            onClick={() => handleStartCountdown(300)}
             className="px-3.5 py-2 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/40 text-violet-200 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
           >
             <Clock className="w-3.5 h-3.5 text-violet-400" /> ⏱️ In 5 Minutes (Lock Phone)
@@ -531,7 +611,7 @@ export function NotificationSettings() {
           {/* Test in 10 seconds */}
           <button
             type="button"
-            onClick={() => scheduleReminderPush(10)}
+            onClick={() => handleStartCountdown(10)}
             className="px-3 py-2 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
           >
             <Timer className="w-3.5 h-3.5" /> In 10 Seconds (Quick Test)
