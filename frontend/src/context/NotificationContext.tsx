@@ -190,20 +190,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
       const applicationServerKey = urlBase64ToUint8Array(vapidKey);
 
+      // Reuse the existing subscription if one already exists — avoids churn
       let subscription = await reg.pushManager.getSubscription();
-      if (subscription) {
-        // Cleanly unsubscribe previous subscription to ensure latest VAPID key is bound
-        try {
-          await subscription.unsubscribe();
-        } catch (e) {
-          console.warn('Could not unsubscribe previous push subscription:', e);
-        }
+      if (!subscription) {
+        subscription = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey,
+        });
       }
-
-      subscription = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey,
-      });
 
       if (subscription) {
         const subJson = subscription.toJSON();
@@ -239,16 +233,35 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Auto-sync push registration whenever browser permission is granted
+  // On mount: re-hydrate isPushSubscribed by checking for an existing browser subscription.
+  // Do NOT unsubscribe/re-subscribe on every page load — only register fresh if none exists.
   useEffect(() => {
     if (
-      typeof window !== 'undefined' &&
-      'Notification' in window &&
-      Notification.permission === 'granted'
-    ) {
-      registerPushSubscription().catch(() => {});
-    }
-  }, [registerPushSubscription]);
+      typeof window === 'undefined' ||
+      !('serviceWorker' in navigator) ||
+      !('PushManager' in window) ||
+      !('Notification' in window)
+    ) return;
+
+    if (Notification.permission !== 'granted') return;
+
+    (async () => {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const existingSub = await reg.pushManager.getSubscription();
+        if (existingSub) {
+          // Subscription already exists — mark as subscribed without touching it
+          setIsPushSubscribed(true);
+        } else {
+          // No subscription found — register fresh (first time or after browser cleared it)
+          await registerPushSubscription();
+        }
+      } catch (err) {
+        console.warn('Push subscription re-hydration warning:', err);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once on mount only
 
   // Schedule local SW reminders for today's uncompleted slots
   useEffect(() => {

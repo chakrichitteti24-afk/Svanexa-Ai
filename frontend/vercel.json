@@ -1,24 +1,49 @@
 {
   "crons": [
     {
-      "path": "/api/cron/checkin-reminder",
-      "schedule": "0 * * * *"
+      "path": "/api/cron/weather-wellness",
+      "schedule": "0 3 * * *",
+      "comment": "8:30 AM IST — Morning weather wellness tip (only sends if weather is notable)"
+    },
+    {
+      "path": "/api/cron/supplements-reminder",
+      "schedule": "30 3 * * *",
+      "comment": "9:00 AM IST — Daily supplements reminder if not logged"
     },
     {
       "path": "/api/cron/checkin-reminder?slot=morning",
-      "schedule": "30 3 * * *"
+      "schedule": "0 3 * * *",
+      "comment": "8:30 AM IST — Morning check-in reminder"
+    },
+    {
+      "path": "/api/cron/hydration-reminder",
+      "schedule": "30 6 * * *",
+      "comment": "12:00 PM IST — Midday hydration reminder if water < 2L"
     },
     {
       "path": "/api/cron/checkin-reminder?slot=afternoon",
-      "schedule": "30 8 * * *"
+      "schedule": "30 8 * * *",
+      "comment": "2:00 PM IST — Afternoon check-in reminder"
+    },
+    {
+      "path": "/api/cron/cycle-reminder",
+      "schedule": "30 2 * * *",
+      "comment": "8:00 AM IST — Period prediction alert if within 3 days"
+    },
+    {
+      "path": "/api/cron/skin-reminder",
+      "schedule": "30 14 * * *",
+      "comment": "8:00 PM IST — Evening skin care journal reminder"
     },
     {
       "path": "/api/cron/checkin-reminder?slot=evening",
-      "schedule": "0 15 * * *"
+      "schedule": "30 15 * * *",
+      "comment": "9:00 PM IST — Evening check-in reminder"
     },
     {
       "path": "/api/cron/checkin-reminder?slot=streak",
-      "schedule": "30 16 * * *"
+      "schedule": "30 16 * * *",
+      "comment": "10:00 PM IST — Streak preservation alert before midnight"
     }
   ]
 }

@@ -1,27 +1,14 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { format } from 'date-fns';
-import { sendWebPush, generateCheckinReminderPayload } from '@/lib/services/web-push';
+import { sendWebPush } from '@/lib/services/web-push';
+import { getCronSupabaseClient, fetchWeatherForCron, buildCheckinMessage } from '@/lib/services/cron-utils';
 
-function getSupabaseClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
-  // Use service role key if available for background bypass, or anon key
-  const supabaseKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    'placeholder-key';
-
-  return createClient(supabaseUrl, supabaseKey);
-}
+export const dynamic = 'force-dynamic';
 
 function determineAutoSlot(currentHour: number): 'morning' | 'afternoon' | 'evening' {
-  if (currentHour >= 5 && currentHour < 12) {
-    return 'morning';
-  } else if (currentHour >= 12 && currentHour < 18) {
-    return 'afternoon';
-  } else {
-    return 'evening';
-  }
+  if (currentHour >= 5 && currentHour < 12) return 'morning';
+  else if (currentHour >= 12 && currentHour < 18) return 'afternoon';
+  else return 'evening';
 }
 
 async function handleCheckinReminders(req: Request) {
@@ -31,7 +18,6 @@ async function handleCheckinReminders(req: Request) {
     const authHeader = req.headers.get('authorization');
     const querySecret = url.searchParams.get('secret');
 
-    // Optional Cron Secret Authorization verification
     if (cronSecret && authHeader !== `Bearer ${cronSecret}` && querySecret !== cronSecret) {
       return NextResponse.json({ success: false, error: 'Unauthorized cron request' }, { status: 401 });
     }
@@ -44,14 +30,13 @@ async function handleCheckinReminders(req: Request) {
     const todayStr = format(now, 'yyyy-MM-dd');
 
     const slot: 'morning' | 'afternoon' | 'evening' | 'streak' =
-      requestedSlot === 'morning' ||
-      requestedSlot === 'afternoon' ||
-      requestedSlot === 'evening' ||
-      requestedSlot === 'streak'
-        ? requestedSlot
-        : determineAutoSlot(currentHour);
+      requestedSlot === 'morning' || requestedSlot === 'afternoon' ||
+      requestedSlot === 'evening' || requestedSlot === 'streak'
+        ? requestedSlot : determineAutoSlot(currentHour);
 
-    const supabase = getSupabaseClient();
+    const supabase = getCronSupabaseClient();
+    const weather = await fetchWeatherForCron();
+
 
     // 1. Fetch all push subscriptions
     let subsQuery = supabase
@@ -175,14 +160,22 @@ async function handleCheckinReminders(req: Request) {
         isCompleted = Boolean(summary.morning?.completed && summary.evening?.completed);
       }
 
-      // If user hasn't completed check-in, dispatch phone push reminder!
       if (!isCompleted) {
         incompleteUserCount++;
-        const payload = generateCheckinReminderPayload(
+        const { title, body } = buildCheckinMessage(
           userName,
           slot === 'streak' || (currentHour >= 20 && userStreak > 1) ? 'streak' : slot,
-          userStreak
+          userStreak,
+          weather
         );
+        const payload = {
+          title,
+          message: body,
+          url: '/check-in',
+          actionLabel: slot === 'streak' || userStreak > 0 ? 'Protect Streak' : 'Complete Check-In',
+          tag: `checkin-${slot}`,
+          category: 'checkin' as const,
+        };
 
         const userSubs = userSubMap.get(userId) || [];
         let userSentDevices = 0;

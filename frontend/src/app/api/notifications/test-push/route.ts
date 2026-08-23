@@ -87,37 +87,41 @@ export async function POST(req: Request) {
             category: 'system' as const,
           };
 
-    // If a delay is requested (e.g. 5 minutes or 10 seconds), schedule in background
+    // NOTE: setTimeout does NOT work on serverless (Vercel/Edge) because the function
+    // terminates after the response is returned. Delayed pushes are handled client-side
+    // via the Service Worker scheduler. Here we always send immediately from the server.
     if (delaySeconds > 0) {
-      // Fire asynchronously after delay
-      setTimeout(async () => {
-        for (const sub of subscriptions) {
-          try {
-            await sendWebPush(
-              {
-                endpoint: sub.endpoint,
-                keys: {
-                  p256dh: sub.p256dh,
-                  auth: sub.auth,
-                },
-              },
-              payload
-            );
-          } catch (e) {
-            console.error('Background scheduled push delivery error:', e);
-          }
-        }
-      }, delaySeconds * 1000);
+      // Send immediately — the client's Service Worker handles the visual delay
+      const immediateResults = [];
+      const deadIds: string[] = [];
 
+      for (const sub of subscriptions) {
+        const pushResult = await sendWebPush(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          payload
+        );
+        immediateResults.push({ id: sub.id, success: pushResult.success, statusCode: pushResult.statusCode, error: pushResult.error });
+        if (pushResult.shouldDeleteSubscription) deadIds.push(sub.id);
+      }
+
+      if (deadIds.length > 0) {
+        await supabase.from('push_subscriptions').delete().in('id', deadIds);
+      }
+
+      const successCount = immediateResults.filter((r) => r.success).length;
       const delayMinutes = Math.round(delaySeconds / 60);
       const timeLabel = delaySeconds >= 60 ? `${delayMinutes} minute(s)` : `${delaySeconds} seconds`;
 
       return NextResponse.json({
-        success: true,
+        success: successCount > 0,
         scheduled: true,
         delaySeconds,
         totalDevices: subscriptions.length,
-        message: `⏱️ Background alert scheduled for ${timeLabel} from now! Lock your phone now and wait — your phone screen will light up with the gentle health reminder.`,
+        sentCount: successCount,
+        message:
+          successCount > 0
+            ? `✅ Push dispatched to ${successCount} device(s). Note: server-side delay scheduling is handled by the Service Worker on your device.`
+            : `Failed to send push. Error: ${immediateResults[0]?.error || 'Push service rejected'}`,
       });
     }
 
