@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { format } from 'date-fns';
 import { sendWebPush } from '@/lib/services/web-push';
-import { getCronSupabaseClient, fetchWeatherForCron, buildCheckinMessage } from '@/lib/services/cron-utils';
+import { getCronSupabaseClient, getUserPreferencesMap, buildCheckinMessage } from '@/lib/services/cron-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +35,6 @@ async function handleCheckinReminders(req: Request) {
         ? requestedSlot : determineAutoSlot(currentHour);
 
     const supabase = getCronSupabaseClient();
-    const weather = await fetchWeatherForCron();
 
 
     // 1. Fetch all push subscriptions
@@ -75,27 +74,20 @@ async function handleCheckinReminders(req: Request) {
 
     const userIds = Array.from(userSubMap.keys());
 
-    // 3. Fetch profiles safely
-    const profileMap = new Map<string, { full_name: string; notifications_enabled: boolean }>();
-    try {
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('*')
-        .in('id', userIds);
+    // 3. Fetch profiles and user preferences in parallel
+    const [profilesRes, prefMap] = await Promise.all([
+      supabase.from('profiles').select('id, username, first_name, last_name').in('id', userIds),
+      getUserPreferencesMap(supabase, userIds),
+    ]);
 
-      if (profiles) {
-        for (const p of profiles) {
-          profileMap.set(p.id, {
-            full_name: (p.username && p.username !== 'User' ? p.username : p.full_name) || 'there',
-            notifications_enabled: p.notifications_enabled ?? true,
-          });
-        }
+    const profileMap = new Map<string, any>();
+    if (profilesRes.data) {
+      for (const p of profilesRes.data) {
+        profileMap.set(p.id, p);
       }
-    } catch (e) {
-      console.warn('Profiles query warning in cron:', e);
     }
 
-    // 4. Fetch today's check-ins for these users
+    // 4. Fetch today's check-ins to verify if user has already completed the slot
     const { data: todayCheckins } = await supabase
       .from('daily_checkins')
       .select('user_id, summary')
@@ -134,17 +126,23 @@ async function handleCheckinReminders(req: Request) {
 
     for (const userId of userIds) {
       const userProfile = profileMap.get(userId);
+      const userPref = prefMap.get(userId);
 
-      // Skip if user explicitly disabled notifications in profile
-      if (userProfile && userProfile.notifications_enabled === false) {
+      // Check Master & Individual Notification Controls
+      if (userPref) {
+        if (userPref.enabled === false) continue;
+        if (slot === 'morning' && userPref.morningCheckin === false) continue;
+        if (slot === 'afternoon' && userPref.afternoonCheckin === false) continue;
+        if (slot === 'evening' && userPref.eveningCheckin === false) continue;
+      } else if (userProfile && userProfile.notifications_enabled === false) {
         continue;
       }
 
       const summary = checkinMap.get(userId) || {};
       const userStreak = streakMap.get(userId) || 0;
-      const userName = userProfile?.full_name || 'there';
+      const userName = userProfile?.full_name || userProfile?.username || 'there';
 
-      // Determine if check-in is completed for the target slot
+      // Determine if check-in is already completed for the target slot (SUPPRESSION RULE)
       let isCompleted = false;
 
       if (slot === 'morning') {
@@ -157,23 +155,23 @@ async function handleCheckinReminders(req: Request) {
         // Any check-in slot completed today keeps streak alive
         isCompleted = Boolean(summary.morning?.completed || summary.afternoon?.completed || summary.evening?.completed);
       } else {
-        isCompleted = Boolean(summary.morning?.completed && summary.evening?.completed);
+        isCompleted = Boolean(summary.morning?.completed && summary.afternoon?.completed && summary.evening?.completed);
       }
 
+      // If user ALREADY completed check-in, SUPPRESS reminder (DO NOT SEND)
       if (!isCompleted) {
         incompleteUserCount++;
         const { title, body } = buildCheckinMessage(
           userName,
           slot === 'streak' || (currentHour >= 20 && userStreak > 1) ? 'streak' : slot,
-          userStreak,
-          weather
+          userStreak
         );
         const payload = {
           title,
           message: body,
           url: '/check-in',
           actionLabel: slot === 'streak' || userStreak > 0 ? 'Protect Streak' : 'Complete Check-In',
-          tag: `checkin-${slot}`,
+          tag: `checkin-${slot}-${todayStr}`,
           category: 'checkin' as const,
         };
 

@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { format, subDays, startOfWeek, endOfWeek } from 'date-fns';
 import { getCronSupabaseClient } from '@/lib/services/cron-utils';
 import { sendWebPush } from '@/lib/services/web-push';
@@ -70,10 +70,10 @@ async function handleReport(req: Request, isMonthly = false) {
     const profileMap = new Map<string, string>();
     try {
       const { data: profiles } = await supabase
-        .from('profiles').select('id, username, full_name').in('id', userIds);
+        .from('profiles').select('id, username, first_name, last_name').in('id', userIds);
       if (profiles) {
         for (const p of profiles) {
-          profileMap.set(p.id, (p.username && p.username !== 'User' ? p.username : p.full_name) || 'there');
+          profileMap.set(p.id, (p.username && p.username !== 'User' ? p.username : p.first_name) || 'there');
         }
       }
     } catch {}

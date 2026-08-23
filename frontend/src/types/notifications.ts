@@ -30,17 +30,28 @@ export interface ReminderSchedule {
 }
 
 export interface NotificationPreferences {
-  enabled: boolean;
+  enabled: boolean; // Master ON / OFF
   browserPush: boolean;
   soundEnabled: boolean;
-  cycleAlerts: boolean;
-  checkinAlerts: boolean;
-  repeatUntilCheckinComplete: boolean; // Main feature: repeating gentle notifications until check-in is complete
-  recurringIntervalMinutes: number; // Default 5 minutes
-  hydrationAlerts: boolean;
-  supplementAlerts: boolean;
-  skinAlerts: boolean;
-  lunaInsights: boolean;
+  // Individual controls
+  morningCheckin: boolean;
+  afternoonCheckin: boolean;
+  eveningCheckin: boolean;
+  wellnessTasks: boolean;
+  wellnessPlan: boolean;
+  coinsRewards: boolean;
+  cycleTracker: boolean;
+  aiCompanion: boolean;
+  // Legacy / supplemental
+  cycleAlerts?: boolean;
+  checkinAlerts?: boolean;
+  hydrationAlerts?: boolean;
+  supplementAlerts?: boolean;
+  skinAlerts?: boolean;
+  lunaInsights?: boolean;
+  repeatUntilCheckinComplete?: boolean;
+  recurringIntervalMinutes?: number;
+  timezone?: string;
   reminderSchedule: ReminderSchedule;
 }
 
@@ -48,17 +59,27 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   enabled: true,
   browserPush: true,
   soundEnabled: true,
+  morningCheckin: true,
+  afternoonCheckin: true,
+  eveningCheckin: true,
+  wellnessTasks: true,
+  wellnessPlan: true,
+  coinsRewards: true,
+  cycleTracker: true,
+  aiCompanion: true,
   cycleAlerts: true,
   checkinAlerts: true,
-  repeatUntilCheckinComplete: true,
-  recurringIntervalMinutes: 5,
   hydrationAlerts: true,
   supplementAlerts: true,
   skinAlerts: true,
   lunaInsights: true,
+  repeatUntilCheckinComplete: false,
+  recurringIntervalMinutes: 30,
+  timezone: 'Asia/Kolkata',
   reminderSchedule: {
     morningTime: '08:30',
     afternoonTime: '14:00',
     eveningTime: '21:30',
   },
 };
+

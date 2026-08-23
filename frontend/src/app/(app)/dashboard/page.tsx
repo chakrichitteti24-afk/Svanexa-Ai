@@ -20,6 +20,7 @@ import { DashboardSkeleton } from '@/components/ui/skeleton';
 import { HormoneFoodSolver } from '@/components/nutrition/HormoneFoodSolver';
 import { WeatherWidget } from '@/components/weather/WeatherWidget';
 import { triggerHaptic } from '@/utils/haptics';
+import { DashboardNotificationPrompt } from '@/components/dashboard/DashboardNotificationPrompt';
 
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
@@ -358,6 +359,9 @@ export default function DashboardPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Polite Permission Prompt (only if not granted and not dismissed) */}
+      <DashboardNotificationPrompt />
 
       {/* Header */}
       <motion.header

@@ -63,6 +63,19 @@
     {
       "path": "/api/cron/weekly-report?type=monthly",
       "schedule": "30 3 1 * *"
+    },
+    {
+      "path": "/api/cron/wellness-plan-reminder",
+      "schedule": "15 3 * * *"
+    },
+    {
+      "path": "/api/cron/wellness-tasks-reminder",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/wellness-tasks-reminder",
+      "schedule": "30 11 * * *"
     }
   ]
 }
+

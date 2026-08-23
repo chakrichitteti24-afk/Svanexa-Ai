@@ -95,6 +95,33 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     return DEFAULT_NOTIFICATION_PREFERENCES;
   });
 
+  // Load preferences from Supabase as source of truth on mount
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const res = await apiFetch('/api/notifications/preferences');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.preferences && isMounted) {
+            setPreferences((prev) => ({
+              ...prev,
+              ...data.preferences,
+            }));
+            try {
+              localStorage.setItem(STORAGE_KEY_PREFS, JSON.stringify(data.preferences));
+            } catch {}
+          }
+        }
+      } catch (err) {
+        console.warn('Could not load notification preferences from Supabase:', err);
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const [readIds, setReadIds] = useState<Set<string>>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -138,10 +165,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // 2. Save preferences
+  // 2. Save preferences to Supabase
   const updatePreferences = useCallback((newPrefs: Partial<NotificationPreferences>) => {
     setPreferences(prev => {
-      const updated = {
+      const updated: NotificationPreferences = {
         ...prev,
         ...newPrefs,
         reminderSchedule: {
@@ -149,9 +176,20 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           ...(newPrefs.reminderSchedule || {}),
         },
       };
+
+      // Optimistic cache
       try {
         localStorage.setItem(STORAGE_KEY_PREFS, JSON.stringify(updated));
       } catch {}
+
+      // Persist directly to Supabase as source of truth
+      apiFetch('/api/notifications/preferences', {
+        method: 'POST',
+        body: JSON.stringify({ preferences: updated }),
+      }).catch((err) => {
+        console.warn('Failed to sync notification preferences to Supabase:', err);
+      });
+
       return updated;
     });
   }, []);
@@ -465,100 +503,123 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     const afternoonDecimal = afternoonParts[0] + (afternoonParts[1] || 0) / 60;
     const eveningDecimal = eveningParts[0] + (eveningParts[1] || 0) / 60;
 
-    // A. Daily Care Journal & Streak Alerts
-    if (preferences.checkinAlerts) {
-      // Morning Slot Check
+    // 1. Morning Check-In Alert
+    if (preferences.morningCheckin ?? preferences.checkinAlerts ?? true) {
       if (currentDecimal < afternoonDecimal && !checkinSlots.morning.completed) {
         alerts.push({
           id: `checkin-morning-${todayStr}`,
-          title: '🌅 Morning Check-In Ready',
-          message: 'Start your morning with a 60-second wellness check-in to balance your day.',
+          title: '🌅 Morning Check-In',
+          message: 'Your morning check-in is ready.',
           category: 'checkin',
           priority: 'normal',
           timestamp: new Date(now.getFullYear(), now.getMonth(), now.getDate(), morningParts[0], morningParts[1] || 0).toISOString(),
           read: false,
           actionUrl: '/check-in',
-          actionLabel: 'Log Morning Slot',
+          actionLabel: 'Complete Check-In',
         });
       }
+    }
 
-      // Afternoon Slot Check
+    // 2. Afternoon Check-In Alert
+    if (preferences.afternoonCheckin ?? preferences.checkinAlerts ?? true) {
       if (currentDecimal >= afternoonDecimal && currentDecimal < eveningDecimal && !checkinSlots.afternoon.completed) {
         alerts.push({
           id: `checkin-afternoon-${todayStr}`,
-          title: '☀️ Afternoon Energy & Stress Check',
-          message: 'How is your energy and mood feeling this afternoon? Take a moment to log.',
+          title: '☀️ Afternoon Check-In',
+          message: 'Your afternoon wellness check-in is ready.',
           category: 'checkin',
           priority: 'normal',
           timestamp: new Date(now.getFullYear(), now.getMonth(), now.getDate(), afternoonParts[0], afternoonParts[1] || 0).toISOString(),
           read: false,
           actionUrl: '/check-in',
-          actionLabel: 'Log Afternoon Slot',
+          actionLabel: 'Complete Check-In',
         });
       }
+    }
 
-      // Evening Slot Check
+    // 3. Evening Check-In Alert
+    if (preferences.eveningCheckin ?? preferences.checkinAlerts ?? true) {
       if (currentDecimal >= eveningDecimal && !checkinSlots.evening.completed) {
         alerts.push({
           id: `checkin-evening-${todayStr}`,
-          title: '🌙 Evening Journal & Reflection',
-          message: 'Complete your evening check-in to close out your day and record your daily habits.',
+          title: '🌙 Evening Reflection',
+          message: 'Your evening reflection is ready.',
           category: 'checkin',
-          priority: 'high',
+          priority: 'normal',
           timestamp: new Date(now.getFullYear(), now.getMonth(), now.getDate(), eveningParts[0], eveningParts[1] || 0).toISOString(),
           read: false,
           actionUrl: '/check-in',
-          actionLabel: 'Log Evening Slot',
+          actionLabel: 'Complete Reflection',
         });
       }
 
-      // Streak Preservation Alert
-      if (currentStreak > 0 && !hasCheckedInToday && currentDecimal >= (eveningDecimal - 3)) {
+      // Streak Preservation Alert (Before midnight if not checked in yet)
+      if (currentStreak > 0 && !hasCheckedInToday && currentDecimal >= (eveningDecimal - 2)) {
         alerts.push({
           id: `streak-preservation-${todayStr}`,
-          title: `🔥 Protect Your ${currentStreak}-Day Streak!`,
-          message: `You're on a ${currentStreak}-day streak! Complete your daily journal before midnight to keep it going.`,
+          title: `🔥 Daily Streak Check-In`,
+          message: 'Save your daily check-in to keep your wellness streak active.',
           category: 'checkin',
           priority: 'high',
           timestamp: now.toISOString(),
           read: false,
           actionUrl: '/check-in',
-          actionLabel: 'Keep Streak Alive',
+          actionLabel: 'Check In Now',
         });
       }
     }
 
-    // B. Hydration Alerts
-    if (preferences.hydrationAlerts) {
-      if (currentHour >= 11 && (todayLog.water === null || todayLog.water === 0)) {
+    // 4. Pending Wellness Tasks Alert
+    if (preferences.wellnessTasks ?? true) {
+      if (!allSlotsComplete && currentHour >= 12) {
         alerts.push({
-          id: `hydration-morning-${todayStr}`,
-          title: '💧 Morning Hydration',
-          message: 'Drink a glass of water to kickstart your metabolism and hormone flush.',
-          category: 'hydration',
+          id: `wellness-tasks-${todayStr}`,
+          title: '✨ Daily Wellness Tasks',
+          message: 'You have a wellness task waiting for you.',
+          category: 'checkin',
           priority: 'normal',
-          timestamp: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10, 30).toISOString(),
+          timestamp: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0).toISOString(),
           read: false,
-          actionUrl: '/check-in',
-          actionLabel: 'Log Water',
-        });
-      } else if (currentHour >= 14 && typeof todayLog.water === 'number' && todayLog.water < 1.5) {
-        alerts.push({
-          id: `hydration-afternoon-${todayStr}`,
-          title: '💧 Hydration Progress Check',
-          message: `You've logged ${todayLog.water}L today. Aim to reach your 2.0L - 2.5L daily goal to reduce bloating.`,
-          category: 'hydration',
-          priority: 'normal',
-          timestamp: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 14, 30).toISOString(),
-          read: false,
-          actionUrl: '/check-in',
-          actionLabel: 'Add Water',
+          actionUrl: '/dashboard',
+          actionLabel: 'View Tasks',
         });
       }
     }
 
-    // C. Cycle & Period Prediction Alerts
-    if (preferences.cycleAlerts && Array.isArray(cycleHistory) && cycleHistory.length > 0) {
+    // 5. Today's Wellness Plan Ready Alert
+    if (preferences.wellnessPlan ?? true) {
+      alerts.push({
+        id: `wellness-plan-ready-${todayStr}`,
+        title: '📋 Daily Care Plan',
+        message: "Your wellness plan for today is ready.",
+        category: 'system',
+        priority: 'normal',
+        timestamp: new Date(now.getFullYear(), now.getMonth(), now.getDate(), morningParts[0], (morningParts[1] || 0) + 15).toISOString(),
+        read: false,
+        actionUrl: '/wellness-plan',
+        actionLabel: 'View Plan',
+      });
+    }
+
+    // 6. Coins & Rewards Alert
+    if (preferences.coinsRewards ?? true) {
+      if (hasCheckedInToday) {
+        alerts.push({
+          id: `coins-reward-${todayStr}`,
+          title: '🪙 Svanexa Rewards',
+          message: 'You earned Svanexa Coins for your check-in today.',
+          category: 'system',
+          priority: 'low',
+          timestamp: now.toISOString(),
+          read: false,
+          actionUrl: '/store',
+          actionLabel: 'View Rewards',
+        });
+      }
+    }
+
+    // 7. Relevant Cycle Tracker Alert
+    if ((preferences.cycleTracker ?? preferences.cycleAlerts ?? true) && Array.isArray(cycleHistory) && cycleHistory.length > 0) {
       try {
         const engine = new CycleIntelligenceEngine(
           cycleHistory.map(c => ({
@@ -566,7 +627,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             endDate: c.end_date || c.start_date,
           })),
           {},
-          herSyncPrefs?.theme === 'pcos'
+          wellnessMode === 'pcos'
         );
         const prediction = engine.predictNextPeriod();
 
@@ -575,23 +636,16 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           const daysUntilLikely = differenceInDays(prediction.likelyDate, now);
 
           if (daysUntilEarliest <= 3 && daysUntilLikely >= -1) {
-            const dayText =
-              daysUntilLikely === 0
-                ? 'today'
-                : daysUntilLikely === 1
-                ? 'tomorrow'
-                : `in ~${daysUntilLikely} days`;
-
             alerts.push({
               id: `cycle-prediction-${prediction.expectedPeriod}`,
-              title: '🌸 Upcoming Period Forecast',
-              message: `Your period is predicted ${dayText} (${prediction.expectedPeriod}). Have your care essentials ready.`,
+              title: '🌸 Cycle Tracker Update',
+              message: 'Your daily wellness cycle update is ready.',
               category: 'cycle',
               priority: 'high',
               timestamp: now.toISOString(),
               read: false,
               actionUrl: '/cycle',
-              actionLabel: 'View Cycle Calendar',
+              actionLabel: 'View Calendar',
             });
           }
         }
@@ -600,78 +654,19 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // D. Supplements & Wellness Mode Care Alerts
-    if (preferences.supplementAlerts) {
-      if (wellnessMode === 'pcos') {
-        alerts.push({
-          id: `supplements-pcos-${todayStr}`,
-          title: '💊 PCOS Routine & Supplements',
-          message: 'Have you taken your Inositol, Vitamin D, or Omega-3 today? Consistency supports insulin balance.',
-          category: 'supplements',
-          priority: 'normal',
-          timestamp: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0).toISOString(),
-          read: false,
-          actionUrl: '/wellness-plan',
-          actionLabel: 'View Care Plan',
-        });
-      } else if (wellnessMode === 'pregnancy') {
-        alerts.push({
-          id: `supplements-preg-${todayStr}`,
-          title: '🤰 Prenatal Care Reminder',
-          message: 'Remember your prenatal vitamins & stay comfortably hydrated throughout the day.',
-          category: 'supplements',
-          priority: 'normal',
-          timestamp: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0).toISOString(),
-          read: false,
-          actionUrl: '/wellness-plan',
-          actionLabel: 'View Care Plan',
-        });
-      }
-    }
-
-    // E. Skin Care Routine Alerts
-    if (preferences.skinAlerts && currentHour >= 19) {
+    // 8. Important AI Companion Notification
+    if (preferences.aiCompanion ?? preferences.lunaInsights ?? true) {
       alerts.push({
-        id: `skin-routine-${todayStr}`,
-        title: '🧴 Evening Skincare Journal',
-        message: 'Log today’s skin condition or flare-ups to correlate with your stress and sleep cycles.',
-        category: 'skin',
-        priority: 'low',
-        timestamp: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 19, 30).toISOString(),
+        id: `ai-companion-note-${todayStr}`,
+        title: `🤖 ${aiName || 'Luna'} AI`,
+        message: `${aiName || 'Luna'} has a gentle wellness thought for you.`,
+        category: 'luna',
+        priority: 'normal',
+        timestamp: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10, 0).toISOString(),
         read: false,
-        actionUrl: '/skin',
-        actionLabel: 'Log Skin',
+        actionUrl: '/dashboard',
+        actionLabel: 'Open Dashboard',
       });
-    }
-
-    // F. AI Luna Insights
-    if (preferences.lunaInsights) {
-      if (todayLog.stress !== null && todayLog.stress >= 7) {
-        alerts.push({
-          id: `luna-stress-${todayStr}`,
-          title: `🤖 ${aiName}'s Stress Relief Tip`,
-          message: 'High stress was detected in your logs. Take 5 minutes for guided breathwork or gentle stretching.',
-          category: 'luna',
-          priority: 'normal',
-          timestamp: now.toISOString(),
-          read: false,
-          actionUrl: '/wellness-plan',
-          actionLabel: 'Relaxation Plan',
-        });
-      }
-      if (todayLog.sleep !== null && todayLog.sleep < 6) {
-        alerts.push({
-          id: `luna-sleep-${todayStr}`,
-          title: `🤖 ${aiName}'s Sleep Insight`,
-          message: `You recorded ${todayLog.sleep}h of sleep. Restful sleep is essential for hormonal regulation.`,
-          category: 'luna',
-          priority: 'normal',
-          timestamp: now.toISOString(),
-          read: false,
-          actionUrl: '/reports',
-          actionLabel: 'View Health Trends',
-        });
-      }
     }
 
     return alerts;
@@ -679,6 +674,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     preferences,
     todayLog,
     checkinSlots,
+    allSlotsComplete,
     hasCheckedInToday,
     currentStreak,
     cycleHistory,
