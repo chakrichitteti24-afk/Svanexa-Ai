@@ -17,6 +17,8 @@ import {
   Play,
   Smartphone,
   BellRing,
+  Timer,
+  Clock,
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useNotifications } from '@/context/NotificationContext';
@@ -31,6 +33,7 @@ export function NotificationSettings() {
     requestPushPermission,
     sendTestNotification,
     sendDeviceTestPush,
+    scheduleReminderPush,
     simulateMissedCheckinAlert,
   } = useNotifications();
 
@@ -443,33 +446,67 @@ export function NotificationSettings() {
       {/* ─────────────────────────────────────────────────────────────────
           LIVE TESTING & MISSED CHECK-IN ALERT SIMULATION
           ───────────────────────────────────────────────────────────────── */}
-      <div className="pt-3 border-t border-border/30 space-y-3">
+      <div className="pt-3 border-t border-border/30 space-y-3.5">
         <div>
           <h3 className="text-xs font-bold text-foreground flex items-center gap-1.5">
-            <BellRing className="w-3.5 h-3.5 text-pink-400" /> Test Real Phone & Background Alerts
+            <BellRing className="w-3.5 h-3.5 text-pink-400" /> Test Phone Push Notifications
           </h3>
           <p className="text-[11px] text-muted-foreground">
-            Verify how push notifications appear on your phone lock screen when the app is closed.
+            Verify how gentle reminder notifications appear on your phone lock screen when you don't open the app.
           </p>
         </div>
 
+        {/* 5-minute explanation card */}
+        <div className="p-3 rounded-2xl bg-violet-500/10 border border-violet-500/25 flex items-start gap-2.5">
+          <Timer className="w-4 h-4 text-violet-400 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="text-xs font-bold text-violet-300">
+              How to test the background check-in reminder on your phone:
+            </p>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Tap <strong>&ldquo;⏱️ In 5 Minutes&rdquo;</strong>, then lock your phone and put it aside. In 5 minutes, your phone will ring and vibrate with:
+              <span className="text-pink-300 font-semibold block mt-0.5">
+                &ldquo;🌅 Hey! Don&apos;t forget your check-in today — it only takes 60 seconds!&rdquo;
+              </span>
+            </p>
+          </div>
+        </div>
+
         <div className="flex flex-wrap items-center gap-2">
-          {/* Test Real Phone Push */}
+          {/* Test in 5 minutes */}
+          <button
+            type="button"
+            onClick={() => scheduleReminderPush(300)}
+            className="px-3.5 py-2 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/40 text-violet-200 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
+          >
+            <Clock className="w-3.5 h-3.5 text-violet-400" /> ⏱️ In 5 Minutes (Lock Phone)
+          </button>
+
+          {/* Test in 10 seconds */}
+          <button
+            type="button"
+            onClick={() => scheduleReminderPush(10)}
+            className="px-3 py-2 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
+          >
+            <Timer className="w-3.5 h-3.5" /> In 10 Seconds (Quick Test)
+          </button>
+
+          {/* Test Right Now */}
           <button
             type="button"
             onClick={sendDeviceTestPush}
-            className="px-3.5 py-2 rounded-xl bg-pink-500/15 hover:bg-pink-500/25 border border-pink-500/30 text-pink-300 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
+            className="px-3 py-2 rounded-xl bg-pink-500/15 hover:bg-pink-500/25 border border-pink-500/30 text-pink-300 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
           >
-            <Smartphone className="w-3.5 h-3.5" /> Send Phone Push Alert
+            <Smartphone className="w-3.5 h-3.5" /> Send Right Now
           </button>
 
           {/* Simulate Missed Check-In Alert */}
           <button
             type="button"
             onClick={() => simulateMissedCheckinAlert('streak')}
-            className="px-3.5 py-2 rounded-xl bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 text-violet-300 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
+            className="px-3 py-2 rounded-xl bg-secondary/30 hover:bg-secondary/50 border border-border/40 text-muted-foreground hover:text-foreground text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
           >
-            <CheckSquare className="w-3.5 h-3.5" /> Simulate Missed Check-In Trigger
+            <CheckSquare className="w-3.5 h-3.5" /> Check Missed Check-Ins
           </button>
 
           {/* In-App Test */}
@@ -478,7 +515,7 @@ export function NotificationSettings() {
             onClick={sendTestNotification}
             className="px-3 py-2 rounded-xl bg-secondary/30 hover:bg-secondary/50 border border-border/40 text-muted-foreground hover:text-foreground text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
           >
-            <Send className="w-3 h-3" /> In-App Alert
+            <Send className="w-3 h-3" /> In-App Chime
           </button>
         </div>
       </div>

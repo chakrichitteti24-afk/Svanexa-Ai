@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/utils/supabase/server';
-import { sendWebPush } from '@/lib/services/web-push';
+import { sendWebPush, generateCheckinReminderPayload } from '@/lib/services/web-push';
 
 export async function POST(req: Request) {
   try {
@@ -8,13 +8,31 @@ export async function POST(req: Request) {
 
     if (!user) {
       return NextResponse.json(
-        { success: false, error: 'Authentication required to test push notifications' },
+        { success: false, error: 'Authentication required to test push notifications. Please log in first.' },
         { status: 401 }
       );
     }
 
+    // Parse options from body or query
+    let delaySeconds = 0;
+    let reminderType: 'checkin' | 'system' = 'checkin';
+    let slot: 'morning' | 'afternoon' | 'evening' | 'streak' = 'morning';
+
+    try {
+      const body = await req.json();
+      if (typeof body.delaySeconds === 'number') {
+        delaySeconds = Math.max(0, body.delaySeconds);
+      }
+      if (body.type) reminderType = body.type;
+      if (body.slot) slot = body.slot;
+    } catch {
+      const url = new URL(req.url);
+      const qDelay = url.searchParams.get('delay');
+      if (qDelay) delaySeconds = parseInt(qDelay, 10) || 0;
+    }
+
     // Get user profile for personalized name
-    let name = 'Wellness Explorer';
+    let name = 'there';
     try {
       const { data: profile } = await supabase
         .from('profiles')
@@ -56,16 +74,54 @@ export async function POST(req: Request) {
       });
     }
 
-    const testPayload = {
-      title: '✨ Svanexa AI Phone Alert',
-      message: `Hello ${name}! Background push notifications are active and working on your device.`,
-      url: '/dashboard',
-      actionUrl: '/dashboard',
-      actionLabel: 'Open Svanexa',
-      tag: 'test-push-notification',
-      category: 'system' as const,
-    };
+    const payload =
+      reminderType === 'checkin'
+        ? generateCheckinReminderPayload(name, slot, 0)
+        : {
+            title: '✨ Svanexa AI Phone Alert',
+            message: `Hello ${name}! Background push notifications are active and working on your device.`,
+            url: '/dashboard',
+            actionUrl: '/dashboard',
+            actionLabel: 'Open Svanexa',
+            tag: 'test-push-notification',
+            category: 'system' as const,
+          };
 
+    // If a delay is requested (e.g. 5 minutes or 10 seconds), schedule in background
+    if (delaySeconds > 0) {
+      // Fire asynchronously after delay
+      setTimeout(async () => {
+        for (const sub of subscriptions) {
+          try {
+            await sendWebPush(
+              {
+                endpoint: sub.endpoint,
+                keys: {
+                  p256dh: sub.p256dh,
+                  auth: sub.auth,
+                },
+              },
+              payload
+            );
+          } catch (e) {
+            console.error('Background scheduled push delivery error:', e);
+          }
+        }
+      }, delaySeconds * 1000);
+
+      const delayMinutes = Math.round(delaySeconds / 60);
+      const timeLabel = delaySeconds >= 60 ? `${delayMinutes} minute(s)` : `${delaySeconds} seconds`;
+
+      return NextResponse.json({
+        success: true,
+        scheduled: true,
+        delaySeconds,
+        totalDevices: subscriptions.length,
+        message: `⏱️ Background alert scheduled for ${timeLabel} from now! Lock your phone now and wait — your phone screen will light up with the gentle health reminder.`,
+      });
+    }
+
+    // Immediate dispatch
     const results = [];
     const deadSubIds: string[] = [];
 
@@ -78,7 +134,7 @@ export async function POST(req: Request) {
             auth: sub.auth,
           },
         },
-        testPayload
+        payload
       );
 
       results.push({
@@ -107,8 +163,8 @@ export async function POST(req: Request) {
       results,
       message:
         successCount > 0
-          ? `Test alert dispatched to ${successCount} device(s). Check your phone lock screen / notification tray!`
-          : 'Failed to send push notification to registered devices.',
+          ? `✅ Health reminder dispatched to ${successCount} device(s). Check your phone lock screen / notification tray!`
+          : `Failed to send push notification. Error: ${results[0]?.error || 'Push service rejected'}`,
     });
   } catch (error: any) {
     console.error('Error in /api/notifications/test-push:', error);

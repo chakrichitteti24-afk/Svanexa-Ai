@@ -18,6 +18,7 @@ import {
 } from '@/types/notifications';
 import { playWellnessChime } from '@/utils/sound-effects';
 import { CycleIntelligenceEngine } from '@/lib/services/cycle-intelligence';
+import { apiFetch } from '@/utils/api-client';
 import { differenceInDays, format } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -35,6 +36,7 @@ interface NotificationContextValue {
   requestPushPermission: () => Promise<boolean>;
   sendTestNotification: () => void;
   sendDeviceTestPush: () => Promise<void>;
+  scheduleReminderPush: (delaySeconds?: number) => Promise<void>;
   simulateMissedCheckinAlert: (slot?: 'morning' | 'afternoon' | 'evening' | 'streak') => Promise<void>;
   addCustomNotification: (item: Omit<NotificationItem, 'id' | 'timestamp' | 'read'>) => void;
 }
@@ -203,9 +205,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       if (subscription) {
         const subJson = subscription.toJSON();
         if (subJson.keys?.p256dh && subJson.keys?.auth) {
-          const res = await fetch('/api/notifications/subscribe', {
+          const res = await apiFetch('/api/notifications/subscribe', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               endpoint: subscription.endpoint,
               keys: subJson.keys,
@@ -765,9 +766,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
     const toastId = toast.loading('Sending test push to your phone...');
     try {
-      const res = await fetch('/api/notifications/test-push', {
+      const res = await apiFetch('/api/notifications/test-push', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          delaySeconds: 0,
+          type: 'checkin',
+          slot: 'morning',
+        }),
       });
       const data = await res.json();
       if (data.success) {
@@ -788,11 +793,75 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   }, [permissionStatus, isPushSubscribed, requestPushPermission]);
 
+  // Schedule a real phone push reminder in N seconds (e.g. 5 minutes = 300s, 1 minute = 60s)
+  const scheduleReminderPush = useCallback(
+    async (delaySeconds: number = 300) => {
+      // First ensure this device is registered
+      if (permissionStatus !== 'granted' || !isPushSubscribed) {
+        const toastId = toast.loading('Registering this device first...');
+        const granted = await requestPushPermission();
+        if (!granted) {
+          toast.error(
+            '❌ Could not register device. Please allow notifications in your browser settings.',
+            { id: toastId, duration: 6000 }
+          );
+          return;
+        }
+        toast.success('✅ Device registered! Scheduling reminder...', { id: toastId });
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+
+      const label = delaySeconds >= 60 ? `${Math.round(delaySeconds / 60)} minute(s)` : `${delaySeconds} seconds`;
+      const toastId = toast.loading(`Scheduling ${label} health reminder...`);
+
+      try {
+        // 1. Post to Service Worker local scheduler
+        try {
+          if ('serviceWorker' in navigator) {
+            const swReg = await navigator.serviceWorker.ready;
+            swReg.active?.postMessage({
+              type: 'SCHEDULE_CHECKIN_REMINDER',
+              slot: 'morning',
+              userName: userName || 'there',
+              streakCount: currentStreak,
+              delayMs: delaySeconds * 1000,
+            });
+          }
+        } catch (swErr) {
+          console.warn('SW message scheduler warning:', swErr);
+        }
+
+        // 2. Server-side scheduled Web Push
+        const res = await apiFetch('/api/notifications/test-push', {
+          method: 'POST',
+          body: JSON.stringify({
+            delaySeconds,
+            type: 'checkin',
+            slot: 'morning',
+          }),
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          toast.success(
+            `⏱️ ${label} Reminder Scheduled!\n\nLock your phone and close the app now. In ${label}, Svanexa will ring/vibrate with your gentle check-in reminder!`,
+            { id: toastId, duration: 8000 }
+          );
+        } else {
+          toast.error(data.error || 'Failed to schedule reminder', { id: toastId, duration: 6000 });
+        }
+      } catch (err: any) {
+        toast.error('Network error scheduling reminder.', { id: toastId });
+      }
+    },
+    [permissionStatus, isPushSubscribed, requestPushPermission, userName, currentStreak]
+  );
+
   // Trigger check-in missed simulation
   const simulateMissedCheckinAlert = useCallback(async (slot: 'morning' | 'afternoon' | 'evening' | 'streak' = 'morning') => {
     const toastId = toast.loading(`Checking incomplete check-ins for ${slot}...`);
     try {
-      const res = await fetch(`/api/cron/checkin-reminder?slot=${slot}`);
+      const res = await apiFetch(`/api/cron/checkin-reminder?slot=${slot}`);
       const data = await res.json();
       if (data.success) {
         toast.success(
@@ -822,6 +891,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       requestPushPermission,
       sendTestNotification,
       sendDeviceTestPush,
+      scheduleReminderPush,
       simulateMissedCheckinAlert,
       addCustomNotification,
     }),
@@ -839,6 +909,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       requestPushPermission,
       sendTestNotification,
       sendDeviceTestPush,
+      scheduleReminderPush,
       simulateMissedCheckinAlert,
       addCustomNotification,
     ]
