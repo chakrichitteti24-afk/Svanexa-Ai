@@ -37,10 +37,18 @@ export function NotificationSettings() {
 
   const [countdown, setCountdown] = React.useState<number | null>(null);
   const [isSecure, setIsSecure] = React.useState<boolean>(true);
+  const [isIOS, setIsIOS] = React.useState<boolean>(false);
+  const [isStandalone, setIsStandalone] = React.useState<boolean>(true);
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
       setIsSecure(window.isSecureContext);
+      const isApple = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+      setIsIOS(isApple);
+      const standalone =
+        window.matchMedia('(display-mode: standalone)').matches ||
+        (navigator as any).standalone;
+      setIsStandalone(Boolean(standalone));
     }
   }, []);
 
@@ -71,6 +79,23 @@ export function NotificationSettings() {
       transition={{ delay: 0.18 }}
       className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border/40 shadow-sm space-y-6"
     >
+      {/* ─────────────────────────────────────────────────────────────────
+          IPHONE PWA SETUP BANNER
+          ───────────────────────────────────────────────────────────────── */}
+      {isIOS && !isStandalone && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-pink-500/15 via-purple-500/15 to-violet-500/15 border border-pink-500/30 flex items-start gap-3 shadow-md">
+          <Smartphone className="w-5 h-5 text-pink-400 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="text-xs font-bold text-foreground">
+              📱 iPhone Required Step for Lock-Screen Alerts
+            </p>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Apple iOS only allows lock-screen notifications for apps added to the Home Screen.
+              Tap the <strong>Share button</strong> (square with up arrow at bottom of Safari), then tap <strong>&ldquo;Add to Home Screen&rdquo;</strong> 📲 and open Svanexa from your home screen.
+            </p>
+          </div>
+        </div>
+      )}
       {/* ─────────────────────────────────────────────────────────────────
           HEADER: MASTER NOTIFICATION SWITCH (ON / OFF)
           ───────────────────────────────────────────────────────────────── */}

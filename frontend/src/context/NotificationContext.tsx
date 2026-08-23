@@ -239,17 +239,16 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Auto-sync push registration if already granted
+  // Auto-sync push registration whenever browser permission is granted
   useEffect(() => {
     if (
       typeof window !== 'undefined' &&
       'Notification' in window &&
-      Notification.permission === 'granted' &&
-      preferences.browserPush
+      Notification.permission === 'granted'
     ) {
       registerPushSubscription().catch(() => {});
     }
-  }, [preferences.browserPush, registerPushSubscription]);
+  }, [registerPushSubscription]);
 
   // Schedule local SW reminders for today's uncompleted slots
   useEffect(() => {
