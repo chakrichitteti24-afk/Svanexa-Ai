@@ -115,46 +115,50 @@ export function generateCheckinReminderPayload(
   switch (slot) {
     case 'morning':
       return {
-        title: '🌅 Morning Wellness Check-In Ready',
-        message: `Good morning ${cleanName}! Take 60 seconds to log your morning wellness & kickstart your day.`,
+        title: '🌅 Hey! Don\'t forget your check-in today',
+        message: `Good morning ${cleanName}! 👋 You haven't completed your morning check-in yet. It only takes 60 seconds — your health matters! Open Svanexa now.`,
         url: '/check-in',
-        actionLabel: 'Log Morning Slot',
+        actionLabel: 'Complete Check-In ✅',
         tag: 'checkin-morning',
         category: 'checkin',
       };
     case 'afternoon':
       return {
-        title: '☀️ Afternoon Energy & Mood Check',
-        message: `Hey ${cleanName}, how are your energy and stress levels feeling today? Take a moment to log.`,
+        title: `☀️ Hey ${cleanName}! Quick health check-in?`,
+        message: `Hi ${cleanName}! 👋 You haven't logged your afternoon check-in yet. How are you feeling today? Take 60 seconds to track your wellness — your body will thank you!`,
         url: '/check-in',
-        actionLabel: 'Log Afternoon Slot',
+        actionLabel: 'Log Now ✅',
         tag: 'checkin-afternoon',
         category: 'checkin',
       };
     case 'evening':
       return {
-        title: '🌙 Evening Journal & Daily Close-Out',
-        message: `Hey ${cleanName}, close out your day with your evening journal and habits reflection.`,
+        title: '🌙 Hey! Complete your check-in before bed',
+        message: `Hey ${cleanName}! 👋 Don't forget to complete your daily check-in before you sleep. Tracking your health every day helps Svanexa give you better care. It only takes a minute!`,
         url: '/check-in',
-        actionLabel: 'Log Evening Slot',
+        actionLabel: 'Complete Now ✅',
         tag: 'checkin-evening',
         category: 'checkin',
       };
     case 'streak':
       return {
-        title: `🔥 Protect Your ${currentStreak}-Day Streak!`,
-        message: `You haven't logged today's check-in yet, ${cleanName}! Complete it before midnight to keep your ${currentStreak}-day streak alive.`,
+        title: currentStreak > 0
+          ? `🔥 ${cleanName}, your ${currentStreak}-day streak is at risk!`
+          : `👋 ${cleanName}, complete your check-in today!`,
+        message: currentStreak > 0
+          ? `Hey ${cleanName}! You haven't checked in yet today 😟 Your ${currentStreak}-day streak will be lost at midnight. Take 60 seconds to protect it — open Svanexa now!`
+          : `Hey ${cleanName}! 👋 You haven't completed your daily health check-in yet today. Your wellness matters — it only takes 60 seconds. Don't forget!`,
         url: '/check-in',
-        actionLabel: 'Keep Streak Alive',
+        actionLabel: currentStreak > 0 ? `Protect Streak 🔥` : 'Check In Now ✅',
         tag: 'checkin-streak-preservation',
         category: 'checkin',
       };
     default:
       return {
-        title: '🌸 Svanexa AI: Daily Check-In Reminder',
-        message: `Hey ${cleanName}, your daily wellness check-in is waiting for you!`,
+        title: '👋 Hey! Complete your health check-in today',
+        message: `Hi ${cleanName}! You haven't completed today's wellness check-in yet. Stay on top of your health — open Svanexa and take 60 seconds to log how you're feeling!`,
         url: '/check-in',
-        actionLabel: 'Open Check-In',
+        actionLabel: 'Open Check-In ✅',
         tag: 'checkin-default',
         category: 'checkin',
       };

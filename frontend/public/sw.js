@@ -165,34 +165,34 @@ function getSlotPayload(slot, userName, streakCount) {
   switch (slot) {
     case 'morning':
       return {
-        title: '🌅 Morning Wellness Check-In',
-        body: `Good morning ${name}! Take 60 seconds to log your morning wellness check-in.`,
+        title: `🌅 Hey ${name}! Don't forget your check-in today`,
+        body: `Good morning ${name}! 👋 You haven't completed your morning check-in yet. It only takes 60 seconds — your health matters! Open Svanexa now.`,
         tag: 'checkin-morning',
       };
     case 'afternoon':
       return {
-        title: '☀️ Afternoon Check-In Reminder',
-        body: `Hey ${name}, how are your energy and stress levels? Log your midday wellness.`,
+        title: `☀️ Hey ${name}! Quick health check-in?`,
+        body: `Hi ${name}! 👋 You haven't logged your afternoon check-in yet. How are you feeling today? Take 60 seconds to track your wellness — your body will thank you!`,
         tag: 'checkin-afternoon',
       };
     case 'evening':
       return {
-        title: '🌙 Evening Journal Reminder',
-        body: `Hey ${name}, close out your day with your evening wellness journal.`,
+        title: `🌙 Hey ${name}! Complete your check-in before bed`,
+        body: `Hey ${name}! 👋 Don't forget to complete your daily check-in before you sleep. Tracking your health every day helps Svanexa give you better care. It only takes a minute!`,
         tag: 'checkin-evening',
       };
     case 'streak':
       return {
-        title: streak > 0 ? `🔥 Protect Your ${streak}-Day Streak!` : '🔥 Complete Your Check-In!',
+        title: streak > 0 ? `🔥 ${name}, your ${streak}-day streak is at risk!` : `👋 ${name}, complete your check-in today!`,
         body: streak > 0
-          ? `You haven't logged today yet, ${name}! Complete it before midnight to protect your ${streak}-day streak.`
-          : `Don't forget your wellness check-in today, ${name}!`,
+          ? `Hey ${name}! You haven't checked in yet today 😟 Your ${streak}-day streak will be lost at midnight. Take 60 seconds to protect it — open Svanexa now!`
+          : `Hey ${name}! 👋 You haven't completed your daily health check-in yet today. Your wellness matters — it only takes 60 seconds. Don't forget!`,
         tag: 'checkin-streak',
       };
     default:
       return {
-        title: '🌸 Svanexa: Daily Check-In Ready',
-        body: `Hey ${name}, your daily wellness check-in is ready!`,
+        title: `👋 Hey ${name}! Complete your health check-in today`,
+        body: `Hi ${name}! You haven't completed today's wellness check-in yet. Stay on top of your health — open Svanexa and take 60 seconds to log how you're feeling!`,
         tag: 'checkin-default',
       };
   }
