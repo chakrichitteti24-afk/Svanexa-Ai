@@ -78,7 +78,15 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(payload.title, notificationOptions)
+    self.registration
+      .showNotification(payload.title, notificationOptions)
+      .catch((err) => {
+        console.warn('[SW] push showNotification fallback:', err);
+        return self.registration.showNotification(payload.title, {
+          body: payload.message || payload.body || payload.title,
+          data: { url: payload.url || '/check-in' },
+        });
+      })
   );
 });
 
@@ -225,20 +233,33 @@ function getSlotPayload(slot, userName, streakCount) {
 function fireLocalCheckinReminder(slot, userName, streakCount) {
   const payload = getSlotPayload(slot, userName, streakCount);
 
-  self.registration.showNotification(payload.title, {
-    body: payload.body,
-    icon: '/logo.jpg',
-    badge: '/logo.jpg',
-    tag: payload.tag,
-    renotify: true,
-    vibrate: [200, 100, 200],
-    requireInteraction: false,
-    data: { url: '/check-in' },
-    actions: [
-      { action: 'open', title: 'Complete Check-In ✅' },
-      { action: 'dismiss', title: 'Remind Later' },
-    ],
-  });
+  try {
+    self.registration
+      .showNotification(payload.title, {
+        body: payload.body,
+        icon: '/logo.jpg',
+        badge: '/logo.jpg',
+        tag: payload.tag || 'checkin-reminder',
+        renotify: true,
+        vibrate: [200, 100, 200],
+        requireInteraction: false,
+        data: { url: '/check-in' },
+      })
+      .catch((err) => {
+        console.warn('[SW] fireLocalCheckinReminder fallback:', err);
+        return self.registration.showNotification(payload.title, {
+          body: payload.body,
+          data: { url: '/check-in' },
+        });
+      });
+  } catch (e) {
+    try {
+      self.registration.showNotification(payload.title, {
+        body: payload.body,
+        data: { url: '/check-in' },
+      });
+    } catch {}
+  }
 }
 
 async function checkAndNotifyIfMissed() {

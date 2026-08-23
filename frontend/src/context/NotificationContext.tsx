@@ -840,6 +840,22 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       await new Promise((r) => setTimeout(r, 1500));
     }
 
+    // 1. Direct device notification trigger for immediate on-screen appearance
+    if ('serviceWorker' in navigator && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        const swReg = await navigator.serviceWorker.ready;
+        swReg.showNotification("🌅 Hey! Don't forget your check-in today", {
+          body: `Good morning ${userName || 'there'}! 👋 You haven't completed your daily wellness check-in yet. It only takes 60 seconds — your health matters! Open Svanexa now.`,
+          icon: '/logo.jpg',
+          badge: '/logo.jpg',
+          tag: 'checkin-test-direct',
+          data: { url: '/check-in' },
+        }).catch(() => {});
+      } catch (swErr) {
+        console.warn('Direct SW notification fallback warning:', swErr);
+      }
+    }
+
     const toastId = toast.loading('Sending test push to your phone...');
     try {
       const res = await apiFetch('/api/notifications/test-push', {
@@ -867,7 +883,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     } catch (err: any) {
       toast.error('Network error. Is the app server running?', { id: toastId });
     }
-  }, [permissionStatus, isPushSubscribed, requestPushPermission]);
+  }, [permissionStatus, isPushSubscribed, requestPushPermission, userName]);
 
   // Schedule a real phone push reminder in N seconds (e.g. 5 minutes = 300s, 1 minute = 60s)
   const scheduleReminderPush = useCallback(
