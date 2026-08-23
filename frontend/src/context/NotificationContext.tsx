@@ -228,6 +228,86 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   }, [preferences.browserPush, registerPushSubscription]);
 
+  // Schedule local SW reminders for today's uncompleted slots
+  useEffect(() => {
+    if (
+      typeof window === 'undefined' ||
+      !('serviceWorker' in navigator) ||
+      !('Notification' in window) ||
+      Notification.permission !== 'granted' ||
+      !preferences.enabled ||
+      !preferences.checkinAlerts
+    ) return;
+
+    const sched = preferences.reminderSchedule;
+    const morningTime = (sched?.morningTime || '08:30').split(':').map(Number);
+    const afternoonTime = (sched?.afternoonTime || '14:00').split(':').map(Number);
+    const eveningTime = (sched?.eveningTime || '21:30').split(':').map(Number);
+
+    const now = new Date();
+
+    function msUntil(h: number, m: number): number {
+      const target = new Date();
+      target.setHours(h, m, 0, 0);
+      const diff = target.getTime() - now.getTime();
+      return diff > 0 ? diff : -1; // -1 means time already passed today
+    }
+
+    const slots: Array<{ slot: string; ms: number; completed: boolean }> = [
+      { slot: 'morning', ms: msUntil(morningTime[0], morningTime[1] || 0), completed: checkinSlots.morning.completed },
+      { slot: 'afternoon', ms: msUntil(afternoonTime[0], afternoonTime[1] || 0), completed: checkinSlots.afternoon.completed },
+      { slot: 'evening', ms: msUntil(eveningTime[0], eveningTime[1] || 0), completed: checkinSlots.evening.completed },
+    ];
+
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    slots.forEach(({ slot, ms, completed }) => {
+      if (completed || ms < 0) return; // Already done or already past
+
+      const timer = setTimeout(async () => {
+        // Re-check if slot still not completed before firing
+        const swReg = await navigator.serviceWorker.ready;
+        swReg.active?.postMessage({
+          type: 'SCHEDULE_CHECKIN_REMINDER',
+          slot,
+          userName: userName || 'there',
+          streakCount: currentStreak,
+          delayMs: 0,
+        });
+      }, ms);
+
+      timers.push(timer);
+    });
+
+    // Also try to register Periodic Background Sync (Chromium/Android)
+    (async () => {
+      try {
+        const swReg = await navigator.serviceWorker.ready;
+        if ('periodicSync' in swReg) {
+          const status = await navigator.permissions.query({
+            name: 'periodic-background-sync' as PermissionName,
+          });
+          if (status.state === 'granted') {
+            await (swReg as any).periodicSync.register('svanexa-checkin-check', {
+              minInterval: 6 * 60 * 60 * 1000, // Every 6 hours
+            });
+          }
+        }
+      } catch {}
+    })();
+
+    return () => {
+      timers.forEach(clearTimeout);
+    };
+  }, [
+    preferences.enabled,
+    preferences.checkinAlerts,
+    preferences.reminderSchedule,
+    checkinSlots,
+    currentStreak,
+    userName,
+  ]);
+
   // 3. Browser Push Permission Handler
   const requestPushPermission = useCallback(async (): Promise<boolean> => {
     if (typeof window === 'undefined' || !('Notification' in window)) {

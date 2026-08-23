@@ -1,0 +1,20 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/checkin-reminder?slot=morning",
+      "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/checkin-reminder?slot=afternoon",
+      "schedule": "30 8 * * *"
+    },
+    {
+      "path": "/api/cron/checkin-reminder?slot=evening",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/checkin-reminder?slot=streak",
+      "schedule": "30 16 * * *"
+    }
+  ]
+}
