@@ -180,7 +180,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       if (!vapidKey) {
         vapidKey =
           process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
-          'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U';
+          'BPGf2eVzhz5vAW3RJXzhvJc3iEw8a-klLa7XON_YZra7y3bu8t4G1x3qfeCrYRW-f0VH59y1QQdD08KFu8xpvOw';
       }
 
       const applicationServerKey = urlBase64ToUint8Array(vapidKey);

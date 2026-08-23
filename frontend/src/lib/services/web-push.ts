@@ -20,14 +20,14 @@ export interface PushSubscriptionData {
   };
 }
 
-// Default development VAPID keys (can be overridden by environment variables in production)
+// VAPID keys — generated matched pair (override with env vars in production)
 const DEFAULT_VAPID_PUBLIC_KEY =
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
-  'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U';
+  'BPGf2eVzhz5vAW3RJXzhvJc3iEw8a-klLa7XON_YZra7y3bu8t4G1x3qfeCrYRW-f0VH59y1QQdD08KFu8xpvOw';
 
 const DEFAULT_VAPID_PRIVATE_KEY =
   process.env.VAPID_PRIVATE_KEY ||
-  'UUxI2qSsspqX6n9Jw7BkJFzBwI4eF5Y9gX6pW0z1_v4';
+  'wxU3YnFS7BjEDWU9_do00YMrNjERv2gs4LG0IOgs28g';
 
 const VAPID_SUBJECT =
   process.env.VAPID_SUBJECT || 'mailto:support@svanexa.ai';
