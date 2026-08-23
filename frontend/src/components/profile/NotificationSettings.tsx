@@ -201,6 +201,52 @@ export function NotificationSettings() {
             />
           </div>
 
+          {/* Core Feature: Every 5-Minute Continuous Reminder */}
+          <div className="p-3.5 rounded-2xl bg-gradient-to-br from-violet-500/15 via-purple-500/10 to-pink-500/10 border border-violet-500/30 flex flex-col gap-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-violet-500/20 text-violet-300">
+                  <Timer className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-bold text-foreground">Every 5-Min Gentle Reminders</p>
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-violet-500/30 text-violet-200 border border-violet-500/40">
+                      MAIN FEATURE
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Repeats every 5 min until check-in is logged
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={preferences.repeatUntilCheckinComplete ?? true}
+                disabled={!preferences.enabled || !preferences.checkinAlerts}
+                onCheckedChange={checked =>
+                  updatePreferences({ repeatUntilCheckinComplete: checked })
+                }
+              />
+            </div>
+            <div className="flex items-center gap-1.5 pt-1 border-t border-border/20">
+              <span className="text-[10px] text-muted-foreground font-medium">Interval:</span>
+              {[5, 10, 15, 30].map(mins => (
+                <button
+                  key={mins}
+                  type="button"
+                  onClick={() => updatePreferences({ recurringIntervalMinutes: mins })}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                    (preferences.recurringIntervalMinutes || 5) === mins
+                      ? 'bg-violet-500/30 text-violet-200 border border-violet-500/50'
+                      : 'bg-secondary/30 text-muted-foreground hover:bg-secondary/50'
+                  }`}
+                >
+                  {mins} min {mins === 5 ? '(Default)' : ''}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Cycle Alerts */}
           <div className="p-3.5 rounded-2xl bg-secondary/15 border border-border/25 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">

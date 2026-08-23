@@ -35,6 +35,8 @@ export interface NotificationPreferences {
   soundEnabled: boolean;
   cycleAlerts: boolean;
   checkinAlerts: boolean;
+  repeatUntilCheckinComplete: boolean; // Main feature: repeating gentle notifications until check-in is complete
+  recurringIntervalMinutes: number; // Default 5 minutes
   hydrationAlerts: boolean;
   supplementAlerts: boolean;
   skinAlerts: boolean;
@@ -44,10 +46,12 @@ export interface NotificationPreferences {
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   enabled: true,
-  browserPush: false,
+  browserPush: true,
   soundEnabled: true,
   cycleAlerts: true,
   checkinAlerts: true,
+  repeatUntilCheckinComplete: true,
+  recurringIntervalMinutes: 5,
   hydrationAlerts: true,
   supplementAlerts: true,
   skinAlerts: true,

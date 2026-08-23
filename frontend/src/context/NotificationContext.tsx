@@ -63,13 +63,16 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const {
     todayLog,
     checkinSlots,
+    allSlotsComplete,
     hasCheckedInToday,
     currentStreak,
     cycleHistory,
-    wellnessMode,
+    preferences: herSyncPrefs,
     aiName,
     userName,
   } = useHerSync();
+
+  const wellnessMode = herSyncPrefs?.theme || 'general';
 
   // Preferences State
   const [preferences, setPreferences] = useState<NotificationPreferences>(() => {
@@ -328,6 +331,79 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     userName,
   ]);
 
+  // ─── 5-Minute Continuous Reminder Lifecycle (Default Core Feature) ───────────
+  // When check-in is pending, arm the 5-minute repeating reminder.
+  // When check-in is completed, immediately disarm and stop repeating reminders.
+  useEffect(() => {
+    if (
+      typeof window === 'undefined' ||
+      !('serviceWorker' in navigator) ||
+      !preferences.enabled ||
+      !preferences.checkinAlerts ||
+      !preferences.repeatUntilCheckinComplete
+    ) {
+      return;
+    }
+
+    const intervalMinutes = preferences.recurringIntervalMinutes || 5;
+    const intervalMs = intervalMinutes * 60 * 1000;
+
+    if (allSlotsComplete || hasCheckedInToday) {
+      // Check-in complete: stop repeating reminders in Service Worker
+      navigator.serviceWorker.ready
+        .then((swReg) => {
+          swReg.active?.postMessage({
+            type: 'CHECKIN_COMPLETED_STOP_REMINDERS',
+          });
+        })
+        .catch(() => {});
+      return;
+    }
+
+    // Check-in NOT done: arm 5-minute recurring reminder in Service Worker
+    navigator.serviceWorker.ready
+      .then((swReg) => {
+        swReg.active?.postMessage({
+          type: 'START_5MIN_RECURRING_REMINDER',
+          userName: userName || 'there',
+          streakCount: currentStreak,
+          intervalMs,
+        });
+      })
+      .catch(() => {});
+
+    // Active in-app interval loop
+    const recurringTimer = setInterval(async () => {
+      if (allSlotsComplete || hasCheckedInToday) return;
+
+      if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+          const swReg = await navigator.serviceWorker.ready;
+          swReg.active?.postMessage({
+            type: 'SCHEDULE_CHECKIN_REMINDER',
+            slot: 'streak',
+            userName: userName || 'there',
+            streakCount: currentStreak,
+            delayMs: 0,
+          });
+        } catch {}
+      }
+    }, intervalMs);
+
+    return () => {
+      clearInterval(recurringTimer);
+    };
+  }, [
+    preferences.enabled,
+    preferences.checkinAlerts,
+    preferences.repeatUntilCheckinComplete,
+    preferences.recurringIntervalMinutes,
+    allSlotsComplete,
+    hasCheckedInToday,
+    userName,
+    currentStreak,
+  ]);
+
   // 3. Browser Push Permission Handler
   const requestPushPermission = useCallback(async (): Promise<boolean> => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -481,7 +557,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             endDate: c.end_date || c.start_date,
           })),
           {},
-          wellnessMode === 'pcos'
+          herSyncPrefs?.theme === 'pcos'
         );
         const prediction = engine.predictNextPeriod();
 

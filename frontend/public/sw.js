@@ -132,8 +132,39 @@ self.addEventListener('periodicsync', (event) => {
 
 // ─── Background Message from Client ──────────────────────────────────────────
 // Frontend can post messages to the service worker to schedule local reminders
+let recurring5MinIntervalId = null;
+
 self.addEventListener('message', (event) => {
   if (!event.data) return;
+
+  // Start 5-minute recurring reminder loop until check-in is finished
+  if (event.data.type === 'START_5MIN_RECURRING_REMINDER') {
+    const { userName, streakCount, intervalMs } = event.data;
+    const ms = intervalMs || 5 * 60 * 1000; // 5 minutes default
+
+    if (recurring5MinIntervalId) {
+      clearInterval(recurring5MinIntervalId);
+    }
+
+    recurring5MinIntervalId = setInterval(() => {
+      fireLocalCheckinReminder('streak', userName, streakCount);
+    }, ms);
+  }
+
+  // Stop 5-minute recurring reminder loop when check-in is logged
+  if (
+    event.data.type === 'STOP_RECURRING_REMINDERS' ||
+    event.data.type === 'CHECKIN_COMPLETED_STOP_REMINDERS' ||
+    event.data.type === 'CANCEL_REMINDERS'
+  ) {
+    if (recurring5MinIntervalId) {
+      clearInterval(recurring5MinIntervalId);
+      recurring5MinIntervalId = null;
+    }
+    if (event.source) {
+      event.source.postMessage({ type: 'REMINDERS_CANCELLED' });
+    }
+  }
 
   if (event.data.type === 'SCHEDULE_CHECKIN_REMINDER') {
     const { slot, userName, streakCount, delayMs } = event.data;
@@ -145,13 +176,6 @@ self.addEventListener('message', (event) => {
       }, delay);
     } else {
       fireLocalCheckinReminder(slot, userName, streakCount);
-    }
-  }
-
-  if (event.data.type === 'CANCEL_REMINDERS') {
-    // Nothing to cancel since we use push notifications, but ack
-    if (event.source) {
-      event.source.postMessage({ type: 'REMINDERS_CANCELLED' });
     }
   }
 });
