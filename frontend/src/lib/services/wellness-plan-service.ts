@@ -450,7 +450,7 @@ export class WellnessPlanService {
         let resp: any = null;
         try {
           const groqCall = this.groq.chat.completions.create({
-            model: 'openai/gpt-oss-120b',
+            model: 'openai/gpt-oss-20b',
             messages: [{ role: 'user', content: prompt }],
             temperature: 0.55,
             max_tokens: 800,
@@ -461,14 +461,25 @@ export class WellnessPlanService {
           );
           resp = await Promise.race([groqCall, timeout]);
         } catch {
-          const fallbackCall = this.groq.chat.completions.create({
-            model: 'qwen/qwen3.6-27b',
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.55,
-            max_tokens: 800,
-            response_format: { type: 'json_object' },
-          });
-          resp = await fallbackCall;
+          try {
+            const fallbackCall = this.groq.chat.completions.create({
+              model: 'openai/gpt-oss-120b',
+              messages: [{ role: 'user', content: prompt }],
+              temperature: 0.55,
+              max_tokens: 800,
+              response_format: { type: 'json_object' },
+            });
+            resp = await fallbackCall;
+          } catch {
+            const fallbackCall2 = this.groq.chat.completions.create({
+              model: 'llama-3.3-70b-versatile',
+              messages: [{ role: 'user', content: prompt }],
+              temperature: 0.55,
+              max_tokens: 800,
+              response_format: { type: 'json_object' },
+            });
+            resp = await fallbackCall2;
+          }
         }
 
         const parsed = JSON.parse(resp?.choices?.[0]?.message?.content || '{}');

@@ -45,7 +45,6 @@ export default function DashboardPage() {
     updateTodayLogLocally,
     updateCheckinSlotLocally,
   } = useHerSync();
-  const [showWelcome, setShowWelcome] = useState(false);
   const [togglingTask, setTogglingTask] = useState<string | null>(null);
   const [lunaReaction, setLunaReaction] = useState<string | null>(null);
   const [showSparkles, setShowSparkles] = useState<string | null>(null);
@@ -56,7 +55,6 @@ export default function DashboardPage() {
     setMounted(true);
   }, []);
 
-
   const LUNA_REACTIONS = [
     "Great job! Keep going. 🌸",
     "You're building healthy habits. ✨",
@@ -66,25 +64,6 @@ export default function DashboardPage() {
     "Every small step makes a big difference! 🌟",
     "You're glowing today! Keep it up. ✨"
   ];
-
-  useEffect(() => {
-    if (!mounted || isLoading) return;
-    try {
-      const todayKey = `hersync_greeted_${format(new Date(), 'yyyy-MM-dd')}`;
-      if (!localStorage.getItem(todayKey)) {
-        // First visit today — show the welcome animation once
-        setShowWelcome(true);
-        localStorage.setItem(todayKey, '1');
-        // Clean up yesterday's key to avoid localStorage bloat
-        const yesterdayKey = `hersync_greeted_${format(new Date(Date.now() - 86400000), 'yyyy-MM-dd')}`;
-        localStorage.removeItem(yesterdayKey);
-        const timer = setTimeout(() => setShowWelcome(false), 2800);
-        return () => clearTimeout(timer);
-      }
-    } catch (err) {
-      console.warn('Dashboard greeting localStorage error:', err);
-    }
-  }, [mounted, isLoading]);
 
 
   const getGreetingTime = () => {
@@ -316,58 +295,21 @@ export default function DashboardPage() {
     return anyPending.length > 0 ? anyPending[0] : null;
   }, [tasksList, activeSlot]);
 
-  if (!mounted || isLoading) {
+  if (!mounted || (isLoading && !profile)) {
     return <DashboardSkeleton />;
   }
 
   return (
     <div className={styles.dashboardContainer}>
 
-      <AnimatePresence>
-        {showWelcome && (
-          <motion.div
-            className={styles.welcomeContainer}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0, scale: 0.98 }}
-            transition={{ duration: 0.6, ease: "easeInOut" }}
-          >
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0, y: 10 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              transition={{ delay: 0.2, duration: 0.7, type: "spring", bounce: 0.4 }}
-              className={styles.welcomeAvatar}
-            >
-              <BrainCircuit className="w-10 h-10 text-white" />
-            </motion.div>
-            <motion.h1
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.4, duration: 0.6 }}
-              className={styles.welcomeGreeting}
-            >
-              {greeting}, {userName} {isMorning ? '☀️' : isEvening ? '🌙' : '☀️'}
-            </motion.h1>
-            <motion.p
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.6, duration: 0.6 }}
-              className={styles.welcomeMessage}
-            >
-              Small healthy habits create lasting results.
-            </motion.p>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Polite Permission Prompt (only if not granted and not dismissed) */}
       <DashboardNotificationPrompt />
 
       {/* Header */}
       <motion.header
-        initial={{ opacity: 0, y: 10 }}
+        initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1, duration: 0.5 }}
+        transition={{ duration: 0.25, ease: 'easeOut' }}
         className={styles.pageHeader}
       >
         <div>
@@ -423,9 +365,9 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-6">
           {/* 🌟 APPLE HEALTH-INSPIRED DYNAMIC "NOW CARD" HERO 🌟 */}
           <motion.div
-            initial={{ opacity: 0, y: 12 }}
+            initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
             className="w-full p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-violet-950/40 via-card to-pink-950/30 border border-violet-500/20 shadow-xl shadow-purple-500/5 relative overflow-hidden backdrop-blur-xl"
           >
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -512,9 +454,9 @@ export default function DashboardPage() {
 
           {/* ⚡ 1-TAP QUICK MICRO-LOGGERS (EFFORTLESS WELLNESS BAR) ⚡ */}
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1, duration: 0.35 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
             className="w-full p-4 rounded-3xl bg-card/60 border border-border/40 backdrop-blur-md space-y-3"
           >
             <div className="flex items-center justify-between">
@@ -630,9 +572,9 @@ export default function DashboardPage() {
 
           {/* ACTIVE WELLNESS PLAN */}
           <motion.section
-            initial={{ opacity: 0, y: 15 }}
+            initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15, duration: 0.35 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
             className="relative"
           >
             <div className="flex items-center justify-between">

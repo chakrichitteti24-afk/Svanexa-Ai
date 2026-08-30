@@ -20,295 +20,225 @@ export class AIService {
     }
   }
 
+  /**
+   * Robustly extracts a structured context object from various string formats
+   * including [USER CONTEXT]: {...}, [HEALTH SUMMARY]: {...}, or raw JSON.
+   */
+  private parseContext(rawContext: string | object | null | undefined): Record<string, any> {
+    if (!rawContext) return {};
+    if (typeof rawContext === 'object') return rawContext as Record<string, any>;
+
+    const str = String(rawContext).trim();
+
+    // 1. Direct JSON parse
+    try {
+      if (str.startsWith('{') && str.endsWith('}')) {
+        return JSON.parse(str);
+      }
+    } catch {}
+
+    // 2. Tagged context format [USER CONTEXT]: {...} or [HEALTH SUMMARY]: {...}
+    try {
+      const match = str.match(/\[(?:USER CONTEXT|HEALTH SUMMARY|USER MEMORY)\]:\s*([\s\S]*)/i);
+      if (match && match[1]) {
+        const jsonPart = match[1].trim();
+        return JSON.parse(jsonPart);
+      }
+    } catch {}
+
+    // 3. Fallback regex to find first JSON object { ... }
+    try {
+      const firstBrace = str.indexOf('{');
+      const lastBrace = str.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        return JSON.parse(str.substring(firstBrace, lastBrace + 1));
+      }
+    } catch {}
+
+    return {};
+  }
+
   async generateCompanionResponse(
     message: string,
     history: ChatMessage[],
-    healthSummary: string,
-    companionName: string,
-    userName: string,
+    healthSummary: string | object,
+    companionName: string = 'Luna',
+    userName: string = 'there',
     forceGemini: boolean = false
   ): Promise<{ response: string; modelUsed: string; error?: string }> {
-    const trimmedMsg = message.trim().toLowerCase();
-    if (trimmedMsg === 'hi') {
-      return { response: "Hey 😊\nHow are you doing today?", modelUsed: this.primaryModel };
-    }
-    if (trimmedMsg === 'hello') {
-      return { response: "Hi 💜\nHow's your day going?", modelUsed: this.primaryModel };
-    }
-    if (trimmedMsg === 'hey') {
-      return { response: "Hey!\nNice to hear from you 😊", modelUsed: this.primaryModel };
-    }
+    const parsedContext = this.parseContext(healthSummary);
 
-    let healthObj: any = null;
-    let memoryObj: any = null;
+    const userObj = parsedContext.user || {};
+    const effectiveUserName = userObj.name || userName || 'there';
+    const effectiveCompanionName = userObj.companionName || companionName || 'Luna';
+    const userMode = userObj.mode || parsedContext.userMode || 'general';
+    const currentSlot = parsedContext.currentSlot || 'today';
+    const currentPage = userObj.currentPage || parsedContext.currentPage || 'App';
 
-    try {
-      const healthMatch = healthSummary.match(/\[HEALTH SUMMARY\]:\s*(\{.*\})/);
-      if (healthMatch) {
-        healthObj = JSON.parse(healthMatch[1]);
-      }
-    } catch {}
+    const msgLower = message.toLowerCase().trim();
+    const isGreetingTrigger = message.includes('[GENERATE_GREETING]');
 
-    try {
-      const memoryMatch = healthSummary.match(/\[USER MEMORY\]:\s*(\{.*\})/);
-      if (memoryMatch) {
-        memoryObj = JSON.parse(memoryMatch[1]);
-      }
-    } catch {}
-
-    const msgLower = message.toLowerCase();
-    
-    const greetingKeywords = [
-      'hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening', 'yo', 'sup', 
-      'what\'s up', 'howdy', 'how are you', 'how\'s it going', 'how are you doing', 
-      'what are you doing', 'who are you', 'what is your name'
-    ];
-    
-    const isGreeting = greetingKeywords.some(keyword => {
-      return msgLower === keyword || msgLower.startsWith(keyword + ' ') || msgLower.startsWith(keyword + ',') || msgLower.startsWith(keyword + '!');
-    }) || msgLower.trim().length <= 3;
-
-    const isReportRequest = forceGemini || 
-      msgLower.includes('report') || 
-      msgLower.includes('analyze') || 
-      msgLower.includes('analysis') || 
-      msgLower.includes('how am i doing') || 
-      msgLower.includes('my wellness') || 
-      msgLower.includes('my health') || 
-      msgLower.includes('my logs') || 
-      msgLower.includes('my summary');
-
-    let relevantCategories: string[] = [];
-    let relevantDataText = '';
-
-    if (isGreeting) {
-      relevantCategories = ['NONE'];
-      relevantDataText = 'NONE (Use conversation only. Do NOT mention or use any health/wellness data).';
-    } else if (isReportRequest) {
-      relevantCategories = ['ALL'];
-      const filteredHealth = { ...healthObj };
-      relevantDataText = JSON.stringify(filteredHealth);
-    } else {
-      const categories: string[] = [];
-
-      const sleepKeywords = ['tired', 'exhausted', 'fatigue', 'sleepy', 'lethargic', 'energy', 'weary', 'low energy', 'sleep', 'insomnia', 'woke up', 'rest'];
-      if (sleepKeywords.some(kw => msgLower.includes(kw))) {
-        categories.push('Sleep', 'Stress', 'Period Status');
-      }
-
-      const skinKeywords = ['skin', 'acne', 'pimple', 'breakout', 'face', 'zits', 'rash', 'dry', 'oily', 'worse'];
-      if (skinKeywords.some(kw => msgLower.includes(kw))) {
-        categories.push('Skin Logs', 'Sleep', 'Stress', 'Period Phase');
-      }
-
-      const moodKeywords = ['mood', 'sad', 'anxious', 'depressed', 'angry', 'emotional', 'calm', 'crying', 'irritated', 'swings', 'stress', 'pressure', 'overwhelmed', 'tense', 'relax', 'nervous', 'scared'];
-      if (moodKeywords.some(kw => msgLower.includes(kw))) {
-        categories.push('Mood', 'Stress', 'Period Status');
-      }
-
-      const cycleKeywords = ['period', 'cycle', 'cramp', 'pcos', 'pcod', 'bleeding', 'flow', 'ovulating', 'fertility', 'fertile', 'ovulation', 'due', 'late', 'menstruation', 'pms', 'bloat', 'stomach', 'pain', 'nausea', 'headache', 'gradient', 'symptom'];
-      if (cycleKeywords.some(kw => msgLower.includes(kw))) {
-        categories.push('Cycle Information', 'Symptom History');
-      }
-
-      const uniqueCategories = Array.from(new Set(categories));
-      
-      if (uniqueCategories.length === 0) {
-        relevantCategories = ['NONE'];
-        relevantDataText = 'NONE (No specific health query. Keep it conversational. Do NOT mention wellness trends).';
-      } else {
-        relevantCategories = uniqueCategories;
-        relevantDataText = JSON.stringify(healthObj);
-      }
+    let maxTokens = 450;
+    if (isGreetingTrigger) {
+      maxTokens = 120;
+    } else if (msgLower.includes('report') || msgLower.includes('analyze') || msgLower.includes('summary')) {
+      maxTokens = 600;
     }
 
-    let maxTokens = 150;
-    if (isGreeting) {
-      maxTokens = 80;
-    } else if (isReportRequest) {
-      maxTokens = 380;
-    } else if (relevantCategories.length > 0 && relevantCategories[0] !== 'NONE') {
-      maxTokens = 200;
-    }
-
-    const userMode = healthObj?.userMode || 'general';
-
-    const systemPrompt = `You are ${companionName}, the AI Wellness Companion inside Svanexa.
-You are talking with ${userName}.
+    const systemPrompt = `You are ${effectiveCompanionName}, the empathetic, emotionally attuned AI Wellness Companion in the Svanexa ecosystem.
+You are in a private conversation with ${effectiveUserName}.
 
 ====================================================
-CORE PERSONALITY
+MOBILE-FIRST RESPONSE FORMATTING (STRICT)
 ====================================================
-You are a trusted wellness companion — warm, clear, concise, supportive, and non-judgmental.
-You are NOT a licensed doctor. You do NOT diagnose.
-You do NOT prescribe medicines, supplements, or treatments.
-You speak only in English.
-You do NOT use roleplay actions (no "smiles", "hugs", "waves").
-You do NOT use excessive emojis (one per response maximum).
-You never fear-monger or catastrophize.
-You never repeat generic advice the user did not ask for.
+1. **Screen-Friendly & Concise**: Keep responses crisp (60–180 words for standard queries, max 250 for reports). Mobile screens are small; avoid walls of dense text.
+2. **Breathable Spacing**: Use short 1–2 sentence paragraphs with clean line breaks.
+3. **Structured Bullet Points**: Use neat markdown bullets with **bold highlights** for actionable tips, breakdowns, or log summaries.
+4. **Actionable Micro-Moment**: Where helpful, end with one immediate, effortless micro-step (e.g., "🌸 **Micro-Step:** Take 3 slow belly breaths right now" or "💧 **Micro-Step:** Sip a glass of water").
+5. **No Filler**: Never start with robot filler like "Certainly!", "As an AI...", "Here is what I found:". Jump straight into the warm, personalized reply.
 
 ====================================================
-RESPONSE RULES — STRICT
+REAL-TIME ACTIVITY & OMNI-LOG ACCESS
 ====================================================
-1. Answer the user's actual question FIRST.
-2. Maximum response length: ${maxTokens} tokens.
-3. Format: 2–5 short sentences OR 3–5 concise bullet points.
-4. Do NOT repeat the user's question back to them.
-5. Do NOT start with filler phrases like "Of course!", "Absolutely!", "Great question!".
-6. Do NOT add unnecessary medical disclaimers unless the user asks about treatment.
-7. Stop once the user's request is fully addressed.
+You have complete, live visibility into ${effectiveUserName}'s activities:
+- **Daily Check-ins**: Morning, afternoon, and evening slot completion, energy, stress level, focus, and symptoms.
+- **Hydration**: Live water intake in ml and 7-day average.
+- **Sleep**: Last night's sleep hours, sleep quality, and weekly average.
+- **Movement**: Workout duration, exercise type, and cumulative weekly minutes.
+- **Skin**: Acne level, skin condition (breakout, clear, dry, oily), and notes.
+- **Cycle & Hormone Phase**: Cycle day, active phase (Menstrual, Follicular, Ovulation, Luteal), next period countdown, or irregular cycle tracking.
+- **Pregnancy (if active)**: Gestational week, trimester, and countdown.
+- **Wellness Plan Tasks**: Pending and completed daily wellness tasks.
+- **Streaks & Coins**: Active daily streak and coin balance.
+
+When ${effectiveUserName} asks about their day, health, habits, or logs, directly and naturally cite these real numbers. Celebrate consistency and acknowledge their efforts!
+If a habit hasn't been logged yet today, mention it warmly and gently invite them to log it.
 
 ====================================================
-CONTEXT PRIORITY (apply in this order)
+MEDICAL SAFETY & ATTITUDE
 ====================================================
-Priority 1: Current user message (answer this first)
-Priority 2: Current conversation history (use to maintain continuity)
-Priority 3: Today's check-in data (stress score, mood, focus, body, sleep)
-Priority 4: Today's wellness plan (pending and completed tasks)
-Priority 5: Historical context (cycle phase, pregnancy due date, recent trends)
-
-Only mention context that is relevant to the user's question.
-Do NOT dump all health data into every response.
+- Warm, non-judgmental, empowering, and protective.
+- You are a trusted wellness companion, NOT a medical doctor.
+- NEVER diagnose medical conditions or prescribe medications/supplements.
+- NEVER invent or guess unlogged data.
 
 ====================================================
-STRESS INDICATOR LANGUAGE
+ACTIVE MODE: ${userMode.toUpperCase()}
 ====================================================
-If referencing stress, use language like:
-- "Your responses suggest you may be feeling more stressed today."
-- "Your check-in suggests you are feeling relatively balanced."
-NEVER say: "You have high stress." or "You are stressed."
+${userMode === 'pregnancy' ? `Pregnancy Care Mode:
+- Focus on gentle trimester wellness, hydration, restful sleep, stress relief, safe gentle movement, and nourishing nutrition.
+- Warm, protective, and reassuring.`
+: userMode === 'pcos' ? `PCOS / Hormone Harmony Mode:
+- Focus on nervous system calming, blood sugar balance, gentle cycle alignment, anti-inflammatory habits, and daily micro-habits.
+- Patient, encouraging, and empowering.`
+: `General Vitality Mode:
+- Focus on holistic energy, sleep quality, hydration balance, stress resilience, and daily habit consistency.`}
 
 ====================================================
-MODE AWARENESS: ${userMode.toUpperCase()}
+LIVE USER CONTEXT & REAL-TIME SNAPSHOT
 ====================================================
-${userMode === 'pregnancy' ? `You are speaking with someone who is pregnant.
-- Focus on gentle wellness: hydration, rest, gentle movement, nutrition.
-- Language: warm, protective, reassuring.
-- NEVER diagnose pregnancy complications or recommend medicines.` 
-: userMode === 'pcos' ? `You are speaking with someone managing PCOS/PCOD.
-- Focus on lifestyle: stress relief, cycle care, gentle exercise, balanced nutrition.
-- Language: supportive, patient, encouraging.
-- NEVER recommend medicines or diagnose hormonal conditions.`
-: `General wellness mode.
-- Focus on daily habits: sleep, hydration, movement, mood, stress balance.
-- Language: practical, warm, and motivating.`}
+Current Screen/View: ${currentPage}
+Current Time Slot: ${currentSlot}
+Live Activity Data:
+${JSON.stringify(parsedContext, null, 2)}
+====================================================`;
 
-====================================================
-ACTIVE USER CONTEXT
-====================================================
-Relevant categories for this response: ${relevantCategories.join(', ')}
-User Data: ${relevantDataText}`;
-
+    // 1. If forceGemini is requested
     if (forceGemini) {
       try {
         const responseText = await this.queryGemini(systemPrompt, history, message, maxTokens);
         return { response: responseText, modelUsed: 'gemini-2.5-flash' };
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
-        return { response: "I'm having trouble analyzing your wellness data right now. Please try again soon. 🌸", modelUsed: 'gemini-2.5-flash', error: errorMsg };
+        return {
+          response: "I'm having trouble analyzing your wellness data right now. Please try again soon. 🌸",
+          modelUsed: 'gemini-2.5-flash',
+          error: errorMsg
+        };
       }
     }
 
+    // 2. Primary: Groq Multi-Tier Fallback Chain (prioritizing openai/gpt-oss-20b)
     if (this.groq) {
-      try {
-        const groqMessages = [
-          { role: 'system' as const, content: systemPrompt },
-          ...history.map(m => ({
-            role: m.role === 'assistant' ? ('assistant' as const) : ('user' as const),
-            content: m.content
-          })),
-          { role: 'user' as const, content: message }
-        ];
+      const groqMessages = [
+        { role: 'system' as const, content: systemPrompt },
+        ...history.map(m => ({
+          role: m.role === 'assistant' ? ('assistant' as const) : ('user' as const),
+          content: m.content
+        })),
+        { role: 'user' as const, content: message }
+      ];
 
-        let chatCompletion: any = null;
+      const groqModels = [
+        'openai/gpt-oss-20b',
+        'openai/gpt-oss-120b',
+        'llama-3.3-70b-versatile',
+        'llama-3.1-8b-instant',
+        'mixtral-8x7b-32768',
+      ];
 
-        // Try primary model openai/gpt-oss-120b, with fallback to qwen/qwen3.6-27b
+      for (const modelName of groqModels) {
         try {
           const responsePromise = this.groq.chat.completions.create({
             messages: groqMessages,
-            model: 'openai/gpt-oss-120b',
+            model: modelName,
             temperature: 0.7,
             max_tokens: maxTokens,
           });
 
           const timeoutPromise = new Promise<null>((_, reject) =>
-            setTimeout(() => reject(new Error('Groq Primary Model Timeout')), 6000)
+            setTimeout(() => reject(new Error(`Groq ${modelName} timeout`)), 7000)
           );
 
-          chatCompletion = await Promise.race([responsePromise, timeoutPromise]);
-        } catch {
-          // Fallback to qwen/qwen3.6-27b
-          const fallbackPromise = this.groq.chat.completions.create({
-            messages: groqMessages,
-            model: 'qwen/qwen3.6-27b',
-            temperature: 0.7,
-            max_tokens: maxTokens,
-          });
-          chatCompletion = await fallbackPromise;
-        }
-        
-        if (chatCompletion && chatCompletion.choices[0]?.message?.content) {
-          return {
-            response: chatCompletion.choices[0].message.content,
-            modelUsed: this.primaryModel
-          };
-        }
-        throw new Error('Empty response from Groq');
-      } catch (error) {
-        if (this.gemini) {
-          try {
-            const responseText = await this.queryGemini(systemPrompt, history, message, maxTokens);
+          const chatCompletion: any = await Promise.race([responsePromise, timeoutPromise]);
+          const reply = chatCompletion?.choices?.[0]?.message?.content;
+          if (reply && typeof reply === 'string' && reply.trim().length > 0) {
             return {
-              response: responseText,
-              modelUsed: 'gemini-2.5-flash'
-            };
-          } catch (geminiError) {
-            return {
-              response: "I'm sorry, I'm having trouble communicating right now. Please try again later. 🌸",
-              modelUsed: this.primaryModel,
-              error: geminiError instanceof Error ? geminiError.message : String(geminiError)
+              response: reply.trim(),
+              modelUsed: modelName,
             };
           }
-        } else {
-          return {
-            response: "I'm sorry, my systems are experiencing issues and I cannot reach my backup models. 🌸",
-            modelUsed: this.primaryModel,
-            error: error instanceof Error ? error.message : String(error)
-          };
-        }
-      }
-    } else {
-      if (this.gemini) {
-        try {
-          const responseText = await this.queryGemini(systemPrompt, history, message, maxTokens);
-          return { response: responseText, modelUsed: 'gemini-2.5-flash' };
-        } catch (err) {
-          return { response: "Backend API keys are not fully configured.", modelUsed: 'gemini-2.5-flash', error: String(err) };
+        } catch (modelErr) {
+          console.warn(`[AIService] Groq model ${modelName} failed, trying next fallback:`, modelErr);
         }
       }
     }
 
-    return { response: 'AI API keys not configured. Please set GROQ_API_KEY or GEMINI_API_KEY in backend environment', modelUsed: this.primaryModel };
+    // 3. Secondary Backup: Gemini
+    if (this.gemini) {
+      try {
+        const responseText = await this.queryGemini(systemPrompt, history, message, maxTokens);
+        return {
+          response: responseText,
+          modelUsed: 'gemini-2.5-flash',
+        };
+      } catch (geminiError) {
+        console.error('[AIService] Gemini fallback failed:', geminiError);
+        return {
+          response: "I'm having a little trouble connecting right now. Please try again in a moment. 🌸",
+          modelUsed: this.primaryModel,
+          error: geminiError instanceof Error ? geminiError.message : String(geminiError)
+        };
+      }
+    }
+
+    return {
+      response: "AI API keys not configured. Please set GROQ_API_KEY or GEMINI_API_KEY in backend environment.",
+      modelUsed: this.primaryModel
+    };
   }
 
-  private async queryGemini(systemInstruction: string, history: ChatMessage[], message: string, maxTokens: number): Promise<string> {
+  private async queryGemini(
+    systemInstruction: string,
+    history: ChatMessage[],
+    message: string,
+    maxTokens: number
+  ): Promise<string> {
     if (!this.gemini) {
       throw new Error('Gemini API key is not configured.');
     }
 
-    let model: any;
-    try {
-      model = this.gemini.getGenerativeModel({
-        model: 'gemini-2.5-flash',
-        systemInstruction: systemInstruction,
-      });
-    } catch {
-      model = this.gemini.getGenerativeModel({
-        model: 'gemini-3.6-flash',
-        systemInstruction: systemInstruction,
-      });
-    }
+    const geminiModels = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash'];
 
     const contents = [
       ...history.map(m => ({
@@ -321,31 +251,31 @@ User Data: ${relevantDataText}`;
       }
     ];
 
-    try {
-      const result = await model.generateContent({
-        contents: contents,
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: maxTokens,
+    for (const modelName of geminiModels) {
+      try {
+        const model = this.gemini.getGenerativeModel({
+          model: modelName,
+          systemInstruction: systemInstruction,
+        });
+
+        const result = await model.generateContent({
+          contents: contents,
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: maxTokens,
+          }
+        });
+        const response = await result.response;
+        const text = response.text();
+        if (text && text.trim().length > 0) {
+          return text.trim();
         }
-      });
-      const response = await result.response;
-      return response.text();
-    } catch (e) {
-      // Fallback model
-      const fallbackModel = this.gemini.getGenerativeModel({
-        model: 'gemini-3.6-flash',
-        systemInstruction: systemInstruction,
-      });
-      const result = await fallbackModel.generateContent({
-        contents: contents,
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: maxTokens,
-        }
-      });
-      const response = await result.response;
-      return response.text();
+      } catch (err) {
+        console.warn(`[AIService] Gemini model ${modelName} failed, trying next:`, err);
+      }
     }
+
+    throw new Error('All Gemini models failed');
   }
 }
+

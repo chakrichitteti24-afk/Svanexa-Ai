@@ -40,24 +40,31 @@ const SUGGESTED_PROMPTS = [
   "Pregnancy progress"
 ];
 
-// Memoized Markdown renderer
+// Memoized Markdown renderer optimized for mobile readability
 const MarkdownRenderer = memo(({ content }: { content?: string | null }) => {
   const safeText = typeof content === 'string' ? content : '';
   return (
-    <div className="markdown-prose text-[14px] leading-relaxed">
+    <div className="markdown-prose text-[13.5px] sm:text-[14px] leading-relaxed break-words">
       <ReactMarkdown 
         remarkPlugins={[remarkGfm]}
         components={{
-          p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
-          ul: ({ node, ...props }) => <ul className="list-disc pl-4 mb-2" {...props} />,
-          ol: ({ node, ...props }) => <ol className="list-decimal pl-4 mb-2" {...props} />,
-          li: ({ node, ...props }) => <li className="mb-1" {...props} />,
-          strong: ({ node, ...props }) => <strong className="font-bold text-white" {...props} />,
+          p: ({ node, ...props }) => <p className="mb-2 last:mb-0 text-[13.5px] sm:text-[14px] leading-relaxed text-[#F3EEFA]" {...props} />,
+          h1: ({ node, ...props }) => <h1 className="text-base font-bold text-white mb-2 mt-1" {...props} />,
+          h2: ({ node, ...props }) => <h2 className="text-sm font-bold text-pink-300 mb-1.5 mt-2" {...props} />,
+          h3: ({ node, ...props }) => <h3 className="text-xs font-bold text-violet-300 mb-1 mt-1.5 uppercase tracking-wide" {...props} />,
+          ul: ({ node, ...props }) => <ul className="list-disc pl-4 mb-2 space-y-1.5 text-[13px] sm:text-[13.5px] text-[#F3EEFA]" {...props} />,
+          ol: ({ node, ...props }) => <ol className="list-decimal pl-4 mb-2 space-y-1.5 text-[13px] sm:text-[13.5px] text-[#F3EEFA]" {...props} />,
+          li: ({ node, ...props }) => <li className="leading-snug" {...props} />,
+          blockquote: ({ node, ...props }) => (
+            <blockquote className="border-l-2 border-pink-400 pl-3 py-1 my-2 text-xs italic text-pink-100 bg-pink-500/10 rounded-r-lg" {...props} />
+          ),
+          strong: ({ node, ...props }) => <strong className="font-semibold text-white tracking-wide" {...props} />,
+          em: ({ node, ...props }) => <em className="italic text-pink-200" {...props} />,
           code: ({ node, inline, ...props }: any) => 
             inline ? (
-              <code className="bg-black/30 rounded px-1 text-xs font-mono" style={{ color: 'var(--hs-pink)' }} {...props} />
+              <code className="bg-black/30 rounded px-1.5 py-0.5 text-xs font-mono" style={{ color: 'var(--hs-pink)' }} {...props} />
             ) : (
-              <code className="block bg-black/40 rounded p-2 text-xs font-mono overflow-x-auto mb-2 border border-white/10" {...props} />
+              <code className="block bg-black/40 rounded-lg p-2.5 text-xs font-mono overflow-x-auto mb-2 border border-white/10" {...props} />
             )
         }}
       >

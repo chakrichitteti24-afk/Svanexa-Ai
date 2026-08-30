@@ -109,19 +109,29 @@ USER CONTEXT:
       try {
         chatCompletion = await groq.chat.completions.create({
           messages: messages,
-          model: "openai/gpt-oss-120b",
+          model: "openai/gpt-oss-20b",
           temperature: 0.7,
           max_tokens: 1024,
           top_p: 1,
         });
       } catch {
-        chatCompletion = await groq.chat.completions.create({
-          messages: messages,
-          model: "qwen/qwen3.6-27b",
-          temperature: 0.7,
-          max_tokens: 1024,
-          top_p: 1,
-        });
+        try {
+          chatCompletion = await groq.chat.completions.create({
+            messages: messages,
+            model: "openai/gpt-oss-120b",
+            temperature: 0.7,
+            max_tokens: 1024,
+            top_p: 1,
+          });
+        } catch {
+          chatCompletion = await groq.chat.completions.create({
+            messages: messages,
+            model: "llama-3.3-70b-versatile",
+            temperature: 0.7,
+            max_tokens: 1024,
+            top_p: 1,
+          });
+        }
       }
 
       if (chatCompletion?.choices?.[0]?.message?.content) {
@@ -153,7 +163,7 @@ export async function generateChatTitle(firstMessage: string): Promise<string> {
     try {
       const chatCompletion = await groq.chat.completions.create({
         messages: [{ role: "user", content: prompt }],
-        model: "openai/gpt-oss-120b",
+        model: "llama-3.1-8b-instant",
         temperature: 0.5,
         max_tokens: 15,
       });
