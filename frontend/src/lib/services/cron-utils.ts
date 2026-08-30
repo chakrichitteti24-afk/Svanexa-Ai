@@ -1,6 +1,31 @@
 import { createClient } from '@supabase/supabase-js';
 import { DEFAULT_NOTIFICATION_PREFERENCES, NotificationPreferences } from '@/types/notifications';
 
+export function validateCronRequest(req: Request): { authorized: boolean; error?: string } {
+  const cronSecret = process.env.CRON_SECRET;
+  const isProd = process.env.NODE_ENV === 'production';
+
+  // In production, CRON_SECRET is strictly required
+  if (isProd && !cronSecret) {
+    console.error('[cron] Security error: CRON_SECRET is not configured in production environment.');
+    return { authorized: false, error: 'Cron secret is not configured' };
+  }
+
+  if (!cronSecret) {
+    // Permitted only in local development when no secret is configured
+    return { authorized: true };
+  }
+
+  const authHeader = req.headers.get('authorization') || req.headers.get('Authorization');
+  const expectedAuth = `Bearer ${cronSecret}`;
+
+  if (authHeader && authHeader.trim() === expectedAuth) {
+    return { authorized: true };
+  }
+
+  return { authorized: false, error: 'Unauthorized cron request' };
+}
+
 export function getCronSupabaseClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
   const supabaseKey =

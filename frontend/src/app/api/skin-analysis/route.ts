@@ -140,6 +140,11 @@ export async function POST(req: Request) {
     const payload = await req.json().catch(() => ({}));
     const { acne, oiliness, dryness, skinType, concerns, notes, photoBase64 } = payload;
 
+    // Validate photo size limit (Max ~5MB binary / 7MB Base64)
+    if (photoBase64 && typeof photoBase64 === 'string' && photoBase64.length > 7 * 1024 * 1024) {
+      return NextResponse.json({ success: false, error: 'Uploaded image exceeds the 5MB file size limit.' }, { status: 400 });
+    }
+
     // Fetch user's profile
     const { data: profile } = await supabase
       .from('profiles')
@@ -151,18 +156,21 @@ export async function POST(req: Request) {
     let avgOil = '5.0';
     let avgDry = '2.0';
     let selectedSkinType = skinType || 'Combination';
-    let selectedConcerns: string[] = Array.isArray(concerns) ? concerns : [];
+    let selectedConcerns: string[] = Array.isArray(concerns) ? concerns.slice(0, 10).map(String) : [];
     let notesSummary: string[] = [];
     let latestPhotoBase64 = '';
 
     if (acne !== undefined || oiliness !== undefined || dryness !== undefined || photoBase64) {
       // Real-time analysis of the current input state
-      avgAcne = String(acne ?? 5);
-      avgOil = String(oiliness ?? 5);
-      avgDry = String(dryness ?? 2);
-      if (skinType) selectedSkinType = skinType;
-      if (notes) notesSummary.push(notes);
-      if (photoBase64) latestPhotoBase64 = photoBase64;
+      const safeAcne = Math.max(0, Math.min(10, Number(acne) || 5));
+      const safeOil = Math.max(0, Math.min(10, Number(oiliness) || 5));
+      const safeDry = Math.max(0, Math.min(10, Number(dryness) || 2));
+      avgAcne = String(safeAcne);
+      avgOil = String(safeOil);
+      avgDry = String(safeDry);
+      if (skinType && typeof skinType === 'string') selectedSkinType = skinType.slice(0, 50);
+      if (notes && typeof notes === 'string') notesSummary.push(notes.slice(0, 1000));
+      if (photoBase64 && typeof photoBase64 === 'string') latestPhotoBase64 = photoBase64;
     } else {
       // Fetch user's recent skin logs from database
       const { data: skinLogs } = await supabase

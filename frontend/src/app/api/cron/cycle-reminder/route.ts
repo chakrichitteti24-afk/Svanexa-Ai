@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getCronSupabaseClient, getUserPreferencesMap, buildCycleMessage } from '@/lib/services/cron-utils';
+import { getCronSupabaseClient, getUserPreferencesMap, buildCycleMessage, validateCronRequest } from '@/lib/services/cron-utils';
 import { sendWebPush } from '@/lib/services/web-push';
 import { differenceInDays, parseISO, addDays, format } from 'date-fns';
 
@@ -25,10 +25,9 @@ function predictNextPeriod(cycleLogs: { start_date: string; end_date?: string }[
 
 export async function GET(req: Request) {
   try {
-    const cronSecret = process.env.CRON_SECRET;
-    const authHeader = req.headers.get('authorization');
-    if (cronSecret && authHeader !== `Bearer `) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    const auth = validateCronRequest(req);
+    if (!auth.authorized) {
+      return NextResponse.json({ success: false, error: auth.error || 'Unauthorized' }, { status: 401 });
     }
 
     const supabase = getCronSupabaseClient();

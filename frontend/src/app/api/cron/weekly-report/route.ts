@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { format, subDays, startOfWeek, endOfWeek } from 'date-fns';
-import { getCronSupabaseClient } from '@/lib/services/cron-utils';
+import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { getCronSupabaseClient, validateCronRequest } from '@/lib/services/cron-utils';
 import { sendWebPush } from '@/lib/services/web-push';
 
 export const dynamic = 'force-dynamic';
@@ -43,10 +43,9 @@ function getWeeklyReportMessage(
 
 async function handleReport(req: Request, isMonthly = false) {
   try {
-    const cronSecret = process.env.CRON_SECRET;
-    const authHeader = req.headers.get('authorization');
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    const auth = validateCronRequest(req);
+    if (!auth.authorized) {
+      return NextResponse.json({ success: false, error: auth.error || 'Unauthorized' }, { status: 401 });
     }
 
     const supabase = getCronSupabaseClient();

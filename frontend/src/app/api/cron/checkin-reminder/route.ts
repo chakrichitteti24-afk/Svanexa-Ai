@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { format } from 'date-fns';
 import { sendWebPush } from '@/lib/services/web-push';
-import { getCronSupabaseClient, getUserPreferencesMap, buildCheckinMessage } from '@/lib/services/cron-utils';
+import { getCronSupabaseClient, getUserPreferencesMap, buildCheckinMessage, validateCronRequest } from '@/lib/services/cron-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,14 +13,12 @@ function determineAutoSlot(currentHour: number): 'morning' | 'afternoon' | 'even
 
 async function handleCheckinReminders(req: Request) {
   try {
-    const url = new URL(req.url);
-    const cronSecret = process.env.CRON_SECRET;
-    const authHeader = req.headers.get('authorization');
-    const querySecret = url.searchParams.get('secret');
-
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}` && querySecret !== cronSecret) {
-      return NextResponse.json({ success: false, error: 'Unauthorized cron request' }, { status: 401 });
+    const auth = validateCronRequest(req);
+    if (!auth.authorized) {
+      return NextResponse.json({ success: false, error: auth.error || 'Unauthorized cron request' }, { status: 401 });
     }
+
+    const url = new URL(req.url);
 
     const requestedSlot = url.searchParams.get('slot');
     const targetUserId = url.searchParams.get('userId');

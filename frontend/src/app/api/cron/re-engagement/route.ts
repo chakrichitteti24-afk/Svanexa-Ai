@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { format, subDays, differenceInDays, parseISO } from 'date-fns';
-import { getCronSupabaseClient } from '@/lib/services/cron-utils';
+import { getCronSupabaseClient, validateCronRequest } from '@/lib/services/cron-utils';
 import { sendWebPush } from '@/lib/services/web-push';
+import { format, differenceInDays, parseISO } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,10 +26,9 @@ function getReEngagementMessage(name: string, daysSince: number): { title: strin
 
 export async function GET(req: Request) {
   try {
-    const cronSecret = process.env.CRON_SECRET;
-    const authHeader = req.headers.get('authorization');
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    const auth = validateCronRequest(req);
+    if (!auth.authorized) {
+      return NextResponse.json({ success: false, error: auth.error || 'Unauthorized' }, { status: 401 });
     }
 
     const supabase = getCronSupabaseClient();

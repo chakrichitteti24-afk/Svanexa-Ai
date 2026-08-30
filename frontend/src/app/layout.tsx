@@ -12,7 +12,6 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'Svanexa AI | Intelligent Wellness, Empowered by AI',
   description: 'Svanexa AI is an AI-powered women\'s wellness platform designed to provide personalized wellness guidance, secure health tracking, and intelligent insights through Artificial Intelligence.',
-  manifest: '/manifest.webmanifest',
   icons: {
     icon: [
       { url: '/favicon.ico' },
@@ -31,6 +30,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark" data-scroll-behavior="smooth" suppressHydrationWarning>
+      <head>
+        <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
+      </head>
       <body className={`${inter.className} bg-background text-foreground antialiased`} suppressHydrationWarning>
         {children}
         <Toaster />
