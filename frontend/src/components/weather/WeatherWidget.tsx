@@ -90,7 +90,8 @@ export function WeatherWidget({
 
   useEffect(() => {
     requestLocation();
-  }, [requestLocation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once on mount only — requestLocation is stable via useCallback([fetchWeather]) and fetchWeather has []
 
   if (loading && !weather) {
     return (

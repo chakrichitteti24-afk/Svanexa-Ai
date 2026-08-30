@@ -20,7 +20,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const VALID_ITEM_TYPES = ['theme', 'dashboard_style', 'companion_style'];
+    const VALID_ITEM_TYPES = ['theme', 'dashboard_style', 'companion_style', 'companion_skin'];
     if (!VALID_ITEM_TYPES.includes(itemType)) {
       return NextResponse.json(
         { success: false, error: 'Invalid item type' },
@@ -34,7 +34,8 @@ export async function POST(req: Request) {
     const isDefaultItem = 
       (itemType === 'theme' && itemId === 'default') ||
       (itemType === 'dashboard_style' && itemId === 'minimal') ||
-      (itemType === 'companion_style' && itemId === 'friendly');
+      (itemType === 'companion_style' && itemId === 'friendly') ||
+      (itemType === 'companion_skin' && itemId === 'dynamic');
 
     if (!isDefaultItem) {
       const { data: unlocked } = await supabase
@@ -58,6 +59,7 @@ export async function POST(req: Request) {
     if (itemType === 'theme') updatePayload.active_theme = itemId;
     else if (itemType === 'dashboard_style') updatePayload.active_dashboard_style = itemId;
     else if (itemType === 'companion_style') updatePayload.active_companion_style = itemId;
+    else if (itemType === 'companion_skin') updatePayload.active_companion_skin = itemId;
 
     const { error } = await supabase
       .from('profiles')

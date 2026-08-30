@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/utils/supabase/server';
 
-// Authoritative server-side price catalog to prevent client-side price tampering
 const STORE_ITEM_PRICES: Record<string, number> = {
   // Themes
   'theme:default': 0,
@@ -11,6 +10,13 @@ const STORE_ITEM_PRICES: Record<string, number> = {
   'theme:midnight': 50,
   'theme:sage': 50,
   'theme:sunrise': 50,
+  'theme:cherry': 75,
+  'theme:arctic': 75,
+  'theme:neon': 100,
+  'theme:honey': 75,
+  'theme:storm': 75,
+  'theme:mint': 50,
+  'theme:twilight': 100,
   // Dashboard Styles
   'dashboard_style:minimal': 0,
   'dashboard_style:soft_glow': 40,
@@ -18,7 +24,12 @@ const STORE_ITEM_PRICES: Record<string, number> = {
   'dashboard_style:calm': 40,
   'dashboard_style:rose_tint': 40,
   'dashboard_style:midnight': 40,
-  // Companion Styles
+  'dashboard_style:crystal': 60,
+  'dashboard_style:rose_gold': 60,
+  'dashboard_style:midnight_ink': 60,
+  'dashboard_style:retro_wave': 80,
+  'dashboard_style:parchment': 40,
+  // Companion Styles (Personality)
   'companion_style:friendly': 0,
   'companion_style:calm': 30,
   'companion_style:focus': 30,
@@ -30,6 +41,21 @@ const STORE_ITEM_PRICES: Record<string, number> = {
   'companion_style:energizing': 60,
   'companion_style:mindful': 60,
   'companion_style:clinical': 60,
+  'companion_style:sage': 50,
+  'companion_style:coach': 50,
+  'companion_style:playful': 50,
+  'companion_style:empath': 60,
+  'companion_style:night_owl': 60,
+  // Companion Skins (Avatar)
+  'companion_skin:dynamic': 0,
+  'companion_skin:always_happy': 40,
+  'companion_skin:always_calm': 40,
+  'companion_skin:cozy_sit': 50,
+  'companion_skin:fierce': 60,
+  'companion_skin:soft_sad': 40,
+  'companion_skin:mascot_cute': 80,
+  'companion_skin:mascot_think': 80,
+  'companion_skin:mascot_walk': 80,
 };
 
 export async function POST(req: Request) {
@@ -133,16 +159,21 @@ export async function POST(req: Request) {
         );
       }
 
-      // Deduct balance
+      // Atomically deduct balance only if still sufficient (prevents race condition double-spend)
       const newBalance = currentBalance - authoritativeCost;
-      await supabase.from('user_coin_balances').upsert(
-        {
-          user_id: userId,
-          balance: newBalance,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id' }
-      );
+      const { data: updatedRows, error: updateErr } = await supabase
+        .from('user_coin_balances')
+        .update({ balance: newBalance, updated_at: new Date().toISOString() })
+        .eq('user_id', userId)
+        .gte('balance', authoritativeCost) // atomic floor guard
+        .select('balance');
+
+      if (updateErr || !updatedRows || updatedRows.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'Insufficient coins or concurrent purchase detected. Please try again.', newBalance: currentBalance },
+          { status: 400 }
+        );
+      };
 
       // Record transaction
       const refId = `store:${itemType}:${itemId}`;
@@ -179,6 +210,7 @@ export async function POST(req: Request) {
       if (itemType === 'theme') profileUpdate.active_theme = itemId;
       else if (itemType === 'dashboard_style') profileUpdate.active_dashboard_style = itemId;
       else if (itemType === 'companion_style') profileUpdate.active_companion_style = itemId;
+      else if (itemType === 'companion_skin') profileUpdate.active_companion_skin = itemId;
 
       if (Object.keys(profileUpdate).length > 0) {
         await supabase.from('profiles').update(profileUpdate).eq('id', userId);

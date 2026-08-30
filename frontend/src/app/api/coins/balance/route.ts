@@ -28,7 +28,7 @@ export async function GET(req: Request) {
     // Fetch active profile selections
     const { data: profile } = await supabase
       .from('profiles')
-      .select('active_theme, active_dashboard_style, active_companion_style')
+      .select('active_theme, active_dashboard_style, active_companion_style, active_companion_skin')
       .eq('id', userId)
       .maybeSingle();
 
@@ -37,6 +37,7 @@ export async function GET(req: Request) {
     const activeTheme = profile?.active_theme || 'default';
     const activeDashboardStyle = profile?.active_dashboard_style || 'minimal';
     const activeCompanionStyle = profile?.active_companion_style || 'friendly';
+    const activeCompanionSkin = profile?.active_companion_skin || 'dynamic';
 
     return NextResponse.json({
       success: true,
@@ -46,6 +47,7 @@ export async function GET(req: Request) {
         activeTheme,
         activeDashboardStyle,
         activeCompanionStyle,
+        activeCompanionSkin,
       },
     });
   } catch (error: any) {

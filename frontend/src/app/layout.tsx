@@ -31,7 +31,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
-        <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
+        <link rel="manifest" href="/manifest.webmanifest" crossOrigin="anonymous" />
       </head>
       <body className={`${inter.className} bg-background text-foreground antialiased`} suppressHydrationWarning>
         {children}

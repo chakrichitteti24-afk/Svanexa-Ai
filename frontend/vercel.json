@@ -75,6 +75,10 @@
     {
       "path": "/api/cron/wellness-tasks-reminder",
       "schedule": "30 11 * * *"
+    },
+    {
+      "path": "/api/cron/keep-alive",
+      "schedule": "0 0 */3 * *"
     }
   ]
 }

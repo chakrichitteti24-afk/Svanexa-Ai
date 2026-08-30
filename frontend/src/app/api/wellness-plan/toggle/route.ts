@@ -65,6 +65,34 @@ export async function POST(req: Request) {
       }
 
       if (!alreadyAwarded) {
+        // Check daily task coin cap (max 50 coins/day from tasks)
+        const DAILY_TASK_COIN_CAP = 50;
+        let dailyTaskCoinsEarned = 0;
+        try {
+          const { data: todayTaskTxs } = await supabase
+            .from('user_coin_transactions')
+            .select('amount')
+            .eq('user_id', userId)
+            .eq('transaction_type', 'wellness_task')
+            .gte('created_at', `${todayStr}T00:00:00.000Z`)
+            .lte('created_at', `${todayStr}T23:59:59.999Z`);
+
+          if (todayTaskTxs) {
+            dailyTaskCoinsEarned = todayTaskTxs.reduce((sum: number, tx: any) => sum + (tx.amount || 0), 0);
+          }
+        } catch (capCheckErr) {
+          console.warn('[daily cap check warning]', capCheckErr);
+        }
+
+        if (dailyTaskCoinsEarned >= DAILY_TASK_COIN_CAP) {
+          // Cap reached — return current balance without awarding
+          try {
+            const { data: balRow } = await supabase
+              .from('user_coin_balances').select('balance').eq('user_id', userId).maybeSingle();
+            newBalance = typeof balRow?.balance === 'number' ? balRow.balance : 0;
+          } catch {}
+          return NextResponse.json({ ...result, coinsEarned: 0, newBalance, capReached: true });
+        }
         // 2. Try PostgreSQL RPC
         let rpcSuccess = false;
         try {

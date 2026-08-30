@@ -118,7 +118,16 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { slot, claimBonus, date: bodyDate } = body as { slot?: CheckinSlot; claimBonus?: boolean; date?: string };
 
-    const today = bodyDate || extractDateFromRequest(req);
+    const serverToday = new Date().toISOString().split('T')[0];
+    const today = serverToday; // Always use server date — never trust client-supplied date
+
+    // Reject if client sent a different date (prevents re-claiming past slots)
+    if (bodyDate && bodyDate !== serverToday) {
+      return NextResponse.json(
+        { success: false, error: 'Claims can only be made for today.' },
+        { status: 400 }
+      );
+    }
 
     // ── Validation ────────────────────────────────────────────────────────────
     if (slot && !VALID_SLOTS.includes(slot)) {
