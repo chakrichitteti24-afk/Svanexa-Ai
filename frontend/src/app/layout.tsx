@@ -12,6 +12,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'Svanexa AI | Intelligent Wellness, Empowered by AI',
   description: 'Svanexa AI is an AI-powered women\'s wellness platform designed to provide personalized wellness guidance, secure health tracking, and intelligent insights through Artificial Intelligence.',
+  manifest: '/manifest.webmanifest',
   icons: {
     icon: [
       { url: '/favicon.ico' },

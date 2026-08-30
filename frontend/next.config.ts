@@ -15,6 +15,15 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        source: "/(manifest.webmanifest|manifest.json)",
+        headers: [
+          { key: "Content-Type", value: "application/manifest+json; charset=utf-8" },
+          { key: "Access-Control-Allow-Origin", value: "*" },
+          { key: "Access-Control-Allow-Methods", value: "GET,OPTIONS" },
+          { key: "Cache-Control", value: "public, max-age=3600" },
+        ],
+      },
+      {
         source: "/api/:path*",
         headers: [
           { key: "Access-Control-Allow-Credentials", value: "true" },
