@@ -23,6 +23,7 @@ import {
   Edit3,
   X,
   RotateCcw,
+  Globe,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { HabitBadges } from '@/components/profile/HabitBadges';
@@ -36,9 +37,27 @@ interface ProfileData {
   lastName: string;
   dob: string;
   companionName: string;
+  companionLanguage: string;
   userMode: WellnessMode;
   dueDate: string;
 }
+
+export const COMPANION_LANGUAGES = [
+  { code: 'English', label: 'English (🇬🇧 English)' },
+  { code: 'Hindi', label: 'Hindi (🇮🇳 हिंदी)' },
+  { code: 'Telugu', label: 'Telugu (🇮🇳 తెలుగు)' },
+  { code: 'Tamil', label: 'Tamil (🇮🇳 தமிழ்)' },
+  { code: 'Spanish', label: 'Spanish (🇪🇸 Español)' },
+  { code: 'French', label: 'French (🇫🇷 Français)' },
+  { code: 'German', label: 'German (🇩🇪 Deutsch)' },
+  { code: 'Kannada', label: 'Kannada (🇮🇳 ಕನ್ನಡ)' },
+  { code: 'Malayalam', label: 'Malayalam (🇮🇳 മലയാളം)' },
+  { code: 'Marathi', label: 'Marathi (🇮🇳 मराठी)' },
+  { code: 'Bengali', label: 'Bengali (🇮🇳 বাংলা)' },
+  { code: 'Gujarati', label: 'Gujarati (🇮🇳 ગુજરાતી)' },
+  { code: 'Arabic', label: 'Arabic (🇸🇦 العربية)' },
+  { code: 'Portuguese', label: 'Portuguese (🇧🇷 Português)' },
+];
 
 function calculateAge(dobString: string): number | null {
   if (!dobString) return null;
@@ -98,7 +117,7 @@ const WELLNESS_MODES: {
 export default function ProfilePage() {
   const router = useRouter();
   const supabase = createClient();
-  const { refreshAll } = useHerSync();
+  const { refreshAll, updateLanguage } = useHerSync();
 
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -112,6 +131,7 @@ export default function ProfilePage() {
     lastName: '',
     dob: '',
     companionName: 'Luna',
+    companionLanguage: 'English',
     userMode: 'general',
     dueDate: '',
   });
@@ -121,6 +141,7 @@ export default function ProfilePage() {
   const [lastName, setLastName] = useState('');
   const [dob, setDob] = useState('');
   const [companionName, setCompanionName] = useState('Luna');
+  const [companionLanguage, setCompanionLanguage] = useState('English');
   const [userMode, setUserMode] = useState<WellnessMode>('general');
   const [dueDate, setDueDate] = useState('');
 
@@ -141,10 +162,11 @@ export default function ProfilePage() {
       lastName !== savedData.lastName ||
       dob !== savedData.dob ||
       companionName !== savedData.companionName ||
+      companionLanguage !== savedData.companionLanguage ||
       userMode !== savedData.userMode ||
       dueDate !== savedData.dueDate
     );
-  }, [firstName, lastName, dob, companionName, userMode, dueDate, savedData]);
+  }, [firstName, lastName, dob, companionName, companionLanguage, userMode, dueDate, savedData]);
 
   const loadProfile = useCallback(async () => {
     try {
@@ -172,7 +194,7 @@ export default function ProfilePage() {
           .maybeSingle(),
         supabase
           .from('user_preferences')
-          .select('theme')
+          .select('theme, language')
           .eq('user_id', user.id)
           .maybeSingle(),
       ]);
@@ -189,6 +211,7 @@ export default function ProfilePage() {
         lastName: profileRes.data?.last_name || user.user_metadata?.last_name || '',
         dob: profileRes.data?.date_of_birth || '',
         companionName: profileRes.data?.ai_name || 'Luna',
+        companionLanguage: prefRes.data?.language || (typeof window !== 'undefined' ? localStorage.getItem('hersync_companion_language') : null) || 'English',
         userMode: detectedUserMode,
         dueDate: pregRes.data?.due_date || '',
       };
@@ -198,6 +221,7 @@ export default function ProfilePage() {
       setLastName(initialData.lastName);
       setDob(initialData.dob);
       setCompanionName(initialData.companionName);
+      setCompanionLanguage(initialData.companionLanguage);
       setUserMode(initialData.userMode);
       setDueDate(initialData.dueDate);
       setErrors({});
@@ -256,6 +280,7 @@ export default function ProfilePage() {
     setLastName(savedData.lastName);
     setDob(savedData.dob);
     setCompanionName(savedData.companionName);
+    setCompanionLanguage(savedData.companionLanguage);
     setUserMode(savedData.userMode);
     setDueDate(savedData.dueDate);
     setErrors({});
@@ -311,6 +336,7 @@ export default function ProfilePage() {
           {
             user_id: userId,
             theme: userMode,
+            language: companionLanguage,
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'user_id' }
@@ -354,10 +380,20 @@ export default function ProfilePage() {
         lastName: lastName.trim(),
         dob,
         companionName: companionName.trim(),
+        companionLanguage,
         userMode,
         dueDate: userMode === 'pregnancy' ? dueDate : '',
       };
       setSavedData(updatedData);
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('hersync_companion_language', companionLanguage);
+      }
+      try {
+        await updateLanguage(companionLanguage);
+      } catch (err) {
+        console.warn('Language sync error:', err);
+      }
 
       toast.success('Profile saved successfully.');
 
@@ -754,37 +790,64 @@ export default function ProfilePage() {
             </span>
           </div>
 
-          <div className="space-y-1.5">
-            <label htmlFor="companionNameInput" className="text-xs font-semibold text-foreground/90">
-              Companion Name <span className="text-pink-500">*</span>
-            </label>
-            <input
-              id="companionNameInput"
-              type="text"
-              value={companionName}
-              disabled={!isEditing}
-              onChange={e => {
-                setCompanionName(e.target.value);
-                if (errors.companionName) setErrors(prev => ({ ...prev, companionName: '' }));
-              }}
-              placeholder="e.g. Luna"
-              className={`w-full h-11 px-3.5 rounded-xl text-sm transition-all ${
-                isEditing
-                  ? 'bg-secondary/50 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-violet-500/40'
-                  : 'bg-secondary/20 border border-border/30 text-muted-foreground/90 cursor-not-allowed select-none'
-              } ${errors.companionName ? 'border-rose-500' : ''}`}
-            />
-            {errors.companionName ? (
-              <p className="text-[11px] text-rose-400 font-semibold flex items-center gap-1 mt-1">
-                <AlertCircle className="w-3 h-3 flex-shrink-0" />
-                {errors.companionName}
-              </p>
-            ) : (
-              <p className="text-[11px] text-muted-foreground">
-                Your personal AI wellness guide will introduce itself with this name in chat and daily briefings.
-              </p>
-            )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Companion Name */}
+            <div className="space-y-1.5">
+              <label htmlFor="companionNameInput" className="text-xs font-semibold text-foreground/90">
+                Companion Name <span className="text-pink-500">*</span>
+              </label>
+              <input
+                id="companionNameInput"
+                type="text"
+                value={companionName}
+                disabled={!isEditing}
+                onChange={e => {
+                  setCompanionName(e.target.value);
+                  if (errors.companionName) setErrors(prev => ({ ...prev, companionName: '' }));
+                }}
+                placeholder="e.g. Luna"
+                className={`w-full h-11 px-3.5 rounded-xl text-sm transition-all ${
+                  isEditing
+                    ? 'bg-secondary/50 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-violet-500/40'
+                    : 'bg-secondary/20 border border-border/30 text-muted-foreground/90 cursor-not-allowed select-none'
+                } ${errors.companionName ? 'border-rose-500' : ''}`}
+              />
+              {errors.companionName && (
+                <p className="text-[11px] text-rose-400 font-semibold flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                  {errors.companionName}
+                </p>
+              )}
+            </div>
+
+            {/* Companion Language */}
+            <div className="space-y-1.5">
+              <label htmlFor="companionLanguageInput" className="text-xs font-semibold text-foreground/90 flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5 text-pink-400" /> Default Language
+              </label>
+              <select
+                id="companionLanguageInput"
+                value={companionLanguage}
+                disabled={!isEditing}
+                onChange={e => setCompanionLanguage(e.target.value)}
+                className={`w-full h-11 px-3.5 rounded-xl text-sm transition-all ${
+                  isEditing
+                    ? 'bg-secondary/50 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-pink-500/40 cursor-pointer'
+                    : 'bg-secondary/20 border border-border/30 text-muted-foreground/90 cursor-not-allowed select-none'
+                }`}
+              >
+                {COMPANION_LANGUAGES.map(lang => (
+                  <option key={lang.code} value={lang.code} className="bg-[#181126] text-white">
+                    {lang.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
+
+          <p className="text-[11px] text-muted-foreground">
+            Your personal AI wellness guide will introduce itself with this name and converse with you in your preferred language across all wellness activities.
+          </p>
         </motion.div>
 
         {/* ───────────────────────────────────────────────────────────────────────

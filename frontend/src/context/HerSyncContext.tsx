@@ -12,11 +12,21 @@ import {
 } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { apiFetch } from '@/utils/api-client';
+import { offlineMutationQueue } from '@/utils/offline-sync';
 import { format } from 'date-fns';
 
 // ============================================================
-// TYPES
+// TYPES & BROADCAST SYNC EVENTS
 // ============================================================
+
+export type BroadcastSyncMessage =
+  | { type: 'CHECKIN_UPDATED'; slot: 'morning' | 'afternoon' | 'evening'; completed: boolean; partialLog?: Partial<TodayLog> }
+  | { type: 'TODAY_LOG_UPDATED'; partialLog: Partial<TodayLog> }
+  | { type: 'TASK_TOGGLED'; taskId: string; completed: boolean; status: string; coinsEarned?: number; newBalance?: number }
+  | { type: 'COIN_UPDATED'; newBalance: number; earnedAmount?: number }
+  | { type: 'CUSTOMIZATION_ACTIVATED'; itemType: string; itemId: string }
+  | { type: 'LANGUAGE_CHANGED'; language: string }
+  | { type: 'REFRESH_ALL'; skipCycleHistory?: boolean };
 
 export interface UserProfile {
   id: string;
@@ -147,10 +157,13 @@ interface HerSyncContextValue extends HealthState {
   /** Instant local optimistic sync methods */
   updateTodayLogLocally: (partialLog: Partial<TodayLog>) => void;
   updateCheckinSlotLocally: (slot: 'morning' | 'afternoon' | 'evening', completed: boolean) => void;
+  /** Language preference management */
+  updateLanguage: (newLang: string) => Promise<void>;
   /** Derived helpers */
   wellnessMode: 'general' | 'pcos' | 'pregnancy';
   userName: string;
   aiName: string;
+  language: string;
 }
 
 // ============================================================
@@ -234,6 +247,18 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
     return initialState;
   });
 
+  const broadcastRef = useRef<BroadcastChannel | null>(null);
+
+  const postSyncBroadcast = useCallback((msg: BroadcastSyncMessage) => {
+    if (typeof window !== 'undefined' && broadcastRef.current) {
+      try {
+        broadcastRef.current.postMessage(msg);
+      } catch (err) {
+        console.warn('[HerSyncContext] BroadcastChannel post error:', err);
+      }
+    }
+  }, []);
+
   const triggerCoinAnimation = useCallback((amount: number) => {
     if (amount <= 0) return;
     const animId = Date.now().toString();
@@ -246,7 +271,7 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
     }, 1200);
   }, []);
 
-  const updateCoinBalanceLocally = useCallback((newBalance: number, earnedAmount?: number) => {
+  const updateCoinBalanceLocally = useCallback((newBalance: number, earnedAmount?: number, broadcast = true) => {
     if (typeof newBalance !== 'number' || isNaN(newBalance)) return;
 
     setState(prev => {
@@ -269,7 +294,15 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
     if (earnedAmount && earnedAmount > 0) {
       triggerCoinAnimation(earnedAmount);
     }
-  }, [triggerCoinAnimation]);
+
+    if (broadcast) {
+      postSyncBroadcast({
+        type: 'COIN_UPDATED',
+        newBalance,
+        earnedAmount,
+      });
+    }
+  }, [triggerCoinAnimation, postSyncBroadcast]);
 
   const refreshCoins = useCallback(async () => {
     try {
@@ -293,7 +326,7 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const updateTodayLogLocally = useCallback((partialLog: Partial<TodayLog>) => {
+  const updateTodayLogLocally = useCallback((partialLog: Partial<TodayLog>, broadcast = true) => {
     setState(prev => {
       const updatedLog = { ...prev.todayLog, ...partialLog };
       try {
@@ -311,9 +344,16 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         hasCheckedInToday: true,
       };
     });
-  }, []);
 
-  const updateCheckinSlotLocally = useCallback((slot: 'morning' | 'afternoon' | 'evening', completed: boolean) => {
+    if (broadcast) {
+      postSyncBroadcast({
+        type: 'TODAY_LOG_UPDATED',
+        partialLog,
+      });
+    }
+  }, [postSyncBroadcast]);
+
+  const updateCheckinSlotLocally = useCallback((slot: 'morning' | 'afternoon' | 'evening', completed: boolean, broadcast = true) => {
     setState(prev => {
       const updatedSlots = {
         ...prev.checkinSlots,
@@ -337,7 +377,15 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         hasCheckedInToday: true,
       };
     });
-  }, []);
+
+    if (broadcast) {
+      postSyncBroadcast({
+        type: 'CHECKIN_UPDATED',
+        slot,
+        completed,
+      });
+    }
+  }, [postSyncBroadcast]);
 
   const fetchAll = useCallback(async (options: { skipCycleHistory?: boolean } = {}) => {
     try {
@@ -554,6 +602,13 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       }),
     }));
 
+    postSyncBroadcast({
+      type: 'TASK_TOGGLED',
+      taskId,
+      completed: nextCompleted,
+      status: nextStatus,
+    });
+
     try {
       const res = await apiFetch('/api/wellness-plan/toggle', {
         method: 'POST',
@@ -568,11 +623,25 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         if (data.tasks) {
           setState(prev => ({ ...prev, wellnessTasks: data.tasks }));
         }
+      } else {
+        // Enqueue for offline background retry
+        offlineMutationQueue.enqueueMutation(
+          '/api/wellness-plan/toggle',
+          'POST',
+          { taskId, status: nextStatus, date: todayStr },
+          `task_toggle_${taskId}`
+        );
       }
     } catch (err) {
-      console.error('Task toggle error', err);
+      console.warn('[HerSyncContext] Task toggle network error, enqueued offline mutation:', err);
+      offlineMutationQueue.enqueueMutation(
+        '/api/wellness-plan/toggle',
+        'POST',
+        { taskId, status: nextStatus, date: todayStr },
+        `task_toggle_${taskId}`
+      );
     }
-  }, [state.wellnessTasks, updateCoinBalanceLocally]);
+  }, [state.wellnessTasks, updateCoinBalanceLocally, postSyncBroadcast]);
 
   const purchaseItem = useCallback(
     async (itemType: string, itemId: string, cost: number, itemName: string): Promise<boolean> => {
@@ -687,6 +756,12 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       };
     });
 
+    postSyncBroadcast({
+      type: 'CUSTOMIZATION_ACTIVATED',
+      itemType,
+      itemId,
+    });
+
     try {
       const res = await apiFetch('/api/coins/active', {
         method: 'POST',
@@ -715,8 +790,9 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       }));
       throw err;
     }
-  }, []);
+  }, [postSyncBroadcast]);
 
+  // ── 1. Initial Load & Error Handling ─────────────────────────────────────
   useEffect(() => {
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       if (
@@ -738,7 +814,208 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
     };
   }, [fetchAll]);
 
-  // Smart Background Syncing on Window Focus
+  // ── 2. Zero-Latency Cross-Tab BroadcastChannel & Storage Event Sync ───────
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    let channel: BroadcastChannel | null = null;
+    try {
+      if ('BroadcastChannel' in window) {
+        channel = new BroadcastChannel('svanexa_health_sync');
+        broadcastRef.current = channel;
+
+        channel.onmessage = (event: MessageEvent<BroadcastSyncMessage>) => {
+          const msg = event.data;
+          if (!msg || typeof msg !== 'object') return;
+
+          switch (msg.type) {
+            case 'CHECKIN_UPDATED':
+              updateCheckinSlotLocally(msg.slot, msg.completed, false);
+              if (msg.partialLog) {
+                updateTodayLogLocally(msg.partialLog, false);
+              }
+              break;
+            case 'TODAY_LOG_UPDATED':
+              updateTodayLogLocally(msg.partialLog, false);
+              break;
+            case 'TASK_TOGGLED':
+              setState(prev => ({
+                ...prev,
+                wellnessTasks: prev.wellnessTasks.map(t =>
+                  t.id === msg.taskId
+                    ? {
+                        ...t,
+                        completed: msg.completed,
+                        status: msg.status as any,
+                        completedAt: msg.completed ? new Date().toISOString() : null,
+                      }
+                    : t
+                ),
+              }));
+              if (typeof msg.newBalance === 'number') {
+                updateCoinBalanceLocally(msg.newBalance, msg.coinsEarned, false);
+              }
+              break;
+            case 'COIN_UPDATED':
+              updateCoinBalanceLocally(msg.newBalance, msg.earnedAmount, false);
+              break;
+            case 'CUSTOMIZATION_ACTIVATED':
+              if (typeof document !== 'undefined') {
+                if (msg.itemType === 'theme') {
+                  document.documentElement.setAttribute('data-theme', msg.itemId);
+                  document.body.setAttribute('data-theme', msg.itemId);
+                } else if (msg.itemType === 'dashboard_style') {
+                  document.documentElement.setAttribute('data-dashboard-style', msg.itemId);
+                  document.body.setAttribute('data-dashboard-style', msg.itemId);
+                }
+              }
+              setState(prev => ({
+                ...prev,
+                activeTheme: msg.itemType === 'theme' ? msg.itemId : prev.activeTheme,
+                activeDashboardStyle: msg.itemType === 'dashboard_style' ? msg.itemId : prev.activeDashboardStyle,
+                activeCompanionStyle: msg.itemType === 'companion_style' ? msg.itemId : prev.activeCompanionStyle,
+              }));
+              break;
+            case 'LANGUAGE_CHANGED':
+              setState(prev => ({
+                ...prev,
+                preferences: prev.preferences ? { ...prev.preferences, language: msg.language } : prev.preferences,
+              }));
+              break;
+            case 'REFRESH_ALL':
+              fetchAll({ skipCycleHistory: msg.skipCycleHistory });
+              break;
+          }
+        };
+      }
+    } catch (bcErr) {
+      console.warn('[HerSyncContext] BroadcastChannel setup fallback:', bcErr);
+    }
+
+    // Storage event listener fallback for cross-tab cache sync
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'svanexa_app_cache_v1' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          const todayStr = format(new Date(), 'yyyy-MM-dd');
+          if (parsed.cacheDate === todayStr) {
+            setState(prev => ({
+              ...prev,
+              coinBalance: typeof parsed.coinBalance === 'number' ? parsed.coinBalance : prev.coinBalance,
+              hasCheckedInToday: parsed.hasCheckedInToday ?? prev.hasCheckedInToday,
+              checkinSlots: parsed.checkinSlots || prev.checkinSlots,
+              todayLog: parsed.todayLog || prev.todayLog,
+              wellnessTasks: Array.isArray(parsed.wellnessTasks) ? parsed.wellnessTasks : prev.wellnessTasks,
+            }));
+          }
+        } catch {}
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      if (channel) {
+        channel.close();
+        broadcastRef.current = null;
+      }
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [fetchAll, updateCheckinSlotLocally, updateCoinBalanceLocally, updateTodayLogLocally]);
+
+  // ── 3. Supabase Realtime CDC (Multi-Device Live Sync) ─────────────────────
+  useEffect(() => {
+    let realtimeChannel: any = null;
+
+    const setupRealtime = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user?.id) return;
+        const userId = session.user.id;
+
+        realtimeChannel = supabase
+          .channel(`hersync-realtime-${userId}`)
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'daily_checkins', filter: `user_id=eq.${userId}` },
+            (payload: any) => {
+              if (payload.new && payload.new.summary) {
+                try {
+                  const meta = JSON.parse(payload.new.summary);
+                  const morningDone = !!meta.morning?.completed;
+                  const afternoonDone = !!meta.afternoon?.completed;
+                  const eveningDone = !!meta.evening?.completed;
+                  const allDone = morningDone && afternoonDone && eveningDone;
+                  setState(prev => ({
+                    ...prev,
+                    hasCheckedInToday: true,
+                    checkinSlots: {
+                      morning: { completed: morningDone, completedAt: meta.morning?.completedAt || null },
+                      afternoon: { completed: afternoonDone, completedAt: meta.afternoon?.completedAt || null },
+                      evening: { completed: eveningDone, completedAt: meta.evening?.completedAt || null },
+                    },
+                    allSlotsComplete: allDone,
+                  }));
+                } catch {}
+              }
+            }
+          )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'coin_balances', filter: `user_id=eq.${userId}` },
+            (payload: any) => {
+              if (payload.new && typeof payload.new.balance === 'number') {
+                updateCoinBalanceLocally(payload.new.balance, undefined, true);
+              }
+            }
+          )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'user_preferences', filter: `user_id=eq.${userId}` },
+            (payload: any) => {
+              if (payload.new) {
+                setState(prev => ({
+                  ...prev,
+                  preferences: {
+                    ...(prev.preferences || ({} as any)),
+                    ...payload.new,
+                  },
+                }));
+              }
+            }
+          )
+          .subscribe();
+      } catch (rtErr) {
+        console.warn('[HerSyncContext] Realtime setup notice:', rtErr);
+      }
+    };
+
+    setupRealtime();
+
+    return () => {
+      if (realtimeChannel) {
+        supabase.removeChannel(realtimeChannel);
+      }
+    };
+  }, [supabase, updateCoinBalanceLocally]);
+
+  // ── 4. Offline Mutation Queue & Auto-Replay on Reconnect ───────────────────
+  useEffect(() => {
+    const unsubscribeOnline = offlineMutationQueue.initOnlineSyncListener(
+      apiFetch,
+      ({ successCount }) => {
+        if (successCount > 0) {
+          console.log(`[OfflineSync] Flushed ${successCount} pending offline health mutations.`);
+          fetchAll();
+        }
+      }
+    );
+    return () => {
+      unsubscribeOnline();
+    };
+  }, [fetchAll]);
+
+  // ── 5. Smart Background Syncing on Window Focus ───────────────────────────
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
 
@@ -759,6 +1036,49 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
     };
   }, [fetchAll, state.lastRefreshed]);
 
+  const updateLanguage = useCallback(async (newLang: string) => {
+    if (!newLang) return;
+    setState(prev => ({
+      ...prev,
+      preferences: prev.preferences
+        ? { ...prev.preferences, language: newLang }
+        : {
+            user_id: prev.profile?.id || '',
+            theme: (prev.profile?.active_theme as any) || 'general',
+            tracking_goals: null,
+            language: newLang,
+            communication_style: 'friendly',
+            emoji_preference: true,
+            response_length: 'concise',
+            notifications_enabled: true,
+          },
+    }));
+
+    postSyncBroadcast({
+      type: 'LANGUAGE_CHANGED',
+      language: newLang,
+    });
+
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('hersync_companion_language', newLang);
+      }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.id) {
+        await supabase.from('user_preferences').upsert(
+          {
+            user_id: session.user.id,
+            language: newLang,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' }
+        );
+      }
+    } catch (err) {
+      console.warn('Language preference sync warning:', err);
+    }
+  }, [supabase, postSyncBroadcast]);
+
   const wellnessMode: 'general' | 'pcos' | 'pregnancy' =
     (state.preferences?.theme && ['general', 'pcos', 'pregnancy'].includes(state.preferences.theme)
       ? (state.preferences.theme as 'general' | 'pcos' | 'pregnancy')
@@ -767,6 +1087,7 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       : 'general');
   const userName = state.profile?.first_name || 'there';
   const aiName = state.profile?.ai_name || 'Luna';
+  const language = state.preferences?.language || (typeof window !== 'undefined' ? localStorage.getItem('hersync_companion_language') : null) || 'English';
 
   const value: HerSyncContextValue = useMemo(
     () => ({
@@ -784,9 +1105,11 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       updateCoinBalanceLocally,
       updateTodayLogLocally,
       updateCheckinSlotLocally,
+      updateLanguage,
       wellnessMode,
       userName,
       aiName,
+      language,
     }),
     [
       state,
@@ -803,9 +1126,11 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       updateCoinBalanceLocally,
       updateTodayLogLocally,
       updateCheckinSlotLocally,
+      updateLanguage,
       wellnessMode,
       userName,
       aiName,
+      language,
     ]
   );
 
@@ -855,9 +1180,11 @@ const defaultContextValue: HerSyncContextValue = {
   updateCoinBalanceLocally: () => {},
   updateTodayLogLocally: () => {},
   updateCheckinSlotLocally: () => {},
+  updateLanguage: async () => {},
   wellnessMode: 'general',
   userName: 'there',
   aiName: 'Luna',
+  language: 'English',
 };
 
 export function useHerSync(): HerSyncContextValue {

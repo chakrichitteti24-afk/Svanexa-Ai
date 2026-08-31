@@ -110,7 +110,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { message, history, currentPage } = body;
+    const { message, history, currentPage, language: clientLanguage } = body;
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return NextResponse.json({ success: false, error: 'Message is required' }, { status: 400 });
@@ -161,7 +161,7 @@ export async function POST(req: Request) {
       // Today's mood log
       supabase.from('mood_logs').select('mood, intensity, notes').eq('user_id', userId).eq('date', today).maybeSingle(),
       // Recent mood logs (last 7 days)
-      supabase.from('mood_logs').select('date, mood, intensity').eq('user_id', userId).order('date', { ascending: false }).limit(7),
+      supabase.from('mood_logs').select('date, mood, intensity, notes').eq('user_id', userId).order('date', { ascending: false }).limit(7),
       // Today's water log
       supabase.from('water_logs').select('amount_ml').eq('user_id', userId).eq('date', today).maybeSingle(),
       // Recent water logs (last 7 days)
@@ -173,7 +173,7 @@ export async function POST(req: Request) {
       // Recent skin logs (last 5 entries)
       supabase.from('skin_logs').select('log_date, acne_level, skin_type, notes, breakouts').eq('user_id', userId).order('log_date', { ascending: false }).limit(5),
       // Cycle logs (last 6 cycles)
-      supabase.from('cycle_logs').select('start_date, end_date, flow_intensity, notes').eq('user_id', userId).order('start_date', { ascending: false }).limit(6),
+      supabase.from('cycle_logs').select('start_date, end_date, flow_intensity, notes, symptoms').eq('user_id', userId).order('start_date', { ascending: false }).limit(6),
       // Pregnancy log
       supabase.from('pregnancy_logs').select('due_date, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       // Today's wellness plan tasks
@@ -183,6 +183,8 @@ export async function POST(req: Request) {
       // User coin balance
       supabase.from('user_coin_balances').select('balance, total_earned').eq('user_id', userId).maybeSingle(),
     ]);
+
+    const activeLanguage = clientLanguage || userPref?.language || 'English';
 
     const wellnessMode =
       userPref?.theme && ['general', 'pcos', 'pregnancy'].includes(userPref.theme)
@@ -247,6 +249,7 @@ export async function POST(req: Request) {
         name: userName,
         mode: wellnessMode,
         companionName: companionName,
+        language: activeLanguage,
         currentPage: currentPage || 'App',
       },
       currentSlot,
@@ -258,24 +261,35 @@ export async function POST(req: Request) {
           sleepRating: morningData.sleep || morningData.answers?.m_sleep || null,
           energyLevel: morningData.indicators?.energy?.level || morningData.answers?.m_energy || null,
           stressIndicator: morningData.indicators?.stress?.level || morningData.stressIndicator || null,
-          focus: morningData.answers?.m_focus || morningData.supportChoice || null,
+          focus: morningData.answers?.m_focus || null,
+          bodyComfort: morningData.answers?.m_body || null,
+          supportChoice: morningData.supportChoice || null,
         } : null,
         afternoon: afternoonData ? {
           stressLevel: afternoonData.stress || afternoonData.indicators?.stress?.level || null,
           energyLevel: afternoonData.indicators?.energy?.level || afternoonData.answers?.a_energy || null,
           lunchLogged: afternoonData.answers?.a_lunch || null,
           symptoms: afternoonData.answers?.a_symptoms || null,
+          physicalComfort: afternoonData.answers?.a_body || null,
+          middayBoost: afternoonData.supportChoice || null,
         } : null,
         evening: eveningData ? {
           eveningMood: eveningData.mood || eveningData.indicators?.mood?.state || null,
           winddown: eveningData.answers?.e_winddown || null,
           reflection: eveningData.answers?.e_reflection || null,
           dinner: eveningData.answers?.e_dinner || null,
+          sleepReadiness: eveningData.answers?.e_readiness || null,
         } : null,
-        sleep: todaySleep?.duration_hours ? `${todaySleep.duration_hours} hours` : (indicators.sleepRating ? `${indicators.sleepRating}/5 rating` : null),
-        water: todayWater?.amount_ml ? `${todayWater.amount_ml} ml` : null,
-        exercise: todayExercise?.duration_minutes ? `${todayExercise.duration_minutes} mins (${todayExercise.type || 'activity'})` : null,
-        mood: todayMood?.mood || indicators.mood?.state || null,
+        sleep: todaySleep?.duration_hours
+          ? `${todaySleep.duration_hours} hours (${todaySleep.quality || 'normal'} quality)`
+          : (indicators.sleepRating ? `${indicators.sleepRating}/5 rating` : null),
+        water: todayWater?.amount_ml ? `${todayWater.amount_ml} ml / 2000 ml` : null,
+        exercise: todayExercise?.duration_minutes
+          ? `${todayExercise.duration_minutes} mins (${todayExercise.type || 'activity'}, ${todayExercise.intensity || 'moderate'} intensity)`
+          : null,
+        mood: todayMood?.mood
+          ? `${todayMood.mood}${todayMood.intensity ? ` (intensity: ${todayMood.intensity}/5)` : ''}${todayMood.notes ? ` - "${todayMood.notes}"` : ''}`
+          : indicators.mood?.state || null,
       },
       wellnessPlan: {
         totalTasksCount: wellnessTasks.length,
@@ -294,8 +308,13 @@ export async function POST(req: Request) {
       healthTrends: {
         sevenDayAvgSleep: avgSleep ? `${avgSleep} hours/night` : null,
         sevenDayAvgWater: avgWater ? `${avgWater} ml/day` : null,
-        sevenDayTotalExercise: totalExerciseRecent > 0 ? `${totalExerciseRecent} minutes` : '0 minutes',
-        recentMoods: (recentMoods || []).slice(0, 5).map((m: any) => ({ date: m.date, mood: m.mood })),
+        sevenDayTotalExercise: totalExerciseRecent > 0 ? `${totalExerciseRecent} minutes this week` : '0 minutes',
+        recentMoods: (recentMoods || []).slice(0, 5).map((m: any) => ({
+          date: m.date,
+          mood: m.mood,
+          intensity: m.intensity,
+          notes: m.notes,
+        })),
         recentCheckinDates: (recentCheckins || []).map((c: any) => c.date),
       },
       skinTracking: recentSkin && recentSkin.length > 0 ? {
@@ -310,6 +329,7 @@ export async function POST(req: Request) {
       gamification: {
         streakDays: streakData?.current_streak || 0,
         longestStreak: streakData?.longest_streak || 0,
+        weeklyConsistencyPercent: streakData?.weekly_consistency || null,
         coinBalance: coinBalance?.balance || 0,
         totalEarnedCoins: coinBalance?.total_earned || 0,
       },
@@ -329,13 +349,15 @@ export async function POST(req: Request) {
       contextStr,
       companionName,
       userName,
-      false
+      false,
+      activeLanguage
     );
 
     return NextResponse.json({
       success: true,
       response: result.response,
       modelUsed: result.modelUsed,
+      language: activeLanguage,
       error: result.error
     });
   } catch (error: any) {

@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef, memo } from 'react';
+import { useState, useEffect, useRef, memo, useMemo, useCallback } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useVisualViewport } from '@/hooks/useVisualViewport';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
 import { 
   MoreVertical, Trash2, Plus, SendHorizontal, Sparkles, Copy, 
-  CheckCircle2, X, MessageSquare, ArrowLeft, History, Clock, SquarePen 
+  CheckCircle2, X, MessageSquare, ArrowLeft, History, Clock, SquarePen, Globe, Check 
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { apiFetch } from '@/utils/api-client';
@@ -33,12 +33,118 @@ export interface ChatSession {
   updated_at: number;
 }
 
-const SUGGESTED_PROMPTS = [
-  "Analyze today's wellness",
-  "Cycle insights",
-  "Skin care tips",
-  "Pregnancy progress"
+export interface LanguageOption {
+  code: string;
+  name: string;
+  native: string;
+  flag: string;
+}
+
+export const SUPPORTED_LANGUAGES: readonly LanguageOption[] = [
+  { code: 'English', name: 'English', native: 'English', flag: '🇬🇧' },
+  { code: 'Hindi', name: 'Hindi', native: 'हिंदी', flag: '🇮🇳' },
+  { code: 'Telugu', name: 'Telugu', native: 'తెలుగు', flag: '🇮🇳' },
+  { code: 'Tamil', name: 'Tamil', native: 'தமிழ்', flag: '🇮🇳' },
+  { code: 'Spanish', name: 'Spanish', native: 'Español', flag: '🇪🇸' },
+  { code: 'French', name: 'French', native: 'Français', flag: '🇫🇷' },
+  { code: 'German', name: 'German', native: 'Deutsch', flag: '🇩🇪' },
+  { code: 'Kannada', name: 'Kannada', native: 'ಕನ್ನಡ', flag: '🇮🇳' },
+  { code: 'Malayalam', name: 'Malayalam', native: 'മലയാളം', flag: '🇮🇳' },
+  { code: 'Marathi', name: 'Marathi', native: 'मराठी', flag: '🇮🇳' },
+  { code: 'Bengali', name: 'Bengali', native: 'বাংলা', flag: '🇮🇳' },
+  { code: 'Gujarati', name: 'Gujarati', native: 'ગુજરાતી', flag: '🇮🇳' },
+  { code: 'Arabic', name: 'Arabic', native: 'العربية', flag: '🇸🇦' },
+  { code: 'Portuguese', name: 'Portuguese', native: 'Português', flag: '🇧🇷' },
 ];
+
+export const LOCALIZED_PROMPTS: Record<string, string[]> = {
+  English: [
+    "Analyze today's wellness",
+    "Cycle & hormone insights",
+    "Skin care tips",
+    "How am I doing today?",
+  ],
+  Hindi: [
+    "आज का वेलनेस विश्लेषण",
+    "पीरियड और हॉर्मोन सुझाव",
+    "स्किन केयर टिप्स",
+    "आज मेरी सेहत कैसी है?",
+  ],
+  Telugu: [
+    "ఈరోజు వెల్నెస్ విశ్లేషణ",
+    "పీరియడ్ & హార్మోన్ సూచనలు",
+    "స్కిన్ కేర్ టిప్స్",
+    "ఈరోజు నా హెల్త్ ఎలా ఉంది?",
+  ],
+  Tamil: [
+    "இன்றைய நல்வாழ்வு பகுப்பாய்வு",
+    "மாதவிடாய் & ஹார்மோன் குறிப்புகள்",
+    "சரும பராமரிப்பு குறிப்புகள்",
+    "இன்று என் உடல்நிலை எப்படி?",
+  ],
+  Spanish: [
+    "Analizar bienestar de hoy",
+    "Perspectivas del ciclo hormonal",
+    "Consejos para la piel",
+    "¿Cómo voy hoy?",
+  ],
+  French: [
+    "Analyser mon bien-être",
+    "Conseils cycle & hormones",
+    "Soins de la peau",
+    "Comment je vais aujourd'hui ?",
+  ],
+  German: [
+    "Heutiges Wohlbefinden analysieren",
+    "Zyklus- & Hormoneinblicke",
+    "Hautpflege-Tipps",
+    "Wie geht es mir heute?",
+  ],
+  Kannada: [
+    "ಇಂದಿನ ಕ್ಷೇಮ ವಿಶ್ಲೇಷಣೆ",
+    "ಮುಟ್ಟಿನ & ಹಾರ್ಮೋನ್ ಮಾಹಿತಿ",
+    "ತ್ವಚೆಯ ಆರೈಕೆ ಸಲಹೆಗಳು",
+    "ಇಂದು ನನ್ನ ಆರೋಗ್ಯ ಹೇಗಿದೆ?",
+  ],
+  Malayalam: [
+    "ഇന്നത്തെ ആരോഗ്യ വിശകലനം",
+    "ആർത്തവ & ഹോർമോൺ വിവരങ്ങൾ",
+    "ചർമ്മ സംരക്ഷണ ടിപ്പുകൾ",
+    "ഇന്ന് എന്റെ ആരോഗ്യം എങ്ങനെയുണ്ട്?",
+  ],
+  Marathi: [
+    "आजचे वेलनेस विश्लेषण",
+    "मासिक पाळी व हार्मोन्स सल्ला",
+    "त्वचा काळजी टिप्स",
+    "आज माझे आरोग्य कसे आहे?",
+  ],
+  Bengali: [
+    "আজকের স্বাস্থ্য বিশ্লেষণ",
+    "পিরিয়ড ও হরমোন পরামর্শ",
+    "ত্বকের যত্ন টিপস",
+    "আজ আমি কেমন আছি?",
+  ],
+  Gujarati: [
+    "આજનું વેલનેસ વિશ્લેષણ",
+    "માસિક અને હોર્મોન ટિપ્સ",
+    "ત્વચા સંભાળ ટિપ્સ",
+    "આજે મારું સ્વાસ્થ્ય કેવું છે?",
+  ],
+  Arabic: [
+    "تحليل صحتي اليوم",
+    "معلومات الدورة والهرمونات",
+    "نصائح العناية بالبشرة",
+    "كيف أداء صحتي اليوم؟",
+  ],
+  Portuguese: [
+    "Analisar bem-estar de hoje",
+    "Insights do ciclo hormonal",
+    "Dicas de cuidados com a pele",
+    "Como estou hoje?",
+  ],
+};
+
+const SUGGESTED_PROMPTS = LOCALIZED_PROMPTS.English;
 
 // Memoized Markdown renderer optimized for mobile readability
 const MarkdownRenderer = memo(({ content }: { content?: string | null }) => {
@@ -77,9 +183,49 @@ const MarkdownRenderer = memo(({ content }: { content?: string | null }) => {
 MarkdownRenderer.displayName = 'MarkdownRenderer';
 
 export const FloatingCompanion = memo(function FloatingCompanion() {
-  const { userName, aiName, isLoading: profileLoading, allSlotsComplete, todayLog } = useHerSync();
+  const { userName, aiName, isLoading: profileLoading, allSlotsComplete, todayLog, language: userContextLanguage, updateLanguage } = useHerSync();
   const viewportHeight = useVisualViewport();
   const pathname = usePathname();
+
+  const [currentLanguage, setCurrentLanguage] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('hersync_companion_language') || userContextLanguage || 'English';
+    }
+    return userContextLanguage || 'English';
+  });
+
+  useEffect(() => {
+    if (userContextLanguage && userContextLanguage !== currentLanguage) {
+      setCurrentLanguage(userContextLanguage);
+    }
+  }, [userContextLanguage]);
+
+  const activeLangObj = useMemo(() => {
+    return SUPPORTED_LANGUAGES.find(l => l.code === currentLanguage) || SUPPORTED_LANGUAGES[0];
+  }, [currentLanguage]);
+
+  const activePrompts = useMemo(() => {
+    return LOCALIZED_PROMPTS[currentLanguage] || LOCALIZED_PROMPTS.English;
+  }, [currentLanguage]);
+
+  const handleLanguageSelect = async (langCode: string) => {
+    setCurrentLanguage(langCode);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('hersync_companion_language', langCode);
+    }
+    try {
+      await updateLanguage(langCode);
+    } catch (err) {
+      console.warn('Language sync error:', err);
+    }
+
+    if (activeSessionId) {
+      const sess = sessions.find(s => s.id === activeSessionId);
+      if (sess && (sess.messages.length === 0 || (sess.messages.length === 1 && sess.messages[0].role === 'model'))) {
+        fetchGreeting(activeSessionId, langCode);
+      }
+    }
+  };
 
   const getDynamicAvatar = () => {
     if (allSlotsComplete) return '/ai-companion-happy.jpg';
@@ -146,7 +292,7 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
   const handleTouchEnd = (e: React.TouchEvent) => {
     if (startY === null) return;
     const endY = e.changedTouches[0].clientY;
-    if (endY - startY > 80) setIsOpen(false); // Swipe down on handle
+    if (endY - startY > 80) setIsOpen(false);
     setStartY(null);
   };
 
@@ -256,13 +402,20 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
     }, 30);
   };
 
-  const fetchGreeting = async (sessionId: string) => {
+  const fetchGreeting = async (sessionId: string, targetLang = currentLanguage) => {
     setIsLoading(true);
     try {
-      const prompt = `[GENERATE_GREETING] Please generate a short, personalized greeting (max 2 sentences) using my most recent logged data. If I have no data, reply exactly with: "Welcome back! Once you complete a few wellness check-ins, I'll start providing personalized insights."`;
+      const prompt = `[GENERATE_GREETING] Please generate a short, personalized greeting (max 2 sentences) in ${targetLang} using my most recent logged data. If I have no data, reply in ${targetLang} with a warm welcoming message encouraging check-ins.`;
       const res = await apiFetch('/api/chat', {
         method: 'POST',
-        body: JSON.stringify({ message: prompt, history: [], userName, aiName, currentPage: pageLabel }),
+        body: JSON.stringify({ 
+          message: prompt, 
+          history: [], 
+          userName, 
+          aiName, 
+          currentPage: pageLabel,
+          language: targetLang,
+        }),
       });
       if (res.ok) {
         const { response } = await res.json();
@@ -282,10 +435,10 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
     } else {
       const current = sessionList.find(s => s.id === activeSessionId);
       if (current && Array.isArray(current.messages) && current.messages.length === 0 && !isLoading) {
-        fetchGreeting(current.id);
+        fetchGreeting(current.id, currentLanguage);
       }
     }
-  }, [isOpen, profileLoading, sessions?.length, activeSessionId, fetchGreeting, startNewChat, activeSessionId, isLoading]);
+  }, [isOpen, profileLoading, sessions?.length, activeSessionId, fetchGreeting, startNewChat, activeSessionId, isLoading, currentLanguage]);
 
   const activeSession = (Array.isArray(sessions) ? sessions : []).find(s => s.id === activeSessionId);
   const messages = Array.isArray(activeSession?.messages) ? activeSession.messages : [];
@@ -337,8 +490,10 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
         body: JSON.stringify({
           message: messageToSend,
           history: messages.map(m => ({ role: m.role === 'model' ? 'assistant' : 'user', content: m.content })),
-          userName, aiName,
+          userName, 
+          aiName,
           currentPage: pageLabel,
+          language: currentLanguage,
         }),
       });
       if (!res.ok) throw new Error('API error');
@@ -360,7 +515,6 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
     setCopiedIndex(index);
     setTimeout(() => setCopiedIndex(null), 2000);
   };
-
 
   if (profileLoading) return null;
 
@@ -452,6 +606,41 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
                 </div>
 
                 <div className={styles.headerActions}>
+                  {/* Language Selector Dropdown */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-pink-300 transition-colors cursor-pointer"
+                      title="Change Language"
+                      aria-label="Change Language"
+                    >
+                      <Globe className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+                      <span className="text-[11px] max-w-[55px] truncate">{activeLangObj.native || activeLangObj.name}</span>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48 max-h-64 overflow-y-auto bg-[#140F24]/95 border border-pink-500/30 backdrop-blur-xl rounded-xl p-1 z-[10000]">
+                      <div className="px-2 py-1 text-[10px] font-bold tracking-wider text-pink-400/80 uppercase">
+                        Companion Language
+                      </div>
+                      {SUPPORTED_LANGUAGES.map((lang) => (
+                        <DropdownMenuItem
+                          key={lang.code}
+                          onClick={() => handleLanguageSelect(lang.code)}
+                          className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors ${
+                            currentLanguage === lang.code
+                              ? 'bg-pink-500/20 text-white font-semibold'
+                              : 'text-[#E2DDF0] hover:bg-white/10'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span>{lang.flag}</span>
+                            <span>{lang.native}</span>
+                            <span className="text-[10px] text-muted-foreground">({lang.name})</span>
+                          </span>
+                          {currentLanguage === lang.code && <Check className="w-3.5 h-3.5 text-pink-400" />}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
                   {/* ChatGPT-style New Chat button */}
                   <button 
                     className={styles.iconButton} 
@@ -606,8 +795,8 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
 
                     {messages.length === 1 && messages[0].role === 'model' && !messages[0].isStreaming && !isLoading && (
                       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap gap-2 mt-2">
-                        {SUGGESTED_PROMPTS.map(prompt => (
-                          <button key={prompt} onClick={() => handleSendMessage(prompt)} className="bg-white/5 border border-white/10 text-sm px-3 py-1.5 rounded-full hover:bg-white/10 transition-colors text-[#E2DDF0]">
+                        {activePrompts.map(prompt => (
+                          <button key={prompt} onClick={() => handleSendMessage(prompt)} className="bg-white/5 border border-white/10 text-xs sm:text-sm px-3 py-1.5 rounded-full hover:bg-white/10 transition-colors text-[#E2DDF0] cursor-pointer">
                             {prompt}
                           </button>
                         ))}
