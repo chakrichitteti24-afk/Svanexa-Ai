@@ -645,6 +645,7 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
                       {SUPPORTED_LANGUAGES.map((lang) => (
                         <DropdownMenuItem
                           key={lang.code}
+                          closeOnClick={true}
                           onClick={() => handleLanguageSelect(lang.code)}
                           className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors ${
                             currentLanguage === lang.code

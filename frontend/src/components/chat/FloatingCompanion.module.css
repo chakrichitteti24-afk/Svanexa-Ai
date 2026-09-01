@@ -101,7 +101,6 @@
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 20px rgba(167, 139, 250, 0.08);
-  overflow: hidden;
   will-change: transform, opacity;
   transform: translateZ(0);
   transform-origin: bottom right;
