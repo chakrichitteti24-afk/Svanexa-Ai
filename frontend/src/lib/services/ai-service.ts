@@ -80,6 +80,12 @@ export class AIService {
     const msgLower = message.toLowerCase().trim();
     const isGreetingTrigger = message.includes('[GENERATE_GREETING]');
 
+    // Inline language enforcement — prepended to every user message for models that
+    // may ignore system-prompt language instructions (e.g. Groq OSS models)
+    const languageEnforcementPrefix = targetLanguage && targetLanguage !== 'English'
+      ? `[IMPORTANT: You MUST respond ONLY in ${targetLanguage}. Do NOT use English. Every word of your reply must be in ${targetLanguage}.] `
+      : '';
+
     let maxTokens = 500;
     if (isGreetingTrigger) {
       maxTokens = 150;
@@ -182,7 +188,7 @@ ${JSON.stringify(parsedContext, null, 2)}
     // 1. If forceGemini is requested
     if (forceGemini) {
       try {
-        const responseText = await this.queryGemini(systemPrompt, history, message, maxTokens);
+        const responseText = await this.queryGemini(systemPrompt, history, message, maxTokens, languageEnforcementPrefix);
         return { response: responseText, modelUsed: 'gemini-2.5-flash' };
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
@@ -202,7 +208,7 @@ ${JSON.stringify(parsedContext, null, 2)}
           role: m.role === 'assistant' ? ('assistant' as const) : ('user' as const),
           content: m.content
         })),
-        { role: 'user' as const, content: message }
+        { role: 'user' as const, content: languageEnforcementPrefix + message }
       ];
 
       const groqModels = [
@@ -244,7 +250,7 @@ ${JSON.stringify(parsedContext, null, 2)}
     // 3. Secondary Backup: Gemini
     if (this.gemini) {
       try {
-        const responseText = await this.queryGemini(systemPrompt, history, message, maxTokens);
+        const responseText = await this.queryGemini(systemPrompt, history, message, maxTokens, languageEnforcementPrefix);
         return {
           response: responseText,
           modelUsed: 'gemini-2.5-flash',
@@ -269,7 +275,8 @@ ${JSON.stringify(parsedContext, null, 2)}
     systemInstruction: string,
     history: ChatMessage[],
     message: string,
-    maxTokens: number
+    maxTokens: number,
+    languagePrefix: string = ''
   ): Promise<string> {
     if (!this.gemini) {
       throw new Error('Gemini API key is not configured.');
@@ -284,7 +291,7 @@ ${JSON.stringify(parsedContext, null, 2)}
       })),
       {
         role: 'user',
-        parts: [{ text: message }]
+        parts: [{ text: languagePrefix + message }]
       }
     ];
 

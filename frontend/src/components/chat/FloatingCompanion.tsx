@@ -198,7 +198,7 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
     if (userContextLanguage && userContextLanguage !== currentLanguage) {
       setCurrentLanguage(userContextLanguage);
     }
-  }, [userContextLanguage]);
+  }, [userContextLanguage, currentLanguage]);
 
   const activeLangObj = useMemo(() => {
     return SUPPORTED_LANGUAGES.find(l => l.code === currentLanguage) || SUPPORTED_LANGUAGES[0];
@@ -208,24 +208,7 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
     return LOCALIZED_PROMPTS[currentLanguage] || LOCALIZED_PROMPTS.English;
   }, [currentLanguage]);
 
-  const handleLanguageSelect = async (langCode: string) => {
-    setCurrentLanguage(langCode);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('hersync_companion_language', langCode);
-    }
-    try {
-      await updateLanguage(langCode);
-    } catch (err) {
-      console.warn('Language sync error:', err);
-    }
 
-    if (activeSessionId) {
-      const sess = sessions.find(s => s.id === activeSessionId);
-      if (sess && (sess.messages.length === 0 || (sess.messages.length === 1 && sess.messages[0].role === 'model'))) {
-        fetchGreeting(activeSessionId, langCode);
-      }
-    }
-  };
 
   const getDynamicAvatar = () => {
     if (allSlotsComplete) return '/ai-companion-happy.jpg';
@@ -263,6 +246,40 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  // Stable ref to fetchGreeting — allows handleLanguageSelect (which must be declared
+  // after state but before fetchGreeting) to call fetchGreeting without TS forward-reference error.
+  const fetchGreetingRef = useRef<((sessionId: string, targetLang?: string) => void) | null>(null);
+
+  // Language switch handler
+  const handleLanguageSelect = useCallback(async (langCode: string) => {
+    if (langCode === currentLanguage) return;
+    setCurrentLanguage(langCode);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('hersync_companion_language', langCode);
+    }
+    try {
+      await updateLanguage(langCode);
+    } catch (err) {
+      console.warn('Language sync error:', err);
+    }
+
+    // Always regenerate the greeting in the new language on the active session
+    if (activeSessionId) {
+      const sess = (Array.isArray(sessions) ? sessions : []).find(s => s.id === activeSessionId);
+      if (sess) {
+        const userMessages = sess.messages.filter(m => m.role === 'user');
+        if (userMessages.length === 0) {
+          // Only AI greeting shown — clear it and fetch fresh in new language
+          setSessions(prev => prev.map(s =>
+            s.id === activeSessionId ? { ...s, messages: [] } : s
+          ));
+          // Use the ref so we don't need fetchGreeting in scope here
+          setTimeout(() => fetchGreetingRef.current?.(activeSessionId, langCode), 80);
+        }
+      }
+    }
+  }, [currentLanguage, activeSessionId, sessions, updateLanguage]);
 
   // Close when pressing Esc
   useEffect(() => {
@@ -402,10 +419,11 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
     }, 30);
   };
 
-  const fetchGreeting = async (sessionId: string, targetLang = currentLanguage) => {
+  const fetchGreeting = useCallback(async (sessionId: string, targetLang?: string) => {
+    const lang = targetLang ?? currentLanguage;
     setIsLoading(true);
     try {
-      const prompt = `[GENERATE_GREETING] Please generate a short, personalized greeting (max 2 sentences) in ${targetLang} using my most recent logged data. If I have no data, reply in ${targetLang} with a warm welcoming message encouraging check-ins.`;
+      const prompt = `[GENERATE_GREETING] Please generate a short, personalized greeting (max 2 sentences) in ${lang} using my most recent logged data. If I have no data, reply in ${lang} with a warm welcoming message encouraging check-ins.`;
       const res = await apiFetch('/api/chat', {
         method: 'POST',
         body: JSON.stringify({ 
@@ -414,7 +432,7 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
           userName, 
           aiName, 
           currentPage: pageLabel,
-          language: targetLang,
+          language: lang,
         }),
       });
       if (res.ok) {
@@ -425,7 +443,11 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentLanguage, userName, aiName, pageLabel]);
+
+  // Keep ref in sync with the latest fetchGreeting callback every render
+  fetchGreetingRef.current = fetchGreeting;
+
 
   useEffect(() => {
     if (profileLoading || !isOpen) return;
@@ -438,7 +460,7 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
         fetchGreeting(current.id, currentLanguage);
       }
     }
-  }, [isOpen, profileLoading, sessions?.length, activeSessionId, fetchGreeting, startNewChat, activeSessionId, isLoading, currentLanguage]);
+  }, [isOpen, profileLoading, sessions?.length, activeSessionId, fetchGreeting, startNewChat, isLoading, currentLanguage]);
 
   const activeSession = (Array.isArray(sessions) ? sessions : []).find(s => s.id === activeSessionId);
   const messages = Array.isArray(activeSession?.messages) ? activeSession.messages : [];
