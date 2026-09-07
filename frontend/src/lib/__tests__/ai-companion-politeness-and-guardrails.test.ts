@@ -85,6 +85,28 @@ describe('AI Companion Politeness, Courtesy, & No-Code Guardrails Suite', () => 
 
       expect(res).toBeDefined();
     });
+
+    it('verifies AIService and gemini.ts mandate the Professional & Friendly Communication Standard', () => {
+      const aiServicePrompt = aiService.buildSystemPrompt('Luna', 'Ananya', 'pcos', 'afternoon', 'Cycle', 'en', {});
+      const geminiPrompt = buildCompanionSystemPrompt('Svanexa AI', 'English', 'Friendly', '{}');
+
+      // Professional Standard directives
+      expect(aiServicePrompt).toContain('PROFESSIONAL & FRIENDLY COMMUNICATION STANDARD (CORE MANDATE)');
+      expect(aiServicePrompt).toContain('Professional Standard');
+      expect(aiServicePrompt).toContain('Friendly Standard');
+      expect(aiServicePrompt).toContain('Scientifically & Clinically Grounded');
+      expect(aiServicePrompt).toContain('Dignified Poise (No Servility)');
+      expect(aiServicePrompt).toContain('Empathy & Validation First');
+      expect(aiServicePrompt).toContain('Never leave sentences, thoughts, or lists incomplete');
+
+      // Gemini prompt parity
+      expect(geminiPrompt).toContain('PROFESSIONAL & FRIENDLY COMMUNICATION STANDARD (CORE MANDATE)');
+      expect(geminiPrompt).toContain('Professional Standard');
+      expect(geminiPrompt).toContain('Friendly Standard');
+      expect(geminiPrompt).toContain('Scientifically Grounded');
+      expect(geminiPrompt).toContain('Dignified Poise (No Servility)');
+      expect(geminiPrompt).toContain('Empathy & Validation First');
+    });
   });
 
   describe('R2: Strict Health & Wellness Domain Boundary (No-Code Policy)', () => {

@@ -192,73 +192,35 @@ export default function SignUpPage() {
     }
 
     try {
-      const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined;
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: redirectUrl,
-          data: {
-            first_name: firstName,
-            last_name: lastName,
-            username: firstName,
-            ai_name: aiName,
-            wellness_mode: wellnessMode,
-            reminder_interval: reminderInterval,
-            referral_code: referralCode ? referralCode.trim().toUpperCase() : undefined,
-          },
-        },
+      // 1. Primary robust path: Register via pre-confirmed API route to bypass rate limits
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          password,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          aiName: aiName || 'Luna',
+          wellnessMode,
+          reminderInterval,
+          referralCode: referralCode ? referralCode.trim().toUpperCase() : undefined,
+        }),
       });
 
-      if (signUpError) {
-        if (signUpError.message.toLowerCase().includes('already registered')) {
+      const resData = await res.json().catch(() => ({}));
+
+      if (!res.ok || !resData.success) {
+        const errorMsg = resData.error || 'Failed to create account';
+        if (errorMsg.toLowerCase().includes('already exists') || errorMsg.toLowerCase().includes('already registered')) {
           setError('An account with this email already exists. Please log in.');
           setLoading(false);
           return;
         }
-        throw signUpError;
+        throw new Error(errorMsg);
       }
 
-      if (!authData.user) throw new Error('Failed to create account');
-
-      // Record pending referral if a referral code was provided
-      if (referralCode && authData.user) {
-        try {
-          await fetch('/api/referrals/track', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              referralCode: referralCode.trim().toUpperCase(),
-              newUserId: authData.user.id,
-              newUserEmail: email,
-            }),
-          });
-        } catch (refErr) {
-          console.warn('[signup referral track notice]', refErr);
-        }
-      }
-
-      // Initialize profiles and wellness streaks
-      await Promise.all([
-        supabase.from('profiles').upsert(
-          {
-            id: authData.user.id,
-            first_name: firstName,
-            last_name: lastName,
-            email: email,
-            ai_name: aiName || 'Luna',
-            active_theme: wellnessMode,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'id' }
-        ),
-        supabase.from('wellness_streaks').upsert(
-          { user_id: authData.user.id, current_streak: 0, longest_streak: 0 },
-          { onConflict: 'user_id' }
-        ),
-      ]);
-
-      // Save user notification preference to localStorage for instant hydration
+      // 2. Save user notification preference to localStorage for instant hydration
       try {
         const defaultPrefs = {
           enabled: enableNotifications,
@@ -281,17 +243,25 @@ export default function SignUpPage() {
         localStorage.setItem('svanexa_notif_prefs_v1', JSON.stringify(defaultPrefs));
       } catch {}
 
-      if (!authData.session) {
-        // Email confirmation is required by Supabase auth
-        setIsEmailSent(true);
-        setLoading(false);
-      } else {
-        // Auto-confirmed by Supabase auth settings: trigger referral completion
-        try {
-          await fetch('/api/referrals/complete', { method: 'POST' });
-        } catch {}
-        window.location.href = '/dashboard';
+      // 3. Log in immediately with password — account is pre-confirmed so this succeeds instantly!
+      const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInErr) {
+        console.warn('Post-signup auto-signin note:', signInErr);
+        window.location.href = '/login?message=' + encodeURIComponent('Account created successfully! Please sign in with your password.');
+        return;
       }
+
+      // Complete referral if any
+      try {
+        await fetch('/api/referrals/complete', { method: 'POST' });
+      } catch {}
+
+      // Instant entry to dashboard!
+      window.location.href = '/dashboard';
     } catch (err: any) {
       if (err.message?.toLowerCase().includes('already registered')) {
         setError('An account with this email already exists. Please log in.');

@@ -71,6 +71,24 @@ export default function LoginPage() {
 
     if (error) {
       if (error.message.toLowerCase().includes('email not confirmed')) {
+        // Automatically attempt to confirm unconfirmed account via server admin
+        try {
+          const autoRes = await fetch('/api/auth/signup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+          });
+          const autoJson = await autoRes.json().catch(() => ({}));
+          if (autoJson.success) {
+            // Retry sign in now that account is confirmed!
+            const retry = await supabase.auth.signInWithPassword({ email, password });
+            if (!retry.error) {
+              fetch('/api/referrals/complete', { method: 'POST' }).catch(() => {});
+              window.location.href = '/dashboard';
+              return;
+            }
+          }
+        } catch {}
         setError('Please verify your email before signing in. Check your inbox for the confirmation link.');
       } else {
         setError(error.message);

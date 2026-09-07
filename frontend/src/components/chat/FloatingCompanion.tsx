@@ -246,6 +246,19 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const activeStreamRef = useRef<{ interval: any; flush: (() => void) | null }>({
+    interval: null,
+    flush: null,
+  });
+
+  // Cleanup streaming interval on unmount
+  useEffect(() => {
+    return () => {
+      if (activeStreamRef.current.flush) {
+        activeStreamRef.current.flush();
+      }
+    };
+  }, []);
 
   // Stable ref to fetchGreeting — allows handleLanguageSelect (which must be declared
   // after state but before fetchGreeting) to call fetchGreeting without TS forward-reference error.
@@ -323,6 +336,9 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
   };
 
   const startNewChat = () => {
+    if (activeStreamRef.current.flush) {
+      activeStreamRef.current.flush();
+    }
     const now = new Date().getTime();
     const newSession: ChatSession = {
       id: generateUUID(),
@@ -338,6 +354,9 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
 
   const deleteSession = (idToDelete: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    if (activeSessionId === idToDelete && activeStreamRef.current.flush) {
+      activeStreamRef.current.flush();
+    }
     setSessions(prev => {
       const list = Array.isArray(prev) ? prev : [];
       const updated = list.filter(s => s.id !== idToDelete);
@@ -362,6 +381,9 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
   };
 
   const clearAllSessions = () => {
+    if (activeStreamRef.current.flush) {
+      activeStreamRef.current.flush();
+    }
     const now = Date.now();
     const fresh: ChatSession = {
       id: generateUUID(),
@@ -391,32 +413,65 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
   };
 
   const streamMessage = (fullText: string, sessionId: string, currentMessages: ChatMessage[]) => {
-    const words = fullText.split(' ');
-    let currentText = '';
-    let wordIndex = 0;
+    if (!fullText || typeof fullText !== 'string') return;
 
-    const streamInterval = setInterval(() => {
-      if (wordIndex >= words.length) {
-        clearInterval(streamInterval);
-        setSessions(prev => prev.map(s => {
-          if (s.id !== sessionId) return s;
-          return { ...s, messages: [...currentMessages, { role: 'model', content: fullText, timestamp: new Date().getTime() }] };
-        }));
-        if (!isUserScrolledUpRef.current && bottomRef.current) {
-          bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
-        }
-        return;
+    // If an earlier stream is still running, flush it immediately
+    if (activeStreamRef.current.flush) {
+      activeStreamRef.current.flush();
+    }
+
+    // Split preserving whitespace, tabs, and newlines
+    const chunks = fullText.match(/\S+\s*/g) || [fullText];
+    let currentText = '';
+    let chunkIndex = 0;
+
+    const flush = () => {
+      if (activeStreamRef.current.interval) {
+        clearInterval(activeStreamRef.current.interval);
+        activeStreamRef.current.interval = null;
       }
-      currentText += (wordIndex === 0 ? '' : ' ') + words[wordIndex];
+      activeStreamRef.current.flush = null;
       setSessions(prev => prev.map(s => {
         if (s.id !== sessionId) return s;
-        return { ...s, messages: [...currentMessages, { role: 'model', content: currentText, timestamp: new Date().getTime(), isStreaming: true }] };
+        return {
+          ...s,
+          messages: [...currentMessages, { role: 'model', content: fullText, timestamp: Date.now() }],
+          updated_at: Date.now(),
+        };
       }));
-      wordIndex++;
       if (!isUserScrolledUpRef.current && bottomRef.current) {
         bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
       }
-    }, 30);
+    };
+
+    activeStreamRef.current.flush = flush;
+
+    // Fast, batch-friendly streaming: stream in chunks without freezing localStorage
+    const stepSize = Math.max(1, Math.min(3, Math.ceil(chunks.length / 80)));
+
+    activeStreamRef.current.interval = setInterval(() => {
+      if (chunkIndex >= chunks.length) {
+        flush();
+        return;
+      }
+
+      for (let i = 0; i < stepSize && chunkIndex < chunks.length; i++) {
+        currentText += chunks[chunkIndex];
+        chunkIndex++;
+      }
+
+      setSessions(prev => prev.map(s => {
+        if (s.id !== sessionId) return s;
+        return {
+          ...s,
+          messages: [...currentMessages, { role: 'model', content: currentText, timestamp: Date.now(), isStreaming: true }],
+        };
+      }));
+
+      if (!isUserScrolledUpRef.current && bottomRef.current) {
+        bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }
+    }, 28);
   };
 
   const fetchGreeting = useCallback(async (sessionId: string, targetLang?: string) => {
@@ -524,7 +579,7 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
       streamMessage(response, activeSessionId as string, newMessages);
     } catch {
       setIsLoading(false);
-      updateActiveSession([...newMessages, { role: 'model', content: "Connection trouble. Try again soon. 💜", timestamp: new Date().getTime() }]);
+      updateActiveSession([...newMessages, { role: 'model', content: "I'm having a little trouble connecting right now. Please try again in a moment. 🌸", timestamp: new Date().getTime() }]);
     }
   };
 
