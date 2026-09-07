@@ -48,7 +48,7 @@ export async function getUserPreferencesMap(
   try {
     const { data: rows, error } = await supabase
       .from('user_preferences')
-      .select('user_id, notifications_enabled, notification_settings')
+      .select('user_id, notifications_enabled, notification_settings, timezone')
       .in('user_id', userIds);
 
     if (error) {
@@ -78,6 +78,9 @@ export async function getUserPreferencesMap(
           coinsRewards: raw.coinsRewards !== undefined ? Boolean(raw.coinsRewards) : true,
           cycleTracker: raw.cycleTracker !== undefined ? Boolean(raw.cycleTracker) : (raw.cycleAlerts ?? true),
           aiCompanion: raw.aiCompanion !== undefined ? Boolean(raw.aiCompanion) : (raw.lunaInsights ?? true),
+          repeatUntilCheckinComplete: Boolean(raw.repeatUntilCheckinComplete),
+          recurringIntervalMinutes: typeof raw.recurringIntervalMinutes === 'number' ? raw.recurringIntervalMinutes : 30,
+          timezone: raw.timezone || r.timezone || 'Asia/Kolkata',
           reminderSchedule: {
             morningTime: raw.reminderSchedule?.morningTime || '08:30',
             afternoonTime: raw.reminderSchedule?.afternoonTime || '14:00',
@@ -102,69 +105,74 @@ export function buildCheckinMessage(
   slot: 'morning' | 'afternoon' | 'evening' | 'streak',
   streak: number
 ): { title: string; body: string } {
+  const cleanName = name && name.trim() && name !== 'there' ? name.trim() : '';
+  const greeting = cleanName ? `, ${cleanName}` : '';
+
   switch (slot) {
     case 'morning':
       return {
-        title: '🌅 Morning Check-In',
-        body: 'Your morning check-in is ready.',
+        title: `🌅 Good morning${greeting}`,
+        body: `Whenever you have a calm moment, take 60 seconds to check in with how your body is feeling today. No rush — wishing you a peaceful day ahead! 🌸`,
       };
     case 'afternoon':
       return {
-        title: '☀️ Afternoon Check-In',
-        body: 'Your afternoon wellness check-in is ready.',
+        title: `☀️ Midday wellness pause${greeting}`,
+        body: `Just a gentle check-in to see how you're feeling this afternoon. Remember to pause, take a deep breath, and care for yourself. 🌿`,
       };
     case 'evening':
       return {
-        title: '🌙 Evening Reflection',
-        body: 'Your evening reflection is ready.',
+        title: `🌙 Evening reflection${greeting}`,
+        body: `Before winding down tonight, take a quiet minute to log your daily wellness notes. Wishing you restful sleep and recovery. ✨`,
       };
     case 'streak':
       return {
-        title: '🔥 Daily Check-In',
+        title: streak > 0
+          ? `✨ A gentle evening reminder${greeting}`
+          : `🌸 Daily wellness check-in${greeting}`,
         body: streak > 0
-          ? `Save your reflection before midnight to keep your ${streak}-day streak active.`
-          : 'Save your daily check-in to build your wellness streak.',
+          ? `You've taken wonderful care of your health for ${streak} days! If you have a free minute before sleep, your daily reflection is waiting for you.`
+          : `Whenever you're ready, take 60 seconds to log today's check-in. Every small step matters for your health.`,
       };
     default:
       return {
-        title: '🌸 Daily Check-In',
-        body: 'Your Svanexa check-in is ready.',
+        title: `🌸 Gentle daily check-in${greeting}`,
+        body: `Take 60 seconds to check in with your wellness today whenever it's most convenient for you.`,
       };
   }
 }
 
 export function buildWellnessTaskMessage(): { title: string; body: string } {
   return {
-    title: '✨ Daily Wellness Tasks',
-    body: 'You have a wellness task waiting for you.',
+    title: '✨ Gentle Wellness Tasks',
+    body: 'You have a wellness task waiting for you today whenever you are ready. Take it one step at a time! 🌸',
   };
 }
 
 export function buildWellnessPlanMessage(): { title: string; body: string } {
   return {
-    title: '📋 Daily Wellness Plan',
-    body: 'Your wellness plan for today is ready.',
+    title: '📋 Your Daily Care Plan',
+    body: 'Your personalized wellness care plan for today is ready whenever you would like to view it.',
   };
 }
 
 export function buildCoinsMessage(): { title: string; body: string } {
   return {
-    title: '🪙 Svanexa Coins',
-    body: 'You earned Svanexa Coins.',
+    title: '🪙 Svanexa Rewards',
+    body: 'Thank you for caring for your health today — your check-in coins are ready to collect!',
   };
 }
 
 export function buildCycleMessage(): { title: string; body: string } {
   return {
-    title: '🌸 Cycle Tracker',
-    body: 'Your daily wellness cycle update is ready.',
+    title: '🌸 Cycle Tracker Update',
+    body: 'Your daily wellness cycle insights are ready to view whenever you have a moment.',
   };
 }
 
 export function buildAICompanionMessage(aiName = 'Luna'): { title: string; body: string } {
   return {
     title: `🤖 ${aiName} AI`,
-    body: `${aiName} has a gentle wellness thought for you.`,
+    body: `${aiName} has a gentle, supportive thought for your wellness journey today.`,
   };
 }
 
@@ -229,29 +237,33 @@ export async function fetchWeatherForCron(lat = 17.385, lon = 78.4867): Promise<
 }
 
 export function buildHydrationMessage(name?: string, waterLogged = 0, w?: SimpleWeather | null): { title: string; body: string } {
+  const cleanName = name && name.trim() && name !== 'there' ? `, ${name.trim()}` : '';
   return {
-    title: '💧 Hydration Reminder',
-    body: 'Stay hydrated today with a fresh glass of water.',
+    title: `💧 Gentle Hydration Reminder${cleanName}`,
+    body: 'Take a mindful pause and enjoy a fresh glass of water whenever you have a moment. Your body will appreciate it! 🌿',
   };
 }
 
 export function buildSupplementsMessage(name?: string, w?: SimpleWeather | null): { title: string; body: string } {
+  const cleanName = name && name.trim() && name !== 'there' ? `, ${name.trim()}` : '';
   return {
-    title: '💊 Care Plan Routine',
-    body: 'Time for your daily care plan routine.',
+    title: `💊 Gentle Care Plan Reminder${cleanName}`,
+    body: 'A kind reminder for your daily wellness plan and routine whenever it suits your schedule today.',
   };
 }
 
 export function buildSkinMessage(name?: string, w?: SimpleWeather | null): { title: string; body: string } {
+  const cleanName = name && name.trim() && name !== 'there' ? `, ${name.trim()}` : '';
   return {
-    title: '🧴 Evening Skincare Journal',
-    body: 'Log your evening skin condition before bed.',
+    title: `🧴 Evening Skincare Journal${cleanName}`,
+    body: 'A gentle reminder to jot down your skin notes before you head to sleep tonight. Rest well! 🌙',
   };
 }
 
 export function buildWeatherWellnessMessage(name?: string, w?: SimpleWeather): { title: string; body: string } {
+  const cleanName = name && name.trim() && name !== 'there' ? `, ${name.trim()}` : '';
   return {
-    title: '☀️ Daily Wellness Forecast',
-    body: 'Check your daily wellness forecast and stay comfortable today.',
+    title: `☀️ Daily Wellness Forecast${cleanName}`,
+    body: 'Here is your daily wellness forecast to help you stay comfortable, balanced, and energized today.',
   };
 }

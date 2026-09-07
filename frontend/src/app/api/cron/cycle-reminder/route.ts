@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getCronSupabaseClient, getUserPreferencesMap, buildCycleMessage, validateCronRequest } from '@/lib/services/cron-utils';
 import { sendWebPush } from '@/lib/services/web-push';
-import { differenceInDays, parseISO, addDays, format } from 'date-fns';
+import { getUserLocalTime, isNotificationAllowed, persistNotificationToDatabase } from '@/lib/services/notification-engine';
+import { differenceInDays, parseISO, addDays } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,6 +32,7 @@ export async function GET(req: Request) {
     }
 
     const supabase = getCronSupabaseClient();
+    const nowUtc = new Date();
 
     const { data: subscriptions, error } = await supabase
       .from('push_subscriptions').select('id, user_id, endpoint, p256dh, auth');
@@ -38,8 +40,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: true, remindersSent: 0, message: 'No subscriptions' });
     }
 
-    const userIds = [...new Set(subscriptions.map((s: any) => s.user_id))];
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const userIds = [...new Set(subscriptions.map((s: any) => s.user_id))] as string[];
 
     // Fetch user preferences in parallel
     const prefMap = await getUserPreferencesMap(supabase, userIds);
@@ -52,43 +53,76 @@ export async function GET(req: Request) {
     if (cycleLogs) {
       for (const c of cycleLogs) {
         const list = userCycles.get(c.user_id) || [];
-        list.push({ start_date: c.start_date }); userCycles.set(c.user_id, list);
+        list.push({ start_date: c.start_date });
+        userCycles.set(c.user_id, list);
       }
     }
 
     const userSubMap = new Map<string, any[]>();
-    for (const s of subscriptions) { const l = userSubMap.get(s.user_id)||[]; l.push(s); userSubMap.set(s.user_id, l); }
+    for (const s of subscriptions) {
+      const l = userSubMap.get(s.user_id) || [];
+      l.push(s);
+      userSubMap.set(s.user_id, l);
+    }
 
-    const deadIds: string[] = []; let sentCount = 0;
+    const deadIds: string[] = [];
+    let sentCount = 0;
+    let suppressedCount = 0;
 
     for (const userId of userIds) {
       const pref = prefMap.get(userId);
 
-      // Check Master & Individual Cycle Tracker Preference
-      if (pref) {
-        if (pref.enabled === false || pref.cycleTracker === false) {
-          continue;
-        }
+      // Check Master & Cycle Tracker preference
+      if (!isNotificationAllowed(pref, 'cycle')) {
+        suppressedCount++;
+        continue;
       }
 
       const logs = userCycles.get(userId) || [];
       const prediction = predictNextPeriod(logs);
       if (!prediction) continue;
       const { daysUntil } = prediction;
-      if (daysUntil < 0 || daysUntil > 3) continue; // Only notify if period is within 3 days
+      if (daysUntil < 0 || daysUntil > 3) continue; // Only notify if period is predicted within 3 days
+
+      const userTz = pref?.timezone || 'Asia/Kolkata';
+      const localTime = getUserLocalTime(userTz, nowUtc);
 
       const { title, body } = buildCycleMessage();
 
-      for (const sub of (userSubMap.get(userId) || [])) {
-        const r = await sendWebPush({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          { title, message: body, url: '/cycle', actionLabel: 'View Calendar', tag: `cycle-tracker-${todayStr}`, category: 'cycle' });
-        if (r.success) sentCount++;
-        if (r.shouldDeleteSubscription) deadIds.push(sub.id);
+      // 1. Persist to inbox
+      await persistNotificationToDatabase(supabase, {
+        userId,
+        title,
+        message: body,
+        category: 'cycle',
+        priority: 'high',
+        actionUrl: '/cycle',
+        actionLabel: 'View Calendar',
+        metadata: { daysUntil, date: localTime.dateStr },
+      });
+
+      // 2. Dispatch push if enabled
+      if (pref?.browserPush !== false) {
+        for (const sub of (userSubMap.get(userId) || [])) {
+          const r = await sendWebPush(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+            {
+              title,
+              message: body,
+              url: '/cycle',
+              actionLabel: 'View Calendar',
+              tag: `cycle-tracker-${localTime.dateStr}`,
+              category: 'cycle',
+            }
+          );
+          if (r.success) sentCount++;
+          if (r.shouldDeleteSubscription) deadIds.push(sub.id);
+        }
       }
     }
 
     if (deadIds.length > 0) await supabase.from('push_subscriptions').delete().in('id', deadIds);
-    return NextResponse.json({ success: true, date: todayStr, remindersSent: sentCount });
+    return NextResponse.json({ success: true, remindersSent: sentCount, suppressedCount });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }

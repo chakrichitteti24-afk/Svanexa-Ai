@@ -87,7 +87,9 @@ export default function ReportsPage() {
         setSkinLogs(skin || []);
         setCycleLogs(cycle || []);
       } catch (err) {
-        console.error("Error loading reports", err);
+        if (process.env.NODE_ENV === 'development') {
+          console.debug("Error loading reports:", err);
+        }
       } finally {
         setLoading(false);
       }

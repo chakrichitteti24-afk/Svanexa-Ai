@@ -421,31 +421,66 @@ export class WellnessPlanService {
     let raw: any[] = [];
 
     try {
-      // 1. Try Gemini first
-      if (this.gemini) {
-        try {
-          let model: any;
+      // 1. Try Mistral AI first (high speed, reliable JSON format)
+      const mistralKey = process.env.MISTRAL_API_KEY;
+      if (mistralKey) {
+        for (const mName of ['open-mistral-nemo', 'open-mistral-7b']) {
           try {
-            model = this.gemini.getGenerativeModel({ model: 'gemini-2.5-flash' });
-          } catch {
-            model = this.gemini.getGenerativeModel({ model: 'gemini-3.6-flash' });
-          }
-          const result = await model.generateContent(prompt);
-          const text = result.response.text();
-          // Extract JSON if wrapped in markdown code fence
-          const jsonMatch = text.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[0]);
-            if (Array.isArray(parsed.tasks) && parsed.tasks.length > 0) {
-              raw = parsed.tasks;
+            const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${mistralKey}`,
+              },
+              body: JSON.stringify({
+                model: mName,
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.55,
+                max_tokens: 1200,
+                response_format: { type: 'json_object' },
+              }),
+            });
+            const d = await res.json();
+            const text = d?.choices?.[0]?.message?.content;
+            if (text) {
+              const jsonMatch = text.match(/\{[\s\S]*\}/);
+              if (jsonMatch) {
+                const parsed = JSON.parse(jsonMatch[0]);
+                if (Array.isArray(parsed.tasks) && parsed.tasks.length > 0) {
+                  raw = parsed.tasks;
+                  break;
+                }
+              }
             }
+          } catch (mistralErr) {
+            console.warn(`[WellnessPlanService] Mistral model ${mName} task generation error:`, mistralErr);
           }
-        } catch (geminiError) {
-          console.warn('[WellnessPlanService] Gemini task generation error:', geminiError);
         }
       }
 
-      // 2. Try Groq as secondary provider if Gemini did not produce tasks
+      // 2. Try Gemini as secondary fallback if Mistral did not produce tasks
+      if ((!raw || raw.length === 0) && this.gemini) {
+        for (const mName of ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-flash-latest']) {
+          try {
+            const model = this.gemini.getGenerativeModel({ model: mName });
+            const result = await model.generateContent(prompt);
+            const text = result.response.text();
+            // Extract JSON if wrapped in markdown code fence
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              const parsed = JSON.parse(jsonMatch[0]);
+              if (Array.isArray(parsed.tasks) && parsed.tasks.length > 0) {
+                raw = parsed.tasks;
+                break;
+              }
+            }
+          } catch (geminiError) {
+            console.warn(`[WellnessPlanService] Gemini model ${mName} task generation error:`, geminiError);
+          }
+        }
+      }
+
+      // 3. Try Groq as tertiary provider if Gemini and Mistral did not produce tasks
       if ((!raw || raw.length === 0) && this.groq) {
         let resp: any = null;
         try {

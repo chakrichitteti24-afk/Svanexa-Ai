@@ -45,6 +45,29 @@ Your communication embodies the perfect harmony of **Professional Medical Litera
    - **Engaging & Conversational**: Conclude with an actionable micro-step (e.g., "🌸 **Micro-Step:** ...") and an open, caring follow-up question that invites them to reflect or reply.
 
 ====================================================
+DAILY WELLNESS ANALYSIS BLUEPRINT (MANDATORY STRUCTURE)
+====================================================
+When the user asks to "analyze today's wellness", "how am I doing today", requests a daily breakdown, or asks about their health logs, format your response using this elegant structure:
+1. ✨ **Executive Snapshot (1 warm sentence)**: Warm greeting grounded in their cycle phase or wellness mode.
+2. 📊 **Omni-Log Synthesis**: Synthesize and connect logs with emojis (🌸 Check-ins/Energy, 😴 Sleep, 💧 Hydration, 🥗 Nutrition, 🚶‍♀️ Movement, 🧘‍♀️ Mood/Symptoms, ✅ Plan/Streak).
+3. 🌿 **Cycle & Metabolic Harmony**: Explain the biological "why" (progesterone, estrogen, cortisol, insulin balance).
+4. 💡 **Targeted Rest-of-Day Care**: 2 actionable, gentle micro-adjustments for the rest of today.
+5. 🌸 **Signature Micro-Step**: One immediate 30-second reset action.
+6. 💬 **Caring Reflection Question**: An open-hearted question inviting reflection.
+
+====================================================
+CONVERSATIONAL CONTINUITY & FLUIDITY
+====================================================
+- If this is an ongoing conversation with prior messages, do NOT re-introduce yourself with formal welcome greetings. Seamlessly continue the dialogue.
+- For quick follow-ups, deliver focused, crisp answers (100–180 words) rather than repeating a full multi-point daily report.
+
+====================================================
+CLINICAL EMPATHY & EMOTIONAL ATTUNEMENT
+====================================================
+- **Stress-Sensitive Adaptation**: If stress is elevated (≥ 3.0/5.0) or mood is low, lead with comfort, validation, and soothing before any habit guidance.
+- **Completeness Guarantee (Zero Cut-Offs)**: Always bring every thought, sentence, recommendation, and list item to a full, natural conclusion. Never stop mid-sentence or mid-bullet.
+
+====================================================
 UTMOST POLITENESS, COURTESY & RESPECTFUL MANNER
 ====================================================
 - **Courteous Address**: Always address the user with supreme politeness, genuine warmth, and unconditional respect in every single interaction across all supported languages.
@@ -118,61 +141,92 @@ export async function getCompanionResponse(
 
   const systemPrompt = buildCompanionSystemPrompt(companionName, normalizedLang, personality, healthSummary);
 
-  // 1. Try Gemini first (Gemini 2.5 Flash)
-  if (genAI) {
-    try {
-      let model = genAI.getGenerativeModel({
-        model: "gemini-2.5-flash",
-        systemInstruction: systemPrompt,
-      });
+  // 1. Try Mistral AI as primary high-speed companion engine
+  const mistralApiKey = process.env.MISTRAL_API_KEY;
+  if (mistralApiKey) {
+    const mistralModels = ['open-mistral-nemo', 'open-mistral-7b', 'mistral-small-latest'];
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...history.map((msg) => ({
+        role: msg.role === 'model' ? 'assistant' : 'user',
+        content: msg.parts[0]?.text || '',
+      })),
+      { role: 'user', content: message },
+    ];
 
-      const contents = [
-        ...history.map((msg) => ({
-          role: msg.role === 'model' ? 'model' : 'user',
-          parts: msg.parts,
-        })),
-        {
-          role: 'user',
-          parts: [{ text: message }],
-        },
-      ];
-
-      const result = await model.generateContent({
-        contents,
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 1200,
-        },
-      });
-
-      const text = result.response.text();
-      if (text) return applyCodeGuardrail(text, language, companionName).content;
-    } catch (geminiError) {
-      console.warn("Gemini 2.5 flash chat attempt failed, trying fallback:", geminiError);
+    for (const modelName of mistralModels) {
       try {
-        const fallbackModel = genAI.getGenerativeModel({
-          model: "gemini-3.6-flash",
-          systemInstruction: systemPrompt,
+        const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${mistralApiKey}`,
+          },
+          body: JSON.stringify({
+            model: modelName,
+            messages,
+            temperature: 0.7,
+            max_tokens: 3000,
+          }),
         });
-        const result = await fallbackModel.generateContent({
-          contents: [
-            ...history.map((msg) => ({
-              role: msg.role === 'model' ? 'model' : 'user',
-              parts: msg.parts,
-            })),
-            { role: 'user', parts: [{ text: message }] },
-          ],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 1200 },
-        });
-        const text = result.response.text();
-        if (text) return applyCodeGuardrail(text, language, companionName).content;
-      } catch (geminiError2) {
-        console.warn("Gemini 3.6 flash fallback failed:", geminiError2);
+
+        const data = await response.json();
+        const text = data?.choices?.[0]?.message?.content;
+        if (text && typeof text === 'string' && text.trim().length > 0) {
+          return applyCodeGuardrail(text, language, companionName).content;
+        }
+      } catch (mistralError) {
+        console.warn(`Mistral companion chat attempt with ${modelName} failed:`, mistralError);
       }
     }
   }
 
-  // 2. Try Groq as secondary provider
+  // 2. Try Gemini as secondary fallback (prioritizing 3.6-flash, 3.5-flash, 2.5-flash)
+  if (genAI) {
+    const geminiModels = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-flash-latest'];
+    const contents = [
+      ...history.map((msg) => ({
+        role: msg.role === 'model' ? 'model' : 'user',
+        parts: msg.parts,
+      })),
+      {
+        role: 'user',
+        parts: [{ text: message }],
+      },
+    ];
+
+    for (const modelName of geminiModels) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          systemInstruction: systemPrompt,
+        });
+
+        const generationConfig: Record<string, any> = {
+          temperature: 0.7,
+          maxOutputTokens: 3500,
+        };
+
+        if (modelName.includes('2.5')) {
+          generationConfig.thinkingConfig = {
+            thinkingBudget: 1024,
+          };
+        }
+
+        const result = await model.generateContent({
+          contents,
+          generationConfig: generationConfig as any,
+        });
+
+        const text = result.response.text();
+        if (text) return applyCodeGuardrail(text, language, companionName).content;
+      } catch (geminiError) {
+        console.warn(`Gemini model ${modelName} chat attempt failed:`, geminiError);
+      }
+    }
+  }
+
+  // 3. Try Groq as tertiary provider
   if (groq) {
     try {
       const groqHistory = history.map((msg) => ({
@@ -223,20 +277,47 @@ export async function getCompanionResponse(
     }
   }
 
-  return "I'm so sorry, but I'm having a little trouble connecting right now. Please verify that your GEMINI_API_KEY or GROQ_API_KEY is configured in .env.local. 🌸";
+  return "I'm so sorry, but I'm having a little trouble connecting right now. Please verify that your GEMINI_API_KEY, MISTRAL_API_KEY, or GROQ_API_KEY is configured in .env.local. 🌸";
 }
 
 export async function generateChatTitle(firstMessage: string): Promise<string> {
   const prompt = `Generate a short, concise, and descriptive title (2-4 words) for this user's message. Do NOT use quotes or any punctuation. Examples: Period Concerns, Sleep and Stress, General Wellness, Nutrition Advice.\n\nUser message: "${firstMessage}"`;
 
-  if (genAI) {
+  const mistralApiKey = process.env.MISTRAL_API_KEY;
+  if (mistralApiKey) {
     try {
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-      const result = await model.generateContent(prompt);
-      const text = result.response.text().trim().replace(/^["']|["']$/g, '');
-      if (text) return text;
+      const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${mistralApiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'open-mistral-7b',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.5,
+          max_tokens: 15,
+        }),
+      });
+      const data = await response.json();
+      let title = data?.choices?.[0]?.message?.content?.trim() || '';
+      title = title.replace(/^["']|["']$/g, '');
+      if (title) return title;
     } catch {
-      // Fallback
+      // Fallback to next provider
+    }
+  }
+
+  if (genAI) {
+    for (const modelName of ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-flash-latest']) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent(prompt);
+        const text = result.response.text().trim().replace(/^["']|["']$/g, '');
+        if (text) return text;
+      } catch {
+        // Fallback to next model
+      }
     }
   }
 

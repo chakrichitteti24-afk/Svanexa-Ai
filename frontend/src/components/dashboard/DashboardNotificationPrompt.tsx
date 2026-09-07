@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -56,15 +56,15 @@ export function DashboardNotificationPrompt() {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: -8, scale: 0.98 }}
         transition={{ duration: 0.22 }}
-        className="relative overflow-hidden p-4 sm:p-4.5 rounded-3xl bg-gradient-to-r from-violet-950/40 via-purple-900/30 to-pink-950/30 border border-purple-500/30 shadow-lg shadow-purple-950/20 backdrop-blur-md mb-5 text-foreground"
+        className="relative overflow-hidden p-3.5 sm:p-4.5 rounded-3xl bg-gradient-to-r from-violet-950/40 via-purple-900/30 to-pink-950/30 border border-purple-500/30 shadow-lg shadow-purple-950/20 backdrop-blur-md mb-5 text-foreground"
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3.5">
+        <div className="flex items-start justify-between gap-2.5 sm:gap-3">
+          <div className="flex items-start gap-3 min-w-0 flex-1">
             <div className="p-2.5 rounded-2xl bg-gradient-to-tr from-pink-500/20 to-purple-500/20 border border-pink-500/30 text-pink-400 shrink-0 mt-0.5 shadow-sm">
               <BellRing className="w-5 h-5 animate-pulse" />
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <h3 className="text-xs sm:text-sm font-bold text-white tracking-tight">
                   Stay in rhythm with your daily wellness
@@ -79,7 +79,7 @@ export function DashboardNotificationPrompt() {
               </p>
 
               {permissionStatus === 'denied' ? (
-                <div className="pt-2 flex items-center gap-3">
+                <div className="pt-2 flex items-center gap-3 flex-wrap">
                   <span className="text-[11px] text-amber-400 flex items-center gap-1.5 font-medium">
                     Notifications are blocked in your browser.
                   </span>
@@ -91,7 +91,7 @@ export function DashboardNotificationPrompt() {
                   </Link>
                 </div>
               ) : (
-                <div className="pt-2 flex items-center gap-2.5">
+                <div className="pt-2 flex items-center gap-2.5 flex-wrap">
                   <button
                     type="button"
                     onClick={handleEnable}
@@ -116,7 +116,7 @@ export function DashboardNotificationPrompt() {
             type="button"
             onClick={handleDismiss}
             title="Dismiss"
-            className="p-1 rounded-lg text-[#7c71a4] hover:text-white hover:bg-white/10 transition-colors"
+            className="p-1 rounded-lg text-[#7c71a4] hover:text-white hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>

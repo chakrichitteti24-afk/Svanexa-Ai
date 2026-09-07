@@ -346,7 +346,9 @@ export function SvanexaStore() {
             setTransactions(data.data || []);
           }
         } catch (err) {
-          console.error(err);
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('[SvanexaStore] transactions load error:', err);
+          }
         } finally {
           if (!ignore) setLoadingTx(false);
         }

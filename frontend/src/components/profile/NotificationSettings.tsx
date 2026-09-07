@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
@@ -21,6 +21,10 @@ import {
   ListTodo,
   FileHeart,
   Bot,
+  Clock,
+  Globe,
+  RotateCcw,
+  Check,
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useNotifications } from '@/context/NotificationContext';
@@ -72,7 +76,7 @@ export function NotificationSettings() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.18 }}
-      className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border/40 shadow-sm space-y-6"
+      className="p-4 sm:p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border/40 shadow-sm space-y-6"
     >
       {/* ─────────────────────────────────────────────────────────────────
           IPHONE PWA SETUP BANNER
@@ -293,6 +297,174 @@ export function NotificationSettings() {
       </div>
 
       {/* ─────────────────────────────────────────────────────────────────
+          CHECK-IN REMINDER SCHEDULE & TIMEZONE
+          ───────────────────────────────────────────────────────────────── */}
+      <div className="space-y-3 pt-2 border-t border-border/30">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Clock className="w-3.5 h-3.5 text-pink-400" />
+            <p className="text-[11px] font-bold text-foreground/90 uppercase tracking-wider">
+              Reminder Schedule & Timezone
+            </p>
+          </div>
+          <span className="text-[10px] text-muted-foreground">
+            Custom alert timings
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Morning Time */}
+          <div className="p-3 rounded-2xl bg-secondary/15 border border-border/25 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+                <Sun className="w-3.5 h-3.5 text-amber-400" /> Morning
+              </span>
+            </div>
+            <input
+              type="time"
+              value={preferences.reminderSchedule?.morningTime || '08:30'}
+              disabled={!isEnabled}
+              onChange={(e) =>
+                updatePreferences({
+                  reminderSchedule: {
+                    ...preferences.reminderSchedule,
+                    morningTime: e.target.value,
+                  },
+                })
+              }
+              className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-background/80 border border-border/40 text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-pink-500 disabled:opacity-50"
+            />
+          </div>
+
+          {/* Afternoon Time */}
+          <div className="p-3 rounded-2xl bg-secondary/15 border border-border/25 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+                <Sunset className="w-3.5 h-3.5 text-orange-400" /> Afternoon
+              </span>
+            </div>
+            <input
+              type="time"
+              value={preferences.reminderSchedule?.afternoonTime || '14:00'}
+              disabled={!isEnabled}
+              onChange={(e) =>
+                updatePreferences({
+                  reminderSchedule: {
+                    ...preferences.reminderSchedule,
+                    afternoonTime: e.target.value,
+                  },
+                })
+              }
+              className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-background/80 border border-border/40 text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-pink-500 disabled:opacity-50"
+            />
+          </div>
+
+          {/* Evening Time */}
+          <div className="p-3 rounded-2xl bg-secondary/15 border border-border/25 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+                <Moon className="w-3.5 h-3.5 text-indigo-400" /> Evening
+              </span>
+            </div>
+            <input
+              type="time"
+              value={preferences.reminderSchedule?.eveningTime || '21:30'}
+              disabled={!isEnabled}
+              onChange={(e) =>
+                updatePreferences({
+                  reminderSchedule: {
+                    ...preferences.reminderSchedule,
+                    eveningTime: e.target.value,
+                  },
+                })
+              }
+              className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-background/80 border border-border/40 text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-pink-500 disabled:opacity-50"
+            />
+          </div>
+        </div>
+
+        {/* Timezone Selector */}
+        <div className="p-3.5 rounded-2xl bg-secondary/15 border border-border/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 shrink-0">
+              <Globe className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-foreground">Active Timezone</p>
+              <p className="text-[10px] text-muted-foreground">Alerts trigger according to your local clock</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={preferences.timezone || 'Asia/Kolkata'}
+              disabled={!isEnabled}
+              onChange={(e) => updatePreferences({ timezone: e.target.value })}
+              className="px-3 py-1.5 text-xs rounded-xl bg-background/90 border border-border/40 text-foreground focus:outline-none focus:ring-1 focus:ring-pink-500 disabled:opacity-50 cursor-pointer"
+            >
+              <option value="Asia/Kolkata">Asia/Kolkata (IST +5:30)</option>
+              <option value="America/New_York">America/New_York (EST/EDT)</option>
+              <option value="America/Chicago">America/Chicago (CST/CDT)</option>
+              <option value="America/Denver">America/Denver (MST/MDT)</option>
+              <option value="America/Los_Angeles">America/Los_Angeles (PST/PDT)</option>
+              <option value="Europe/London">Europe/London (GMT/BST)</option>
+              <option value="Europe/Paris">Europe/Paris (CET/CEST)</option>
+              <option value="Asia/Dubai">Asia/Dubai (GST +4:00)</option>
+              <option value="Asia/Singapore">Asia/Singapore (SGT +8:00)</option>
+              <option value="Australia/Sydney">Australia/Sydney (AEST +10:00)</option>
+              <option value="UTC">UTC (Coordinated Universal Time)</option>
+            </select>
+            <button
+              type="button"
+              title="Auto-detect timezone"
+              onClick={() => {
+                const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                if (detected) {
+                  updatePreferences({ timezone: detected });
+                  toast.success(`Timezone updated to ${detected}`);
+                }
+              }}
+              className="px-2.5 py-1.5 rounded-xl bg-pink-500/15 hover:bg-pink-500/25 text-pink-300 text-[11px] font-semibold flex items-center gap-1 transition-all cursor-pointer"
+            >
+              <RotateCcw className="w-3 h-3" /> Auto
+            </button>
+          </div>
+        </div>
+
+        {/* Continuous Repeating Reminder Mode */}
+        <div className="p-3.5 rounded-2xl bg-secondary/15 border border-border/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-rose-500/10 text-rose-400 shrink-0">
+              <RotateCcw className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-foreground">Repeating Reminder Mode</p>
+              <p className="text-[10px] text-muted-foreground">Repeats gentle reminders until check-in is logged</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            {preferences.repeatUntilCheckinComplete && (
+              <select
+                value={preferences.recurringIntervalMinutes || 30}
+                disabled={!isEnabled}
+                onChange={(e) => updatePreferences({ recurringIntervalMinutes: Number(e.target.value) })}
+                className="px-2.5 py-1 text-xs rounded-xl bg-background/90 border border-border/40 text-foreground focus:outline-none focus:ring-1 focus:ring-pink-500 disabled:opacity-50 cursor-pointer"
+              >
+                <option value={5}>Every 5 minutes</option>
+                <option value={15}>Every 15 minutes</option>
+                <option value={30}>Every 30 minutes</option>
+                <option value={60}>Every 1 hour</option>
+              </select>
+            )}
+            <Switch
+              checked={preferences.repeatUntilCheckinComplete ?? false}
+              disabled={!isEnabled}
+              onCheckedChange={(checked) => updatePreferences({ repeatUntilCheckinComplete: checked })}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ─────────────────────────────────────────────────────────────────
           DEVICE REGISTRATION & SOUND
           ───────────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
@@ -357,24 +529,24 @@ export function NotificationSettings() {
           LIVE TESTING SECTION
           ───────────────────────────────────────────────────────────────── */}
       <div className="pt-2 border-t border-border/30 space-y-2.5">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
             <h3 className="text-xs font-bold text-foreground flex items-center gap-1.5">
-              <BellRing className="w-3.5 h-3.5 text-pink-400" /> Test Delivery
+              <BellRing className="w-3.5 h-3.5 text-pink-400 shrink-0" /> Test Delivery
             </h3>
             <p className="text-[10px] text-muted-foreground">
               Send a test notification to your current device.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
             <button
               type="button"
               onClick={handleTestAlert}
               disabled={isTesting}
               className="px-3 py-1.5 rounded-xl bg-pink-500/15 hover:bg-pink-500/25 border border-pink-500/30 text-pink-300 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
             >
-              <Smartphone className="w-3.5 h-3.5" /> {isTesting ? 'Sending...' : 'Send Test Alert'}
+              <Smartphone className="w-3.5 h-3.5 shrink-0" /> {isTesting ? 'Sending...' : 'Send Test Alert'}
             </button>
             <button
               type="button"

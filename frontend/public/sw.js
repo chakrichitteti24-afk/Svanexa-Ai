@@ -1,6 +1,6 @@
 // Svanexa AI — Service Worker
 // Handles background push notifications from server AND local scheduling
-const CACHE_NAME = 'svanexa-sw-v3';
+const CACHE_NAME = 'svanexa-sw-v4';
 
 // ─── Install & Activate ───────────────────────────────────────────────────────
 self.addEventListener('install', () => {
@@ -85,6 +85,13 @@ self.addEventListener('notificationclick', (event) => {
       .then((windowClients) => {
         // If app window is already open, focus it and navigate
         for (const client of windowClients) {
+          try {
+            client.postMessage({
+              type: 'NOTIFICATION_ACTION_CLICK',
+              url: targetUrl,
+              tag: event.notification.tag,
+            });
+          } catch {}
           if ('focus' in client) {
             client.focus();
             if ('navigate' in client) {
@@ -173,34 +180,34 @@ function getSlotPayload(slot, userName, streakCount) {
   switch (slot) {
     case 'morning':
       return {
-        title: `🌅 Hey ${name}! Don't forget your check-in today`,
-        body: `Good morning ${name}! 👋 You haven't completed your morning check-in yet. It only takes 60 seconds — your health matters! Open Svanexa now.`,
+        title: `🌅 Good morning, ${name}`,
+        body: `Whenever you have a calm moment, take 60 seconds to check in with how your body is feeling today. No rush — wishing you a lovely day ahead! 🌸`,
         tag: 'checkin-morning',
       };
     case 'afternoon':
       return {
-        title: `☀️ Hey ${name}! Quick health check-in?`,
-        body: `Hi ${name}! 👋 You haven't logged your afternoon check-in yet. How are you feeling today? Take 60 seconds to track your wellness — your body will thank you!`,
+        title: `☀️ Midday wellness pause, ${name}`,
+        body: `Just a gentle check-in to see how you're feeling this afternoon. Remember to pause, take a deep breath, and care for yourself. 🌿`,
         tag: 'checkin-afternoon',
       };
     case 'evening':
       return {
-        title: `🌙 Hey ${name}! Complete your check-in before bed`,
-        body: `Hey ${name}! 👋 Don't forget to complete your daily check-in before you sleep. Tracking your health every day helps Svanexa give you better care. It only takes a minute!`,
+        title: `🌙 Evening reflection, ${name}`,
+        body: `Before winding down tonight, take a quiet minute to log your daily wellness notes. Wishing you restful sleep and recovery. ✨`,
         tag: 'checkin-evening',
       };
     case 'streak':
       return {
-        title: streak > 0 ? `🔥 ${name}, your ${streak}-day streak is at risk!` : `👋 ${name}, complete your check-in today!`,
+        title: streak > 0 ? `✨ A gentle evening reminder, ${name}` : `🌸 Daily wellness check-in, ${name}`,
         body: streak > 0
-          ? `Hey ${name}! You haven't checked in yet today 😟 Your ${streak}-day streak will be lost at midnight. Take 60 seconds to protect it — open Svanexa now!`
-          : `Hey ${name}! 👋 You haven't completed your daily health check-in yet today. Your wellness matters — it only takes 60 seconds. Don't forget!`,
+          ? `You've taken wonderful care of your health for ${streak} days! If you have a free minute before sleep, your daily reflection is waiting for you.`
+          : `Whenever you're ready, take 60 seconds to log today's check-in. Every small step matters for your health.`,
         tag: 'checkin-streak',
       };
     default:
       return {
-        title: `👋 Hey ${name}! Complete your health check-in today`,
-        body: `Hi ${name}! You haven't completed today's wellness check-in yet. Stay on top of your health — open Svanexa and take 60 seconds to log how you're feeling!`,
+        title: `🌸 Gentle health check-in, ${name}`,
+        body: `Take 60 seconds to check in with your wellness today whenever it's most convenient for you.`,
         tag: 'checkin-default',
       };
   }
@@ -221,8 +228,7 @@ function fireLocalCheckinReminder(slot, userName, streakCount) {
         requireInteraction: false,
         data: { url: '/check-in' },
       })
-      .catch((err) => {
-        console.warn('[SW] fireLocalCheckinReminder fallback:', err);
+      .catch(() => {
         return self.registration.showNotification(payload.title, {
           body: payload.body,
           data: { url: '/check-in' },
@@ -259,7 +265,5 @@ async function checkAndNotifyIfMissed() {
         { action: 'dismiss', title: 'Later' },
       ],
     });
-  } catch (err) {
-    console.warn('[SW] Periodic sync notification failed:', err);
-  }
+  } catch (_err) {}
 }

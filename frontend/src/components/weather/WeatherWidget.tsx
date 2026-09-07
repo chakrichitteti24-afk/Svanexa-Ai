@@ -30,14 +30,33 @@ export function WeatherWidget({
     if (typeof window !== 'undefined') {
       try {
         const cached = sessionStorage.getItem('svanexa_weather_cache_v1');
-        if (cached) return JSON.parse(cached);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed?.data && parsed?.timestamp && Date.now() - parsed.timestamp < 30 * 60 * 1000) {
+            return parsed.data;
+          }
+          if (!parsed?.timestamp && parsed?.temperature) {
+            return parsed; // backward compatibility
+          }
+        }
       } catch {}
     }
     return null;
   });
   const [loading, setLoading] = useState(!weather);
   const [locationError, setLocationError] = useState<string | null>(null);
-  const [locationName, setLocationName] = useState<string>('Local Weather');
+  const [locationName, setLocationName] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem('svanexa_weather_cache_v1');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          return parsed?.locationName || 'Local Weather';
+        }
+      } catch {}
+    }
+    return 'Local Weather';
+  });
 
   const fetchWeather = useCallback(async (lat?: number, lon?: number, locName?: string) => {
     setLoading(true);
@@ -54,44 +73,95 @@ export function WeatherWidget({
 
       if (res.ok && result.success && result.data) {
         setWeather(result.data);
+        if (locName) setLocationName(locName);
         try {
-          sessionStorage.setItem('svanexa_weather_cache_v1', JSON.stringify(result.data));
+          sessionStorage.setItem(
+            'svanexa_weather_cache_v1',
+            JSON.stringify({
+              data: result.data,
+              timestamp: Date.now(),
+              locationName: locName || 'Current Area',
+            })
+          );
         } catch {}
       } else {
         throw new Error(result.error || 'Failed to fetch weather');
       }
     } catch (err: any) {
-      console.warn('Weather widget fetch warning:', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[WeatherWidget] fetch note:', err);
+      }
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const requestLocation = useCallback(() => {
-    if (typeof window === 'undefined' || !navigator.geolocation) {
+  const requestLocation = useCallback(async (forcePrompt = false) => {
+    if (typeof window === 'undefined') return;
+
+    // 1. If we already have fresh weather in state and this is not a manual user refresh, no need to query geolocation again
+    if (!forcePrompt && weather) {
+      return;
+    }
+
+    // 2. If geolocation is not supported in this browser, silently fetch default weather
+    if (!navigator.geolocation) {
       fetchWeather();
       return;
     }
 
+    // 3. If user already denied in this session and not forcing prompt, silently use default weather
+    try {
+      if (!forcePrompt && sessionStorage.getItem('svanexa_geo_declined') === '1') {
+        fetchWeather();
+        return;
+      }
+    } catch {}
+
+    // 4. Check navigator.permissions if available to avoid triggering browser blocked notice
+    if (typeof navigator !== 'undefined' && navigator.permissions?.query) {
+      try {
+        const perm = await navigator.permissions.query({ name: 'geolocation' });
+        if (perm.state === 'denied' && !forcePrompt) {
+          fetchWeather();
+          return;
+        }
+      } catch {
+        // Continue if permissions query is unsupported
+      }
+    }
+
+    // 5. Query geolocation with shorter timeout and silent fallback
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const { latitude, longitude } = pos.coords;
+        try {
+          sessionStorage.removeItem('svanexa_geo_declined');
+        } catch {}
         setLocationName('Your Location');
         fetchWeather(latitude, longitude, 'Your Location');
       },
       (err) => {
-        console.warn('Geolocation warning (using default location):', err.message);
+        // Normal fallback: user denied permission or timeout expired
+        try {
+          sessionStorage.setItem('svanexa_geo_declined', '1');
+        } catch {}
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('[WeatherWidget] Geolocation unavailable, using default location:', err.message);
+        }
         setLocationName('Current Area');
         fetchWeather();
       },
-      { timeout: 8000, maximumAge: 600000 }
+      { timeout: 5000, maximumAge: 600000 }
     );
-  }, [fetchWeather]);
+  }, [fetchWeather, weather]);
 
   useEffect(() => {
-    requestLocation();
+    if (!weather) {
+      requestLocation(false);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // run once on mount only — requestLocation is stable via useCallback([fetchWeather]) and fetchWeather has []
+  }, []); // run once on mount only if no weather is cached
 
   if (loading && !weather) {
     return (
@@ -143,7 +213,7 @@ export function WeatherWidget({
           </span>
           <button
             type="button"
-            onClick={requestLocation}
+            onClick={() => requestLocation(true)}
             disabled={loading}
             aria-label="Refresh weather"
             className="p-1.5 rounded-xl hover:bg-white/5 text-muted-foreground hover:text-foreground transition-all active:scale-95"
@@ -177,7 +247,7 @@ export function WeatherWidget({
 
           <button
             type="button"
-            onClick={requestLocation}
+            onClick={() => requestLocation(true)}
             disabled={loading}
             aria-label="Refresh weather data"
             className="p-1.5 rounded-xl hover:bg-white/5 text-muted-foreground hover:text-foreground transition-all active:scale-95"

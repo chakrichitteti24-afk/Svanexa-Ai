@@ -3,6 +3,8 @@ import { getAuthenticatedUser } from '@/utils/supabase/server';
 import { AIService } from '@/lib/services/ai-service';
 import { format, differenceInDays, addDays } from 'date-fns';
 
+export const maxDuration = 60;
+
 function getCurrentSlotLabel(): 'morning' | 'afternoon' | 'evening' {
   const h = new Date().getHours();
   if (h >= 5 && h < 12) return 'morning';

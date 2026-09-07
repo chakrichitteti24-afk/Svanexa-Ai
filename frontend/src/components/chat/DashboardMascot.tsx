@@ -95,7 +95,6 @@ export const DashboardMascot = memo(function DashboardMascot() {
             fill
             sizes="70px"
             style={{ objectFit: 'cover' }}
-            priority
           />
         </div>
       </motion.div>

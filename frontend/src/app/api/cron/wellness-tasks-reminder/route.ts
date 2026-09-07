@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { format } from 'date-fns';
 import { getCronSupabaseClient, getUserPreferencesMap, buildWellnessTaskMessage, validateCronRequest } from '@/lib/services/cron-utils';
 import { sendWebPush } from '@/lib/services/web-push';
+import { getUserLocalTime, isNotificationAllowed, persistNotificationToDatabase } from '@/lib/services/notification-engine';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +13,7 @@ export async function GET(req: Request) {
     }
 
     const supabase = getCronSupabaseClient();
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const nowUtc = new Date();
 
     const { data: subscriptions, error } = await supabase
       .from('push_subscriptions')
@@ -23,7 +23,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: true, remindersSent: 0, message: 'No subscriptions' });
     }
 
-    const userIds = [...new Set(subscriptions.map((s: any) => s.user_id))];
+    const userIds = [...new Set(subscriptions.map((s: any) => s.user_id))] as string[];
 
     // Fetch user preferences in parallel
     const prefMap = await getUserPreferencesMap(supabase, userIds);
@@ -59,15 +59,15 @@ export async function GET(req: Request) {
 
     const deadIds: string[] = [];
     let sentCount = 0;
+    let suppressedCount = 0;
 
     for (const userId of userIds) {
       const pref = prefMap.get(userId);
 
-      // Check Master & Individual Wellness Tasks preference
-      if (pref) {
-        if (pref.enabled === false || pref.wellnessTasks === false) {
-          continue;
-        }
+      // Check Master & Wellness Tasks preference
+      if (pref && (pref.enabled === false || pref.wellnessTasks === false)) {
+        suppressedCount++;
+        continue;
       }
 
       const tasks = userPlanMap.get(userId) || [];
@@ -76,22 +76,39 @@ export async function GET(req: Request) {
       const hasPendingTasks = tasks.length > 0 && tasks.some((t: any) => !t.completed && t.status !== 'completed');
 
       if (hasPendingTasks) {
+        const userTz = pref?.timezone || 'Asia/Kolkata';
+        const localTime = getUserLocalTime(userTz, nowUtc);
         const { title, body } = buildWellnessTaskMessage();
 
-        for (const sub of (userSubMap.get(userId) || [])) {
-          const r = await sendWebPush(
-            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-            {
-              title,
-              message: body,
-              url: '/dashboard',
-              actionLabel: 'View Tasks',
-              tag: `tasks-reminder-${todayStr}`,
-              category: 'checkin',
-            }
-          );
-          if (r.success) sentCount++;
-          if (r.shouldDeleteSubscription) deadIds.push(sub.id);
+        // 1. Persist to inbox
+        await persistNotificationToDatabase(supabase, {
+          userId,
+          title,
+          message: body,
+          category: 'checkin',
+          priority: 'normal',
+          actionUrl: '/dashboard',
+          actionLabel: 'View Tasks',
+          metadata: { date: localTime.dateStr },
+        });
+
+        // 2. Dispatch push if enabled
+        if (pref?.browserPush !== false) {
+          for (const sub of (userSubMap.get(userId) || [])) {
+            const r = await sendWebPush(
+              { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+              {
+                title,
+                message: body,
+                url: '/dashboard',
+                actionLabel: 'View Tasks',
+                tag: `tasks-reminder-${localTime.dateStr}`,
+                category: 'checkin',
+              }
+            );
+            if (r.success) sentCount++;
+            if (r.shouldDeleteSubscription) deadIds.push(sub.id);
+          }
         }
       }
     }
@@ -102,8 +119,8 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       success: true,
-      date: todayStr,
       remindersSent: sentCount,
+      suppressedCount,
       usersChecked: userIds.length,
     });
   } catch (err: any) {

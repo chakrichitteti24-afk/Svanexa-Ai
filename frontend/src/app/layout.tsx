@@ -33,6 +33,47 @@ export default function RootLayout({
     <html lang="en" className="dark" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
         <link rel="manifest" href="/manifest.webmanifest" crossOrigin="anonymous" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if (typeof window !== 'undefined') {
+                window.addEventListener('error', function(e) {
+                  if (
+                    e.message && (
+                      e.message.indexOf("reading 'startTime'") !== -1 ||
+                      e.message.indexOf('reportAllChanges') !== -1 ||
+                      e.message.indexOf('ResizeObserver loop') !== -1 ||
+                      (e.filename && (e.filename.indexOf('chrome-extension://') !== -1 || e.filename.indexOf('moz-extension://') !== -1))
+                    )
+                  ) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                  }
+                }, true);
+
+                window.addEventListener('unhandledrejection', function(e) {
+                  var reason = e.reason;
+                  if (
+                    reason && (
+                      (typeof reason.message === 'string' && (
+                        reason.message.indexOf("reading 'startTime'") !== -1 ||
+                        reason.message.indexOf('reportAllChanges') !== -1 ||
+                        reason.message.indexOf('ResizeObserver loop') !== -1
+                      )) ||
+                      (typeof reason.stack === 'string' && (
+                        reason.stack.indexOf('chrome-extension://') !== -1 ||
+                        reason.stack.indexOf('moz-extension://') !== -1
+                      ))
+                    )
+                  ) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                  }
+                }, true);
+              }
+            `,
+          }}
+        />
       </head>
       <body className={`${inter.className} bg-background text-foreground antialiased`} suppressHydrationWarning>
         <I18nProvider>

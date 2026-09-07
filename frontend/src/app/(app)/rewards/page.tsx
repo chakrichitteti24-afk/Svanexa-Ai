@@ -76,7 +76,9 @@ export default function RewardsPage() {
         }
       }
     } catch (err) {
-      console.warn('[rewards/summary fetch warning]', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[rewards/summary fetch warning]', err);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);

@@ -104,7 +104,9 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
         );
       }
     } catch (err) {
-      console.warn('Language sync error:', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Language sync notice:', err);
+      }
     }
   }, []);
 

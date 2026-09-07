@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export function useLocalStorage<T>(key: string, initialValue: T) {
   // Always initialize with initialValue to match SSR output
   const [storedValue, setStoredValue] = useState<T>(initialValue);
+  const hookId = useRef(Math.random().toString(36).substring(2, 9));
 
   // Load from localStorage on client-side mount
   useEffect(() => {
@@ -20,13 +21,20 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
 
     loadFromStorage();
 
-    // Listen for custom event on the same window
-    window.addEventListener('local-storage', loadFromStorage);
+    // Listen for custom event on the same window from other hook instances
+    const handleLocalEvent = (e: Event) => {
+      const custom = e as CustomEvent<{ key?: string; senderId?: string }>;
+      if (custom.detail?.key && custom.detail.key !== key) return;
+      if (custom.detail?.senderId && custom.detail.senderId === hookId.current) return;
+      loadFromStorage();
+    };
+
+    window.addEventListener('local-storage', handleLocalEvent);
     // Listen for native storage event from other tabs
     window.addEventListener('storage', loadFromStorage);
 
     return () => {
-      window.removeEventListener('local-storage', loadFromStorage);
+      window.removeEventListener('local-storage', handleLocalEvent);
       window.removeEventListener('storage', loadFromStorage);
     };
   }, [key]);
@@ -38,7 +46,7 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
         const valueToStore = value instanceof Function ? value(prevValue) : value;
         if (typeof window !== 'undefined') {
           window.localStorage.setItem(key, JSON.stringify(valueToStore));
-          window.dispatchEvent(new Event('local-storage'));
+          window.dispatchEvent(new CustomEvent('local-storage', { detail: { key, senderId: hookId.current } }));
         }
         return valueToStore;
       });

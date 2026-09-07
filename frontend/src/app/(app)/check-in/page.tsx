@@ -190,7 +190,9 @@ export default function CheckInPage() {
         setBonusClaimed(data.claimed.bonus);
       }
     } catch (err) {
-      console.error('Error fetching checkin status', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Error fetching checkin status:', err);
+      }
     } finally {
       setLoading(false);
     }
@@ -342,7 +344,9 @@ export default function CheckInPage() {
             setPlanError("Your check-in was saved, but your wellness plan couldn't be generated.");
           }
         } catch (planErr) {
-          console.warn('Wellness plan generation failed:', planErr);
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('Wellness plan generation notice:', planErr);
+          }
           setPlanError("Your check-in was saved, but your wellness plan couldn't be generated.");
         } finally {
           setPlanGenerating(false);

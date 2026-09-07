@@ -230,7 +230,9 @@ export default function ProfilePage() {
       setDueDate(initialData.dueDate);
       setErrors({});
     } catch (e) {
-      console.error('Error fetching profile', e);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Error fetching profile:', e);
+      }
       toast.error('Unable to load profile data. Please refresh.');
     } finally {
       setLoading(false);
@@ -373,7 +375,9 @@ export default function ProfilePage() {
               .insert({ user_id: userId, due_date: dueDate });
           }
         } catch (pregErr) {
-          console.warn('Optional pregnancy log save notice:', pregErr);
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('Optional pregnancy log save notice:', pregErr);
+          }
         }
       }
 
@@ -397,7 +401,9 @@ export default function ProfilePage() {
         await updateLanguage(companionLanguage);
         await setLanguage(companionLanguage);
       } catch (err) {
-        console.warn('Language sync error:', err);
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('Language sync notice:', err);
+        }
       }
 
       toast.success(t('common.saved'));
@@ -408,7 +414,9 @@ export default function ProfilePage() {
       await refreshAll();
 
     } catch (err: any) {
-      console.error('Profile save error:', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Profile save notice:', err);
+      }
       toast.error("Couldn't save your changes. Please try again.", {
         description: err.message || 'Database connection error.',
       });
@@ -422,7 +430,9 @@ export default function ProfilePage() {
     try {
       await supabase.auth.signOut();
     } catch (e) {
-      console.warn('Sign out error:', e);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Sign out notice:', e);
+      }
     } finally {
       if (typeof window !== 'undefined') {
         localStorage.clear();

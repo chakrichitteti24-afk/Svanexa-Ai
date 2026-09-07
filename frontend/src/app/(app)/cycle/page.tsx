@@ -285,7 +285,9 @@ export default function CycleTrackerPage() {
       }
       setMonthData(aggregated);
     } catch (e) {
-      console.error('Error fetching month data:', e);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Error fetching month data:', e);
+      }
     }
   };
 
@@ -597,7 +599,9 @@ export default function CycleTrackerPage() {
       setSelectedDate(null);
       refreshAll({ skipCycleHistory: true });
     } catch (e: any) {
-      console.error('Error logging period start:', e);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Period start notice:', e);
+      }
       refreshCycleHistory();
       toast.error(e?.message || 'Failed to log period start.');
     } finally {
@@ -672,7 +676,9 @@ export default function CycleTrackerPage() {
       setSelectedDate(null);
       refreshAll({ skipCycleHistory: true });
     } catch (e: any) {
-      console.error('Error logging period end:', e);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Period end notice:', e);
+      }
       refreshCycleHistory();
       toast.error(e?.message || 'Failed to log period end.');
     } finally {

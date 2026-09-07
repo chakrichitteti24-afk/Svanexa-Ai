@@ -50,6 +50,8 @@ export function playWellnessChime() {
       ctx.close().catch(() => {});
     }, 1500);
   } catch (err) {
-    console.warn('Unable to play audio alert chime:', err);
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('Audio alert chime prevented by browser autoplay policy:', err);
+    }
   }
 }

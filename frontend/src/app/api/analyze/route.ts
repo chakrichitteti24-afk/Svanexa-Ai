@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/utils/supabase/server';
 import { AIService } from '@/lib/services/ai-service';
 
+export const maxDuration = 60;
+
 export async function POST(req: Request) {
   try {
     const { supabase, user, error: authError } = await getAuthenticatedUser(req);

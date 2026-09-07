@@ -38,7 +38,9 @@ class OfflineMutationQueueManager {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(mutations));
     } catch (err) {
-      console.warn('[OfflineSync] Failed to persist mutation queue:', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[OfflineSync] Failed to persist mutation queue:', err);
+      }
     }
   }
 
@@ -116,7 +118,9 @@ class OfflineMutationQueueManager {
             successCount++;
           } else if (res.status >= 400 && res.status < 500) {
             // Client error (e.g. 400 Bad Request or already applied), discard to avoid clogging queue
-            console.warn(`[OfflineSync] Discarding permanent error ${res.status} for mutation ${mutation.id}`);
+            if (process.env.NODE_ENV === 'development') {
+              console.debug(`[OfflineSync] Discarding permanent error ${res.status} for mutation ${mutation.id}`);
+            }
           } else {
             // Server error (5xx) or timeout: keep in queue if retries remain
             mutation.retryCount++;

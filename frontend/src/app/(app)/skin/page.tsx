@@ -212,7 +212,9 @@ export default function SkinTrackerPage() {
       setCameraFacing(facing);
       setIsCameraOpen(true);
     } catch (err: any) {
-      console.error('Camera open failed:', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Camera open notice:', err);
+      }
       toast.error('Unable to access camera', {
         description: 'Please grant camera permission in your browser or select a photo from your gallery.'
       });

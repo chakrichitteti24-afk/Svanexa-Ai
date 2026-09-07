@@ -240,6 +240,7 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
   const [activeSessionId, setActiveSessionId] = useLocalStorage<string | null>('hersync_active_session', null);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [streamingText, setStreamingText] = useState<{ sessionId: string; content: string } | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -274,7 +275,9 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
     try {
       await updateLanguage(langCode);
     } catch (err) {
-      console.warn('Language sync error:', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Language sync notice:', err);
+      }
     }
 
     // Always regenerate the greeting in the new language on the active session
@@ -339,6 +342,7 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
     if (activeStreamRef.current.flush) {
       activeStreamRef.current.flush();
     }
+    setStreamingText(null);
     const now = new Date().getTime();
     const newSession: ChatSession = {
       id: generateUUID(),
@@ -384,6 +388,7 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
     if (activeStreamRef.current.flush) {
       activeStreamRef.current.flush();
     }
+    setStreamingText(null);
     const now = Date.now();
     const fresh: ChatSession = {
       id: generateUUID(),
@@ -431,7 +436,10 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
         activeStreamRef.current.interval = null;
       }
       activeStreamRef.current.flush = null;
-      setSessions(prev => prev.map(s => {
+      setStreamingText(null);
+
+      // Single atomic persistence to localStorage upon stream completion
+      setSessions(prev => (Array.isArray(prev) ? prev : []).map(s => {
         if (s.id !== sessionId) return s;
         return {
           ...s,
@@ -439,6 +447,7 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
           updated_at: Date.now(),
         };
       }));
+
       if (!isUserScrolledUpRef.current && bottomRef.current) {
         bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
       }
@@ -446,8 +455,8 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
 
     activeStreamRef.current.flush = flush;
 
-    // Fast, batch-friendly streaming: stream in chunks without freezing localStorage
-    const stepSize = Math.max(1, Math.min(3, Math.ceil(chunks.length / 80)));
+    // Fast, batch-friendly streaming: smoothly update in-memory state (zero disk writes during stream)
+    const stepSize = Math.max(1, Math.min(4, Math.ceil(chunks.length / 70)));
 
     activeStreamRef.current.interval = setInterval(() => {
       if (chunkIndex >= chunks.length) {
@@ -460,18 +469,13 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
         chunkIndex++;
       }
 
-      setSessions(prev => prev.map(s => {
-        if (s.id !== sessionId) return s;
-        return {
-          ...s,
-          messages: [...currentMessages, { role: 'model', content: currentText, timestamp: Date.now(), isStreaming: true }],
-        };
-      }));
+      // Smooth in-memory update with zero disk I/O
+      setStreamingText({ sessionId, content: currentText });
 
       if (!isUserScrolledUpRef.current && bottomRef.current) {
         bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
       }
-    }, 28);
+    }, 24);
   };
 
   const fetchGreeting = useCallback(async (sessionId: string, targetLang?: string) => {
@@ -518,7 +522,16 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
   }, [isOpen, profileLoading, sessions?.length, activeSessionId, fetchGreeting, startNewChat, isLoading, currentLanguage]);
 
   const activeSession = (Array.isArray(sessions) ? sessions : []).find(s => s.id === activeSessionId);
-  const messages = Array.isArray(activeSession?.messages) ? activeSession.messages : [];
+  const persistedMessages = Array.isArray(activeSession?.messages) ? activeSession.messages : [];
+  const messages = useMemo(() => {
+    if (streamingText && streamingText.sessionId === activeSessionId) {
+      return [
+        ...persistedMessages,
+        { role: 'model' as const, content: streamingText.content, timestamp: Date.now(), isStreaming: true }
+      ];
+    }
+    return persistedMessages;
+  }, [persistedMessages, streamingText, activeSessionId]);
 
   useEffect(() => {
     if (isOpen && !showHistoryView) {
@@ -610,16 +623,16 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
         transition={
           isLoading
             ? { duration: 1.2, repeat: Infinity, ease: 'easeInOut' }
-            : { duration: 0.2 }
+            : { type: 'spring', stiffness: 400, damping: 25 }
         }
-        whileHover={{ scale: 1.06 }}
-        whileTap={{ scale: 0.94 }}
+        whileHover={{ scale: 1.08 }}
+        whileTap={{ scale: 0.92 }}
       >
         {isLoading && (
           <motion.div
             className={styles.fabGlowRing}
             animate={{ rotate: 360 }}
-            transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+            transition={{ duration: 2.5, repeat: Infinity, ease: 'linear' }}
           />
         )}
         <span className={styles.fabPulse} />
@@ -635,19 +648,20 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
               className={styles.overlay}
               onClick={() => setIsOpen(false)}
             />
 
             <motion.div
               ref={panelRef}
-              initial={{ opacity: 0, scale: 0.9, y: 16 }}
+              initial={{ opacity: 0, scale: 0.93, y: 24 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 16 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{
                 type: 'spring',
-                damping: 25,
-                stiffness: 300,
+                damping: 30,
+                stiffness: 380,
                 mass: 0.8,
               }}
               className={`${styles.panel} ${styles.desktopPanel}`}

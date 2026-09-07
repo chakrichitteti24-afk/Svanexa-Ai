@@ -5,6 +5,8 @@ export type NotificationCategory =
   | 'supplements'
   | 'skin'
   | 'luna'
+  | 'rewards'
+  | 'reports'
   | 'system';
 
 export type NotificationPriority = 'high' | 'normal' | 'low';

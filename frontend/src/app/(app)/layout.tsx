@@ -33,7 +33,9 @@ export default function AppLayout({
         if (!isSubscribed) return;
 
         if (error) {
-          console.warn('Session retrieval warning:', error.message);
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('Session retrieval warning:', error.message);
+          }
         }
 
         if (session?.user) {
@@ -44,7 +46,9 @@ export default function AppLayout({
           router.replace('/login');
         }
       } catch (err: any) {
-        console.error('Auth verification error in AppLayout:', err);
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('Auth verification notice in AppLayout:', err);
+        }
         if (isSubscribed) {
           setAuthState('UNAUTHENTICATED');
           router.replace('/login');

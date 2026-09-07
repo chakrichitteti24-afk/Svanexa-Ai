@@ -1,15 +1,19 @@
 import { NextResponse } from 'next/server';
-import { format } from 'date-fns';
 import { sendWebPush } from '@/lib/services/web-push';
-import { getCronSupabaseClient, getUserPreferencesMap, buildCheckinMessage, validateCronRequest } from '@/lib/services/cron-utils';
+import {
+  getCronSupabaseClient,
+  getUserPreferencesMap,
+  buildCheckinMessage,
+  validateCronRequest,
+} from '@/lib/services/cron-utils';
+import {
+  getUserLocalTime,
+  determineUserSlot,
+  isNotificationAllowed,
+  persistNotificationToDatabase,
+} from '@/lib/services/notification-engine';
 
 export const dynamic = 'force-dynamic';
-
-function determineAutoSlot(currentHour: number): 'morning' | 'afternoon' | 'evening' {
-  if (currentHour >= 5 && currentHour < 12) return 'morning';
-  else if (currentHour >= 12 && currentHour < 18) return 'afternoon';
-  else return 'evening';
-}
 
 async function handleCheckinReminders(req: Request) {
   try {
@@ -19,21 +23,10 @@ async function handleCheckinReminders(req: Request) {
     }
 
     const url = new URL(req.url);
-
-    const requestedSlot = url.searchParams.get('slot');
+    const requestedSlot = url.searchParams.get('slot') as 'morning' | 'afternoon' | 'evening' | 'streak' | null;
     const targetUserId = url.searchParams.get('userId');
 
-    const now = new Date();
-    const currentHour = now.getHours();
-    const todayStr = format(now, 'yyyy-MM-dd');
-
-    const slot: 'morning' | 'afternoon' | 'evening' | 'streak' =
-      requestedSlot === 'morning' || requestedSlot === 'afternoon' ||
-      requestedSlot === 'evening' || requestedSlot === 'streak'
-        ? requestedSlot : determineAutoSlot(currentHour);
-
     const supabase = getCronSupabaseClient();
-
 
     // 1. Fetch all push subscriptions
     let subsQuery = supabase
@@ -57,8 +50,7 @@ async function handleCheckinReminders(req: Request) {
         message: 'No push subscriptions found to check.',
         totalSubscriptions: 0,
         remindersSent: 0,
-        date: todayStr,
-        slot,
+        slot: requestedSlot || 'auto',
       });
     }
 
@@ -74,7 +66,7 @@ async function handleCheckinReminders(req: Request) {
 
     // 3. Fetch profiles and user preferences in parallel
     const [profilesRes, prefMap] = await Promise.all([
-      supabase.from('profiles').select('id, username, first_name, last_name').in('id', userIds),
+      supabase.from('profiles').select('id, username, first_name, last_name, notifications_enabled').in('id', userIds),
       getUserPreferencesMap(supabase, userIds),
     ]);
 
@@ -85,21 +77,32 @@ async function handleCheckinReminders(req: Request) {
       }
     }
 
-    // 4. Fetch today's check-ins to verify if user has already completed the slot
-    const { data: todayCheckins } = await supabase
-      .from('daily_checkins')
-      .select('user_id, summary')
-      .in('user_id', userIds)
-      .eq('date', todayStr);
+    // 4. Fetch recent check-ins across last 2 days to account for all user timezones
+    const nowUtc = new Date();
+    const todayUtc = nowUtc.toISOString().slice(0, 10);
+    const yesterdayUtc = new Date(nowUtc.getTime() - 86400000).toISOString().slice(0, 10);
 
-    const checkinMap = new Map<string, Record<string, any>>();
-    if (todayCheckins) {
-      for (const c of todayCheckins) {
+    const { data: recentCheckins } = await supabase
+      .from('daily_checkins')
+      .select('user_id, date, summary')
+      .in('user_id', userIds)
+      .gte('date', yesterdayUtc)
+      .lte('date', todayUtc);
+
+    // checkinMap: userId -> Map<dateStr, summary>
+    const checkinMap = new Map<string, Map<string, Record<string, any>>>();
+    if (recentCheckins) {
+      for (const c of recentCheckins) {
+        let userMap = checkinMap.get(c.user_id);
+        if (!userMap) {
+          userMap = new Map();
+          checkinMap.set(c.user_id, userMap);
+        }
         let parsed = {};
         try {
           parsed = typeof c.summary === 'string' ? JSON.parse(c.summary) : c.summary || {};
         } catch {}
-        checkinMap.set(c.user_id, parsed);
+        userMap.set(c.date, parsed);
       }
     }
 
@@ -120,36 +123,45 @@ async function handleCheckinReminders(req: Request) {
     const deadSubIds: string[] = [];
     let sentCount = 0;
     let incompleteUserCount = 0;
+    let suppressedCount = 0;
     const dispatchDetails: Array<{ userId: string; slot: string; sentDevices: number }> = [];
 
     for (const userId of userIds) {
       const userProfile = profileMap.get(userId);
       const userPref = prefMap.get(userId);
 
-      // Check Master & Individual Notification Controls
-      if (userPref) {
-        if (userPref.enabled === false) continue;
-        if (slot === 'morning' && userPref.morningCheckin === false) continue;
-        if (slot === 'afternoon' && userPref.afternoonCheckin === false) continue;
-        if (slot === 'evening' && userPref.eveningCheckin === false) continue;
-      } else if (userProfile && userProfile.notifications_enabled === false) {
+      // Localized timezone calculation for each individual user
+      const userTz = userPref?.timezone || 'Asia/Kolkata';
+      const localTime = getUserLocalTime(userTz, nowUtc);
+
+      // Determine slot: use requestedSlot if valid, else determine from local time & custom schedule
+      const effectiveSlot = requestedSlot || determineUserSlot(localTime.hour, userPref?.reminderSchedule);
+
+      // Verify preference enforcement
+      if (!isNotificationAllowed(userPref, 'checkin', effectiveSlot)) {
+        suppressedCount++;
+        continue;
+      }
+      if (userProfile?.notifications_enabled === false) {
+        suppressedCount++;
         continue;
       }
 
-      const summary = checkinMap.get(userId) || {};
+      const userDates = checkinMap.get(userId);
+      const summary = userDates?.get(localTime.dateStr) || {};
       const userStreak = streakMap.get(userId) || 0;
-      const userName = userProfile?.full_name || userProfile?.username || 'there';
+      const userName = userProfile?.first_name || userProfile?.username || 'there';
 
       // Determine if check-in is already completed for the target slot (SUPPRESSION RULE)
       let isCompleted = false;
 
-      if (slot === 'morning') {
+      if (effectiveSlot === 'morning') {
         isCompleted = Boolean(summary.morning?.completed);
-      } else if (slot === 'afternoon') {
+      } else if (effectiveSlot === 'afternoon') {
         isCompleted = Boolean(summary.afternoon?.completed);
-      } else if (slot === 'evening') {
+      } else if (effectiveSlot === 'evening') {
         isCompleted = Boolean(summary.evening?.completed);
-      } else if (slot === 'streak') {
+      } else if (effectiveSlot === 'streak') {
         // Any check-in slot completed today keeps streak alive
         isCompleted = Boolean(summary.morning?.completed || summary.afternoon?.completed || summary.evening?.completed);
       } else {
@@ -159,48 +171,66 @@ async function handleCheckinReminders(req: Request) {
       // If user ALREADY completed check-in, SUPPRESS reminder (DO NOT SEND)
       if (!isCompleted) {
         incompleteUserCount++;
+        const isStreakSlot = effectiveSlot === 'streak' || (localTime.hour >= 20 && userStreak > 1);
         const { title, body } = buildCheckinMessage(
           userName,
-          slot === 'streak' || (currentHour >= 20 && userStreak > 1) ? 'streak' : slot,
+          isStreakSlot ? 'streak' : effectiveSlot,
           userStreak
         );
-        const payload = {
+
+        const actionLabel = isStreakSlot ? 'Protect Streak' : 'Complete Check-In';
+        const tag = `checkin-${effectiveSlot}-${localTime.dateStr}`;
+
+        // 1. Persist in database inbox
+        await persistNotificationToDatabase(supabase, {
+          userId,
           title,
           message: body,
-          url: '/check-in',
-          actionLabel: slot === 'streak' || userStreak > 0 ? 'Protect Streak' : 'Complete Check-In',
-          tag: `checkin-${slot}-${todayStr}`,
-          category: 'checkin' as const,
-        };
+          category: 'checkin',
+          priority: isStreakSlot ? 'high' : 'normal',
+          actionUrl: '/check-in',
+          actionLabel,
+          metadata: { slot: effectiveSlot, streak: userStreak, date: localTime.dateStr },
+        });
 
-        const userSubs = userSubMap.get(userId) || [];
+        // 2. Dispatch push notifications to all user's registered devices if browserPush enabled
         let userSentDevices = 0;
-
-        for (const sub of userSubs) {
-          const result = await sendWebPush(
-            {
-              endpoint: sub.endpoint,
-              keys: {
-                p256dh: sub.p256dh,
-                auth: sub.auth,
+        if (userPref?.browserPush !== false) {
+          const userSubs = userSubMap.get(userId) || [];
+          for (const sub of userSubs) {
+            const result = await sendWebPush(
+              {
+                endpoint: sub.endpoint,
+                keys: {
+                  p256dh: sub.p256dh,
+                  auth: sub.auth,
+                },
               },
-            },
-            payload
-          );
+              {
+                title,
+                message: body,
+                url: '/check-in',
+                actionUrl: '/check-in',
+                actionLabel,
+                tag,
+                category: 'checkin',
+              }
+            );
 
-          if (result.success) {
-            sentCount++;
-            userSentDevices++;
-          }
+            if (result.success) {
+              sentCount++;
+              userSentDevices++;
+            }
 
-          if (result.shouldDeleteSubscription) {
-            deadSubIds.push(sub.id);
+            if (result.shouldDeleteSubscription) {
+              deadSubIds.push(sub.id);
+            }
           }
         }
 
         dispatchDetails.push({
           userId,
-          slot,
+          slot: effectiveSlot,
           sentDevices: userSentDevices,
         });
       }
@@ -213,12 +243,11 @@ async function handleCheckinReminders(req: Request) {
 
     return NextResponse.json({
       success: true,
-      timestamp: now.toISOString(),
-      date: todayStr,
-      slot,
+      timestamp: nowUtc.toISOString(),
       totalSubscriptions: subscriptions.length,
       uniqueUsers: userIds.length,
       incompleteUsers: incompleteUserCount,
+      suppressedCount,
       remindersSent: sentCount,
       cleanedUpExpired: deadSubIds.length,
       dispatchDetails,

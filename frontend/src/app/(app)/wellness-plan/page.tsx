@@ -200,7 +200,9 @@ function WellnessPlanContent() {
         setTimeout(() => setAnimScore(body.plan.wellnessScore), 200);
       }
     } catch (err) {
-      console.error('Error loading wellness plan:', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Error loading wellness plan:', err);
+      }
       setIsError(true);
       toast.error('Could not load your wellness plan.');
     } finally {

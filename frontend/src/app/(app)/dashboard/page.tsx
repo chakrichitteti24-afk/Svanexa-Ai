@@ -222,9 +222,15 @@ export default function DashboardPage() {
             note: `Quick hydration log (+${Math.round(amountLiters * 1000)}ml)`,
           },
         }),
-      }).catch(err => console.warn('Background water sync notice:', err));
+      }).catch(err => {
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('Background water sync notice:', err);
+        }
+      });
     } catch (err) {
-      console.warn('Quick water log error:', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Quick water log notice:', err);
+      }
     }
   };
 
@@ -251,9 +257,15 @@ export default function DashboardPage() {
             note: `Quick 1-tap mood log: ${emoji} ${moodText}`,
           },
         }),
-      }).catch(err => console.warn('Background mood sync notice:', err));
+      }).catch(err => {
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('Background mood sync notice:', err);
+        }
+      });
     } catch (err) {
-      console.warn('Quick mood log error:', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Quick mood log notice:', err);
+      }
     }
   };
 
@@ -279,9 +291,15 @@ export default function DashboardPage() {
           date: todayStr,
           data: defaultData[slotToFill],
         }),
-      }).catch(err => console.warn('Catch-up background sync notice:', err));
+      }).catch(err => {
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('Catch-up background sync notice:', err);
+        }
+      });
     } catch (err) {
-      console.warn('Catch-up error:', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Catch-up error notice:', err);
+      }
       toast.error('Could not complete catch-up log.');
     }
   };
@@ -372,29 +390,39 @@ export default function DashboardPage() {
       </motion.div>
 
       {/* 🧭 EFFORTLESS TAB NAVIGATION (PROGRESSIVE DISCLOSURE) */}
-      <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-secondary/30 border border-border/30 backdrop-blur-md self-start max-w-full overflow-x-auto scrollbar-thin">
+      <div className="flex items-center gap-1 p-1 rounded-full bg-white/[0.05] border border-white/[0.08] shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)] backdrop-blur-2xl self-start max-w-full overflow-x-auto scrollbar-thin">
         {[
           { id: 'focus' as const, label: "Today's Focus", icon: '🎯' },
           { id: 'nutrition' as const, label: 'Hormone Foods', icon: '🍵' },
           { id: 'insights' as const, label: 'Biometrics & AI', icon: '📊' },
-        ].map(tab => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => {
-              triggerHaptic('selection');
-              setActiveDashboardTab(tab.id);
-            }}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
-              activeDashboardTab === tab.id
-                ? 'bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-md shadow-pink-500/20'
-                : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
-            }`}
-          >
-            <span>{tab.icon}</span>
-            <span>{tab.label}</span>
-          </button>
-        ))}
+        ].map(tab => {
+          const isActive = activeDashboardTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => {
+                triggerHaptic('selection');
+                setActiveDashboardTab(tab.id);
+              }}
+              className={`relative px-4 py-2 rounded-full text-xs font-bold transition-colors duration-150 flex items-center gap-1.5 shrink-0 cursor-pointer apple-tactile ${
+                isActive
+                  ? 'text-white font-bold'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {isActive && (
+                <motion.div
+                  layoutId="activeDashboardTabPill"
+                  className="absolute inset-0 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 shadow-md shadow-pink-500/25 -z-10"
+                  transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                />
+              )}
+              <span>{tab.icon}</span>
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* 🎯 TAB 1: TODAY'S FOCUS (HERO RING + MICRO-LOGGERS + PLAN) */}

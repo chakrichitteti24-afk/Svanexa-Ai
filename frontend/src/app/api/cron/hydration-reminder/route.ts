@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { format } from 'date-fns';
-import { getCronSupabaseClient, fetchWeatherForCron, buildHydrationMessage, validateCronRequest } from '@/lib/services/cron-utils';
+import { getCronSupabaseClient, getUserPreferencesMap, fetchWeatherForCron, buildHydrationMessage, validateCronRequest } from '@/lib/services/cron-utils';
 import { sendWebPush } from '@/lib/services/web-push';
+import { getUserLocalTime, isNotificationAllowed, persistNotificationToDatabase } from '@/lib/services/notification-engine';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +13,7 @@ export async function GET(req: Request) {
     }
 
     const supabase = getCronSupabaseClient();
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const nowUtc = new Date();
     const weather = await fetchWeatherForCron();
 
     const { data: subscriptions, error: subsErr } = await supabase
@@ -24,53 +24,117 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: true, remindersSent: 0, message: 'No subscriptions found' });
     }
 
-    const userIds = [...new Set(subscriptions.map((s: any) => s.user_id))];
+    const userIds = [...new Set(subscriptions.map((s: any) => s.user_id))] as string[];
+
+    const [profilesRes, prefMap] = await Promise.all([
+      supabase.from('profiles').select('id, username, first_name, last_name, notifications_enabled').in('id', userIds),
+      getUserPreferencesMap(supabase, userIds),
+    ]);
 
     const profileMap = new Map<string, string>();
-    try {
-      const { data: profiles } = await supabase.from('profiles').select('id, username, first_name, last_name').in('id', userIds);
-      if (profiles) for (const p of profiles) profileMap.set(p.id, (p.username && p.username !== 'User' ? p.username : p.first_name) || 'there');
-    } catch {}
+    if (profilesRes.data) {
+      for (const p of profilesRes.data) {
+        profileMap.set(p.id, p.first_name || (p.username && p.username !== 'User' ? p.username : 'there'));
+      }
+    }
 
+    // Check water logs for the past 2 days across user timezones
+    const twoDaysAgo = new Date(nowUtc.getTime() - 86400000).toISOString().slice(0, 10);
     const { data: checkins } = await supabase
-      .from('daily_checkins').select('user_id, summary').in('user_id', userIds).eq('date', todayStr);
+      .from('daily_checkins')
+      .select('user_id, date, summary')
+      .in('user_id', userIds)
+      .gte('date', twoDaysAgo);
 
-    const waterMap = new Map<string, number>();
+    const userWaterMap = new Map<string, Map<string, number>>();
     if (checkins) {
       for (const c of checkins) {
+        let dateMap = userWaterMap.get(c.user_id);
+        if (!dateMap) {
+          dateMap = new Map();
+          userWaterMap.set(c.user_id, dateMap);
+        }
         try {
           const s = typeof c.summary === 'string' ? JSON.parse(c.summary) : c.summary || {};
-          waterMap.set(c.user_id, parseFloat(s.water) || 0);
+          dateMap.set(c.date, parseFloat(s.water) || 0);
         } catch {}
       }
     }
 
     const deadIds: string[] = [];
     let sentCount = 0;
+    let suppressedCount = 0;
 
     const userSubMap = new Map<string, any[]>();
     for (const s of subscriptions) {
       const list = userSubMap.get(s.user_id) || [];
-      list.push(s); userSubMap.set(s.user_id, list);
+      list.push(s);
+      userSubMap.set(s.user_id, list);
     }
 
     for (const userId of userIds) {
-      const name = profileMap.get(userId) || 'there';
-      const water = waterMap.get(userId) ?? 0;
-      if (water >= 2.0) continue;
+      const pref = prefMap.get(userId);
 
-      const { title, body } = buildHydrationMessage(name, water, weather);
-      for (const sub of (userSubMap.get(userId) || [])) {
-        const r = await sendWebPush({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          { title, message: body, url: '/check-in', actionLabel: 'Log Water', tag: 'hydration-reminder', category: 'hydration' });
-        if (r.success) sentCount++;
-        if (r.shouldDeleteSubscription) deadIds.push(sub.id);
+      // Check Master & Hydration preference
+      if (!isNotificationAllowed(pref, 'hydration')) {
+        suppressedCount++;
+        continue;
+      }
+
+      const userTz = pref?.timezone || 'Asia/Kolkata';
+      const localTime = getUserLocalTime(userTz, nowUtc);
+      const name = profileMap.get(userId) || 'there';
+
+      const userWaterToday = userWaterMap.get(userId)?.get(localTime.dateStr) ?? 0;
+      if (userWaterToday >= 2.0) {
+        // Hydration goal met -> suppress reminder
+        continue;
+      }
+
+      const { title, body } = buildHydrationMessage(name, userWaterToday, weather);
+
+      // 1. Persist to inbox
+      await persistNotificationToDatabase(supabase, {
+        userId,
+        title,
+        message: body,
+        category: 'hydration',
+        priority: 'normal',
+        actionUrl: '/check-in',
+        actionLabel: 'Log Water',
+        metadata: { currentWater: userWaterToday, date: localTime.dateStr },
+      });
+
+      // 2. Dispatch push if enabled
+      if (pref?.browserPush !== false) {
+        for (const sub of (userSubMap.get(userId) || [])) {
+          const r = await sendWebPush(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+            {
+              title,
+              message: body,
+              url: '/check-in',
+              actionLabel: 'Log Water',
+              tag: `hydration-reminder-${localTime.dateStr}`,
+              category: 'hydration',
+            }
+          );
+          if (r.success) sentCount++;
+          if (r.shouldDeleteSubscription) deadIds.push(sub.id);
+        }
       }
     }
 
-    if (deadIds.length > 0) await supabase.from('push_subscriptions').delete().in('id', deadIds);
+    if (deadIds.length > 0) {
+      await supabase.from('push_subscriptions').delete().in('id', deadIds);
+    }
 
-    return NextResponse.json({ success: true, date: todayStr, remindersSent: sentCount, weather: weather?.condition });
+    return NextResponse.json({
+      success: true,
+      remindersSent: sentCount,
+      suppressedCount,
+      weather: weather?.condition,
+    });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }

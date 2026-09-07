@@ -187,7 +187,9 @@ export default function SignUpPage() {
       try {
         await Notification.requestPermission();
       } catch (e) {
-        console.warn('Notification permission request during signup warning:', e);
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('Notification permission request during signup notice:', e);
+        }
       }
     }
 
@@ -250,7 +252,9 @@ export default function SignUpPage() {
       });
 
       if (signInErr) {
-        console.warn('Post-signup auto-signin note:', signInErr);
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('Post-signup auto-signin notice:', signInErr);
+        }
         window.location.href = '/login?message=' + encodeURIComponent('Account created successfully! Please sign in with your password.');
         return;
       }

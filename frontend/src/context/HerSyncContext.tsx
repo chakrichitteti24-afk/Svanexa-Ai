@@ -240,7 +240,9 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
           };
         }
       } catch (err) {
-        console.warn('Cache restore warning:', err);
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('[HerSyncContext] Cache restore note:', err);
+        }
       }
     }
 
@@ -254,7 +256,9 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       try {
         broadcastRef.current.postMessage(msg);
       } catch (err) {
-        console.warn('[HerSyncContext] BroadcastChannel post error:', err);
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('[HerSyncContext] BroadcastChannel post note:', err);
+        }
       }
     }
   }, []);
@@ -322,7 +326,9 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         }));
       }
     } catch (err) {
-      console.error('Error fetching coins balance', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[HerSyncContext] Error fetching coins balance:', err);
+      }
     }
   }, []);
 
@@ -400,11 +406,15 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       // Execute ALL health, coin, skin, and cycle requests safely in parallel
       const [healthRes, coinsRes, skinRes, cycleRes] = await Promise.all([
         apiFetch(`/api/health/summary?date=${todayStr}`).catch(err => {
-          console.warn('Health summary fetch error:', err);
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('[HerSyncContext] Health summary fetch note:', err);
+          }
           return new Response(JSON.stringify({ success: false }), { status: 500 });
         }),
         apiFetch('/api/coins/balance').catch(err => {
-          console.warn('Coins balance fetch error:', err);
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('[HerSyncContext] Coins balance fetch note:', err);
+          }
           return new Response(JSON.stringify({ success: false }), { status: 500 });
         }),
         supabase
@@ -456,7 +466,9 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
             wellnessTasks = Array.isArray(data.wellness_tasks) ? data.wellness_tasks : [];
           }
         } catch (jsonErr) {
-          console.warn('Health summary json parse warning:', jsonErr);
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('[HerSyncContext] Health summary json parse note:', jsonErr);
+          }
         }
       }
 
@@ -482,7 +494,9 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
             activeCompanionStyle = coinData.activeCompanionStyle || 'friendly';
           }
         } catch (coinJsonErr) {
-          console.warn('Coin json parse warning:', coinJsonErr);
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('[HerSyncContext] Coin json parse note:', coinJsonErr);
+          }
         }
       }
 
@@ -539,7 +553,9 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         );
       } catch {}
     } catch (err) {
-      console.error('fetchAll error', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[HerSyncContext] fetchAll sync note:', err);
+      }
       setState(prev => ({ ...prev, isLoading: false }));
     }
   }, [supabase]);
@@ -633,7 +649,9 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         );
       }
     } catch (err) {
-      console.warn('[HerSyncContext] Task toggle network error, enqueued offline mutation:', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[HerSyncContext] Task toggle network error, enqueued offline mutation:', err);
+      }
       offlineMutationQueue.enqueueMutation(
         '/api/wellness-plan/toggle',
         'POST',
@@ -700,7 +718,9 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
             body: JSON.stringify({ itemType, itemId }),
           });
         } catch (activeErr) {
-          console.warn('Auto-activate sync notice:', activeErr);
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('Auto-activate sync notice:', activeErr);
+          }
         }
 
         return true;
@@ -773,7 +793,9 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         throw new Error(body.error || 'Failed to update customization');
       }
     } catch (err) {
-      console.error('Error updating active customization', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[HerSyncContext] Error updating active customization:', err);
+      }
       // Revert on error
       if (typeof document !== 'undefined') {
         if (itemType === 'theme') {
@@ -889,7 +911,9 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         };
       }
     } catch (bcErr) {
-      console.warn('[HerSyncContext] BroadcastChannel setup fallback:', bcErr);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[HerSyncContext] BroadcastChannel setup fallback:', bcErr);
+      }
     }
 
     // Storage event listener fallback for cross-tab cache sync
@@ -986,7 +1010,9 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
           )
           .subscribe();
       } catch (rtErr) {
-        console.warn('[HerSyncContext] Realtime setup notice:', rtErr);
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('[HerSyncContext] Realtime setup notice:', rtErr);
+        }
       }
     };
 
@@ -1075,7 +1101,9 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         );
       }
     } catch (err) {
-      console.warn('Language preference sync warning:', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Language preference sync warning:', err);
+      }
     }
   }, [supabase, postSyncBroadcast]);
 

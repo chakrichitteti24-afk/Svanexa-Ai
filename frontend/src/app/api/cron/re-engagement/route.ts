@@ -1,26 +1,30 @@
 import { NextResponse } from 'next/server';
-import { getCronSupabaseClient, validateCronRequest } from '@/lib/services/cron-utils';
+import { getCronSupabaseClient, getUserPreferencesMap, validateCronRequest } from '@/lib/services/cron-utils';
 import { sendWebPush } from '@/lib/services/web-push';
+import { getUserLocalTime, isNotificationAllowed, persistNotificationToDatabase } from '@/lib/services/notification-engine';
 import { format, differenceInDays, parseISO } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
 
 function getReEngagementMessage(name: string, daysSince: number): { title: string; body: string } {
+  const cleanName = name && name.trim() && name !== 'there' ? name.trim() : '';
+  const greeting = cleanName ? `, ${cleanName}` : '';
+
   if (daysSince >= 14) {
     return {
-      title: `We miss you, ${name}! Come back to Svanexa`,
-      body: `It has been ${daysSince} days since you last checked in. Luna has been saving your insights and waiting to share new patterns about your health. Your wellness journey is still here, come back anytime`,
+      title: `🌸 Thinking of you${greeting}`,
+      body: `We hope you are taking gentle care of yourself! Your wellness journey is always here whenever you'd like to return. No rush or pressure — we are always in your corner.`,
     };
   }
   if (daysSince >= 5) {
     return {
-      title: `${name}, your health matters every day`,
-      body: `You have not checked in for ${daysSince} days. Life gets busy, we totally understand! But even a 60-second log helps Svanexa give you better care. Come back today, no pressure`,
+      title: `🌿 A gentle hello${greeting}`,
+      body: `Life gets full and busy, and that is completely natural! Whenever you have a quiet moment, we're here to help you reflect on your wellness. Take good care.`,
     };
   }
   return {
-    title: `Hey ${name}, we have been thinking about you!`,
-    body: `You missed your check-in yesterday. No worries at all! Come on back today and log how you are feeling. Every day of data makes your AI health insights smarter and more personal`,
+    title: `✨ A gentle check-in${greeting}`,
+    body: `Hope you had a restful day yesterday! Whenever you're ready today, take 60 seconds to note how you're feeling. Wishing you a peaceful day ahead.`,
   };
 }
 
@@ -44,19 +48,20 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: true, remindersSent: 0, message: 'No subscriptions' });
     }
 
-    const userIds = [...new Set(subscriptions.map((s: any) => s.user_id))];
+    const userIds = [...new Set(subscriptions.map((s: any) => s.user_id))] as string[];
 
-    // Get profiles
+    // Get profiles and preferences in parallel
+    const [profilesRes, prefMap] = await Promise.all([
+      supabase.from('profiles').select('id, username, first_name, last_name, notifications_enabled').in('id', userIds),
+      getUserPreferencesMap(supabase, userIds),
+    ]);
+
     const profileMap = new Map<string, string>();
-    try {
-      const { data: profiles } = await supabase
-        .from('profiles').select('id, username, first_name, last_name').in('id', userIds);
-      if (profiles) {
-        for (const p of profiles) {
-          profileMap.set(p.id, (p.username && p.username !== 'User' ? p.username : p.first_name) || 'there');
-        }
+    if (profilesRes.data) {
+      for (const p of profilesRes.data) {
+        profileMap.set(p.id, p.first_name || (p.username && p.username !== 'User' ? p.username : 'there'));
       }
-    } catch {}
+    }
 
     // Get each user's most recent check-in date
     const { data: recentCheckins } = await supabase
@@ -78,46 +83,83 @@ export async function GET(req: Request) {
     const userSubMap = new Map<string, any[]>();
     for (const s of subscriptions) {
       const l = userSubMap.get(s.user_id) || [];
-      l.push(s); userSubMap.set(s.user_id, l);
+      l.push(s);
+      userSubMap.set(s.user_id, l);
     }
 
     const deadIds: string[] = [];
     let sentCount = 0;
-    const MILESTONES = [2, 5, 14]; // days of inactivity to send notification
+    let suppressedCount = 0;
+    const MILESTONES = [2, 5, 14]; // days of inactivity to send polite check-in
 
     for (const userId of userIds) {
+      const pref = prefMap.get(userId);
+
+      // Check Master & Checkin preferences
+      if (!isNotificationAllowed(pref, 'checkin')) {
+        suppressedCount++;
+        continue;
+      }
+
+      const userTz = pref?.timezone || 'Asia/Kolkata';
+      const localTime = getUserLocalTime(userTz, today);
+
       const lastDateStr = lastCheckinMap.get(userId);
 
       // If user checked in today, skip
-      if (lastDateStr === todayStr) continue;
+      if (lastDateStr === localTime.dateStr) continue;
 
       let daysSince = 99;
       if (lastDateStr) {
         daysSince = differenceInDays(today, parseISO(lastDateStr));
       }
 
-      // Only send on specific milestone days (2, 5, 14) to avoid spamming
+      // Only send on specific milestone days (2, 5, 14) to avoid unnecessary notification frequency
       if (!MILESTONES.includes(daysSince)) continue;
 
       const name = profileMap.get(userId) || 'there';
       const { title, body } = getReEngagementMessage(name, daysSince);
 
-      for (const sub of (userSubMap.get(userId) || [])) {
-        const r = await sendWebPush(
-          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          { title, message: body, url: '/check-in', actionLabel: 'Log Check-In Now', tag: 're-engagement', category: 'checkin' }
-        );
-        if (r.success) sentCount++;
-        if (r.shouldDeleteSubscription) deadIds.push(sub.id);
+      // 1. Persist to inbox
+      await persistNotificationToDatabase(supabase, {
+        userId,
+        title,
+        message: body,
+        category: 'checkin',
+        priority: 'low',
+        actionUrl: '/check-in',
+        actionLabel: 'Check In When Ready',
+        metadata: { daysSince, date: localTime.dateStr },
+      });
+
+      // 2. Dispatch push if enabled
+      if (pref?.browserPush !== false) {
+        for (const sub of (userSubMap.get(userId) || [])) {
+          const r = await sendWebPush(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+            {
+              title,
+              message: body,
+              url: '/check-in',
+              actionLabel: 'Check In When Ready',
+              tag: `re-engagement-${localTime.dateStr}`,
+              category: 'checkin',
+            }
+          );
+          if (r.success) sentCount++;
+          if (r.shouldDeleteSubscription) deadIds.push(sub.id);
+        }
       }
     }
 
-    if (deadIds.length > 0) await supabase.from('push_subscriptions').delete().in('id', deadIds);
+    if (deadIds.length > 0) {
+      await supabase.from('push_subscriptions').delete().in('id', deadIds);
+    }
 
     return NextResponse.json({
       success: true,
-      date: todayStr,
       remindersSent: sentCount,
+      suppressedCount,
       usersChecked: userIds.length,
     });
   } catch (err: any) {

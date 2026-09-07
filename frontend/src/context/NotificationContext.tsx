@@ -39,6 +39,7 @@ interface NotificationContextValue {
   scheduleReminderPush: (delaySeconds?: number) => Promise<void>;
   simulateMissedCheckinAlert: (slot?: 'morning' | 'afternoon' | 'evening' | 'streak') => Promise<void>;
   addCustomNotification: (item: Omit<NotificationItem, 'id' | 'timestamp' | 'read'>) => void;
+  refreshNotifications: () => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextValue | null>(null);
@@ -114,7 +115,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           }
         }
       } catch (err) {
-        console.warn('Could not load notification preferences from Supabase:', err);
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('[NotificationContext] Could not load notification preferences from Supabase:', err);
+        }
       }
     })();
     return () => {
@@ -152,6 +155,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     return [];
   });
 
+  const [persistedNotifications, setPersistedNotifications] = useState<NotificationItem[]>([]);
   const [permissionStatus, setPermissionStatus] = useState<NotificationPermission | 'unsupported'>('default');
   const [isPushSubscribed, setIsPushSubscribed] = useState<boolean>(false);
 
@@ -164,6 +168,37 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       setPermissionStatus(Notification.permission);
     }
   }, []);
+
+  // Fetch persisted in-app notifications from backend inbox
+  const fetchPersistedNotifications = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/notifications');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.notifications)) {
+          setPersistedNotifications(data.notifications);
+
+          // Sync read status from server
+          const serverRead = data.notifications.filter((n: any) => n.read).map((n: any) => n.id);
+          if (serverRead.length > 0) {
+            setReadIds(prev => {
+              const next = new Set(prev);
+              serverRead.forEach((id: string) => next.add(id));
+              return next;
+            });
+          }
+        }
+      }
+    } catch (err) {
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[NotificationContext] Could not fetch persisted notifications:', err);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPersistedNotifications();
+  }, [fetchPersistedNotifications]);
 
   // 2. Save preferences to Supabase
   const updatePreferences = useCallback((newPrefs: Partial<NotificationPreferences>) => {
@@ -187,7 +222,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         method: 'POST',
         body: JSON.stringify({ preferences: updated }),
       }).catch((err) => {
-        console.warn('Failed to sync notification preferences to Supabase:', err);
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('[NotificationContext] Failed to sync notification preferences to Supabase:', err);
+        }
       });
 
       return updated;
@@ -217,7 +254,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           vapidKey = data.publicKey;
         }
       } catch (e) {
-        console.warn('Could not fetch vapid key from API:', e);
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('[NotificationContext] Could not fetch vapid key from API:', e);
+        }
       }
 
       if (!vapidKey) {
@@ -253,7 +292,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             setIsPushSubscribed(true);
             return true;
           } else {
-            console.error('Failed to save push subscription to backend:', resJson);
+            if (process.env.NODE_ENV === 'development') {
+              console.debug('Failed to save push subscription to backend:', resJson);
+            }
             if (res.status === 401) {
               toast.error('Please log in first to enable push notifications on this device.');
             } else {
@@ -265,7 +306,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       }
       return false;
     } catch (err: any) {
-      console.error('Error registering push subscription:', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Error registering push subscription:', err);
+      }
       toast.error(`Push subscription error: ${err.message || 'Unknown error'}`);
       return false;
     }
@@ -292,7 +335,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           }
         }
       } catch (err) {
-        console.warn('Service worker registration or push re-hydration warning:', err);
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('[NotificationContext] Service worker registration or push re-hydration note:', err);
+        }
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -478,7 +523,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       }
       return false;
     } catch (err) {
-      console.error('Error requesting notification permission:', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Notification permission request note:', err);
+      }
       return false;
     }
   }, [updatePreferences, registerPushSubscription]);
@@ -508,14 +555,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       if (currentDecimal < afternoonDecimal && !checkinSlots.morning.completed) {
         alerts.push({
           id: `checkin-morning-${todayStr}`,
-          title: '🌅 Morning Check-In',
-          message: 'Your morning check-in is ready.',
+          title: userName ? `🌅 Good morning, ${userName}` : '🌅 Good morning',
+          message: 'Whenever you have a calm moment, take 60 seconds to check in with how your body is feeling today. No rush — wishing you a lovely day ahead! 🌸',
           category: 'checkin',
           priority: 'normal',
           timestamp: new Date(now.getFullYear(), now.getMonth(), now.getDate(), morningParts[0], morningParts[1] || 0).toISOString(),
           read: false,
           actionUrl: '/check-in',
-          actionLabel: 'Complete Check-In',
+          actionLabel: 'Check In When Ready 🌸',
         });
       }
     }
@@ -525,14 +572,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       if (currentDecimal >= afternoonDecimal && currentDecimal < eveningDecimal && !checkinSlots.afternoon.completed) {
         alerts.push({
           id: `checkin-afternoon-${todayStr}`,
-          title: '☀️ Afternoon Check-In',
-          message: 'Your afternoon wellness check-in is ready.',
+          title: userName ? `☀️ Midday wellness pause, ${userName}` : '☀️ Midday wellness pause',
+          message: "Just a gentle check-in to see how you're feeling this afternoon. Remember to pause, take a deep breath, and care for yourself. 🌿",
           category: 'checkin',
           priority: 'normal',
           timestamp: new Date(now.getFullYear(), now.getMonth(), now.getDate(), afternoonParts[0], afternoonParts[1] || 0).toISOString(),
           read: false,
           actionUrl: '/check-in',
-          actionLabel: 'Complete Check-In',
+          actionLabel: 'Take a Moment 🌿',
         });
       }
     }
@@ -542,14 +589,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       if (currentDecimal >= eveningDecimal && !checkinSlots.evening.completed) {
         alerts.push({
           id: `checkin-evening-${todayStr}`,
-          title: '🌙 Evening Reflection',
-          message: 'Your evening reflection is ready.',
+          title: userName ? `🌙 Evening reflection, ${userName}` : '🌙 Evening reflection',
+          message: 'Before winding down tonight, take a quiet minute to log your daily wellness notes. Wishing you restful sleep and recovery. ✨',
           category: 'checkin',
           priority: 'normal',
           timestamp: new Date(now.getFullYear(), now.getMonth(), now.getDate(), eveningParts[0], eveningParts[1] || 0).toISOString(),
           read: false,
           actionUrl: '/check-in',
-          actionLabel: 'Complete Reflection',
+          actionLabel: 'Evening Check-In ✨',
         });
       }
 
@@ -557,14 +604,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       if (currentStreak > 0 && !hasCheckedInToday && currentDecimal >= (eveningDecimal - 2)) {
         alerts.push({
           id: `streak-preservation-${todayStr}`,
-          title: `🔥 Daily Streak Check-In`,
-          message: 'Save your daily check-in to keep your wellness streak active.',
+          title: userName ? `✨ A gentle reminder, ${userName}` : '✨ Gentle evening check-in',
+          message: `You've taken wonderful care of your health for ${currentStreak} days! If you have a free minute before sleep, your daily reflection is waiting for you.`,
           category: 'checkin',
           priority: 'high',
           timestamp: now.toISOString(),
           read: false,
           actionUrl: '/check-in',
-          actionLabel: 'Check In Now',
+          actionLabel: 'Log Reflection ✨',
         });
       }
     }
@@ -574,14 +621,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       if (!allSlotsComplete && currentHour >= 12) {
         alerts.push({
           id: `wellness-tasks-${todayStr}`,
-          title: '✨ Daily Wellness Tasks',
-          message: 'You have a wellness task waiting for you.',
+          title: '✨ Gentle Wellness Tasks',
+          message: 'You have a wellness task waiting for you today whenever you are ready. Take it one step at a time! 🌸',
           category: 'checkin',
           priority: 'normal',
           timestamp: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0).toISOString(),
           read: false,
           actionUrl: '/dashboard',
-          actionLabel: 'View Tasks',
+          actionLabel: 'View When Ready 🌸',
         });
       }
     }
@@ -590,8 +637,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     if (preferences.wellnessPlan ?? true) {
       alerts.push({
         id: `wellness-plan-ready-${todayStr}`,
-        title: '📋 Daily Care Plan',
-        message: "Your wellness plan for today is ready.",
+        title: '📋 Your Daily Care Plan',
+        message: 'Your personalized wellness care plan for today is ready whenever you would like to view it.',
         category: 'system',
         priority: 'normal',
         timestamp: new Date(now.getFullYear(), now.getMonth(), now.getDate(), morningParts[0], (morningParts[1] || 0) + 15).toISOString(),
@@ -650,7 +697,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           }
         }
       } catch (err) {
-        console.warn('Cycle alert calculation warning:', err);
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('[NotificationContext] Cycle alert calculation note:', err);
+        }
       }
     }
 
@@ -682,18 +731,22 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     aiName,
   ]);
 
-  // Combine dynamic alerts and custom notifications, filtering out dismissed ones
+  // Combine persisted server notifications, dynamic alerts, and custom notifications
   const allNotifications = useMemo(() => {
-    const combined = [...customNotifications, ...dynamicAlerts];
+    const combined = [...persistedNotifications, ...customNotifications, ...dynamicAlerts];
 
-    // Deduplicate by ID
+    // Deduplicate by ID and date-category signature
     const uniqueMap = new Map<string, NotificationItem>();
     for (const item of combined) {
-      if (!dismissedIds.has(item.id)) {
-        uniqueMap.set(item.id, {
-          ...item,
-          read: readIds.has(item.id) || item.read,
-        });
+      if (!dismissedIds.has(item.id) && !item.dismissed) {
+        // Tag-like deduplication key to avoid showing identical reminders twice
+        const dedupeKey = `${item.category}:${item.title}:${(item.timestamp || '').slice(0, 10)}`;
+        if (!uniqueMap.has(item.id) && !uniqueMap.has(dedupeKey)) {
+          uniqueMap.set(item.id, {
+            ...item,
+            read: readIds.has(item.id) || item.read,
+          });
+        }
       }
     }
 
@@ -701,7 +754,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     return Array.from(uniqueMap.values()).sort(
       (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
-  }, [customNotifications, dynamicAlerts, dismissedIds, readIds]);
+  }, [persistedNotifications, customNotifications, dynamicAlerts, dismissedIds, readIds]);
 
   const unreadCount = useMemo(() => {
     return allNotifications.filter(n => !n.read).length;
@@ -728,6 +781,16 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       } catch {}
       return next;
     });
+
+    setPersistedNotifications(prev =>
+      prev.map(item => item.id === id ? { ...item, read: true } : item)
+    );
+
+    // Sync to backend
+    apiFetch('/api/notifications', {
+      method: 'PATCH',
+      body: JSON.stringify({ id, read: true }),
+    }).catch(() => {});
   }, []);
 
   const markAllAsRead = useCallback(() => {
@@ -739,6 +802,17 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       } catch {}
       return next;
     });
+
+    setPersistedNotifications(prev =>
+      prev.map(item => ({ ...item, read: true }))
+    );
+
+    // Sync to backend
+    apiFetch('/api/notifications', {
+      method: 'PATCH',
+      body: JSON.stringify({ all: true, action: 'markRead' }),
+    }).catch(() => {});
+
     toast.success('All notifications marked as read');
   }, [allNotifications]);
 
@@ -750,6 +824,16 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       } catch {}
       return next;
     });
+
+    setPersistedNotifications(prev =>
+      prev.filter(item => item.id !== id)
+    );
+
+    // Sync to backend
+    apiFetch('/api/notifications', {
+      method: 'PATCH',
+      body: JSON.stringify({ id, dismissed: true, action: 'dismiss' }),
+    }).catch(() => {});
   }, []);
 
   const clearAll = useCallback(() => {
@@ -762,9 +846,16 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       return next;
     });
     setCustomNotifications([]);
+    setPersistedNotifications([]);
     try {
       localStorage.removeItem(STORAGE_KEY_CUSTOM);
     } catch {}
+
+    // Sync to backend
+    apiFetch('/api/notifications', {
+      method: 'DELETE',
+    }).catch(() => {});
+
     toast.success('Cleared all notifications');
   }, [allNotifications]);
 
@@ -803,7 +894,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             badge: '/logo.jpg',
           });
         } catch (pushErr) {
-          console.warn('Browser push error:', pushErr);
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('Browser push notice:', pushErr);
+          }
         }
       }
     },
@@ -849,15 +942,17 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     if ('serviceWorker' in navigator && 'Notification' in window && Notification.permission === 'granted') {
       try {
         const swReg = await navigator.serviceWorker.ready;
-        swReg.showNotification("🌅 Hey! Don't forget your check-in today", {
-          body: `Good morning ${userName || 'there'}! 👋 You haven't completed your daily wellness check-in yet. It only takes 60 seconds — your health matters! Open Svanexa now.`,
+        swReg.showNotification(`🌅 Good morning, ${userName || 'there'}`, {
+          body: 'Whenever you have a calm moment, take 60 seconds to check in with how your body is feeling today. No rush — wishing you a lovely day ahead! 🌸',
           icon: '/logo.jpg',
           badge: '/logo.jpg',
           tag: 'checkin-test-direct',
           data: { url: '/check-in' },
         }).catch(() => {});
       } catch (swErr) {
-        console.warn('Direct SW notification fallback warning:', swErr);
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('[NotificationContext] Direct SW notification fallback note:', swErr);
+        }
       }
     }
 
@@ -925,7 +1020,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             });
           }
         } catch (swErr) {
-          console.warn('SW message scheduler warning:', swErr);
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('[NotificationContext] SW message scheduler note:', swErr);
+          }
         }
 
         // 2. Server-side scheduled Web Push
@@ -991,6 +1088,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       scheduleReminderPush,
       simulateMissedCheckinAlert,
       addCustomNotification,
+      refreshNotifications: fetchPersistedNotifications,
     }),
     [
       allNotifications,
@@ -1009,6 +1107,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       scheduleReminderPush,
       simulateMissedCheckinAlert,
       addCustomNotification,
+      fetchPersistedNotifications,
     ]
   );
 

@@ -11,7 +11,9 @@ export async function apiFetch(input: string, init?: RequestInit): Promise<Respo
       headers.set('Authorization', `Bearer ${session.access_token}`);
     }
   } catch (err) {
-    console.warn('apiFetch auth header attach warning:', err);
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('apiFetch auth header note:', err);
+    }
   }
 
   if (!headers.has('Content-Type')) {
