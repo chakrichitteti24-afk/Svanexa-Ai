@@ -88,17 +88,17 @@ export function PwaInstallPrompt() {
           initial={{ opacity: 0, y: 30, scale: 0.95 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 20, scale: 0.95 }}
-          className="p-4 rounded-3xl bg-card/95 border border-pink-500/30 backdrop-blur-2xl shadow-2xl shadow-pink-500/20 flex flex-col gap-3"
+          className="p-4 rounded-3xl bg-white/[0.08] border border-white/[0.12] backdrop-blur-2xl shadow-2xl flex flex-col gap-3"
         >
           <div className="flex items-start justify-between gap-2.5">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl overflow-hidden shadow-md shadow-pink-500/25 relative shrink-0 border border-pink-500/30">
+              <div className="w-10 h-10 rounded-2xl overflow-hidden shadow-sm relative shrink-0 border border-white/[0.12]">
                 <Image src="/logo.jpg" alt="Svanexa AI" fill className="object-cover" />
               </div>
               <div>
-                <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <h4 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                   <span>Install Svanexa App</span>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 font-bold">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/[0.08] text-muted-foreground font-medium border border-white/[0.1]">
                     Fast & Offline
                   </span>
                 </h4>
@@ -146,7 +146,7 @@ export function PwaInstallPrompt() {
             <button
               type="button"
               onClick={handleInstallClick}
-              className="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-pink-500 to-violet-500 hover:opacity-95 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-pink-500/25 transition-all active:scale-95 cursor-pointer"
+              className="flex-1 py-2 px-3 rounded-full bg-primary hover:opacity-95 text-white font-semibold text-xs flex items-center justify-center gap-1.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] transition-all active:scale-[0.98] cursor-pointer"
             >
               {isIos ? (
                 <>

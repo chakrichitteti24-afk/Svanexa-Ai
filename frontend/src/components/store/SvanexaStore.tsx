@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Check, History, Loader2, Heart, ShieldCheck, Coins } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from '@/i18n/useTranslation';
+import { apiFetch } from '@/utils/api-client';
 
 interface StoreItem {
   id: string;
@@ -340,7 +341,7 @@ export function SvanexaStore() {
       const loadHistory = async () => {
         setLoadingTx(true);
         try {
-          const res = await fetch('/api/coins/transactions');
+          const res = await apiFetch('/api/coins/transactions');
           const data = await res.json();
           if (!ignore && data.success) {
             setTransactions(data.data || []);
@@ -495,7 +496,7 @@ export function SvanexaStore() {
                   transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                   className={`rounded-2xl p-4 border transition-all duration-200 flex flex-col justify-between space-y-3.5 ${
                     active
-                      ? 'bg-purple-500/10 border-purple-500/40 shadow-md shadow-purple-500/10'
+                      ? 'bg-white/[0.08] border-white/[0.16] shadow-sm'
                       : unlocked
                       ? 'bg-white/[0.03] border-white/10 hover:border-white/20'
                       : 'bg-white/[0.015] border-white/5 opacity-85 hover:opacity-100'

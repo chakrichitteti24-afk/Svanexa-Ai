@@ -75,16 +75,16 @@ export default function MessageList({ messages, isLoading, aiName }: MessageList
               >
                 {/* AI Avatar */}
                 {!isUser && (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-violet-600 flex items-center justify-center shrink-0 mb-0.5 shadow-md shadow-violet-500/20">
-                    <BrainCircuit className="w-4 h-4 text-white" />
+                  <div className="w-8 h-8 rounded-full bg-white/[0.1] border border-white/[0.14] flex items-center justify-center shrink-0 mb-0.5 shadow-sm text-foreground">
+                    <BrainCircuit className="w-4 h-4 text-primary" />
                   </div>
                 )}
 
                 <div
-                  className={`relative text-[16px] leading-relaxed break-words px-4 py-2.5 ${
+                  className={`relative text-[15px] sm:text-[16px] leading-relaxed break-words px-4 py-2.5 ${
                     isUser
-                      ? 'max-w-[75%] bg-gradient-to-br from-pink-500 to-violet-600 text-white rounded-2xl rounded-br-sm shadow-lg shadow-pink-500/15'
-                      : 'max-w-[85%] bg-[#12101c] border border-[rgba(168,85,247,0.12)] text-[#f0eeff] rounded-2xl rounded-bl-sm'
+                      ? 'max-w-[75%] bg-primary text-white rounded-2xl rounded-br-sm shadow-[inset_0_1px_0_0_rgba(255,255,255,0.2),0_2px_8px_rgba(0,0,0,0.2)]'
+                      : 'max-w-[85%] bg-white/[0.08] border border-white/[0.1] text-foreground rounded-2xl rounded-bl-sm backdrop-blur-md'
                   } ${isLastAI ? 'fade-in-up' : ''}`}
                 >
                   {/* Message content */}
@@ -93,7 +93,7 @@ export default function MessageList({ messages, isLoading, aiName }: MessageList
                   {/* Timestamp */}
                   <div
                     className={`text-[10px] font-medium mt-1 text-right leading-none ${
-                      isUser ? 'text-white/50' : 'text-[#5a527a]'
+                      isUser ? 'text-white/60' : 'text-muted-foreground'
                     }`}
                   >
                     {formatTime(msg.timestamp)}
@@ -102,7 +102,7 @@ export default function MessageList({ messages, isLoading, aiName }: MessageList
 
                 {/* User Avatar */}
                 {isUser && (
-                  <div className="w-8 h-8 rounded-full bg-white/5 border border-[rgba(168,85,247,0.15)] flex items-center justify-center shrink-0 mb-0.5">
+                  <div className="w-8 h-8 rounded-full bg-white/[0.08] border border-white/[0.12] flex items-center justify-center shrink-0 mb-0.5 text-foreground">
                     <User className="w-4 h-4 text-[#9d91c4]" />
                   </div>
                 )}
@@ -120,8 +120,8 @@ export default function MessageList({ messages, isLoading, aiName }: MessageList
               transition={{ duration: 0.2 }}
               className="flex w-full gap-2.5 items-end justify-start"
             >
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-violet-600 flex items-center justify-center shrink-0 mb-0.5 shadow-md shadow-violet-500/20">
-                <BrainCircuit className="w-4 h-4 text-white" />
+              <div className="w-8 h-8 rounded-full bg-white/[0.1] border border-white/[0.14] flex items-center justify-center shrink-0 mb-0.5 shadow-sm text-foreground">
+                <BrainCircuit className="w-4 h-4 text-primary" />
               </div>
               <TypingIndicator aiName={aiName} />
             </motion.div>

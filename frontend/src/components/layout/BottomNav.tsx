@@ -63,7 +63,7 @@ export const BottomNav = memo(function BottomNav() {
               {isActive && (
                 <motion.div
                   layoutId="apple-dock-active-pill"
-                  className="absolute inset-x-1.5 inset-y-1 bg-primary/20 rounded-full -z-10 border border-primary/35 shadow-[0_0_14px_var(--primary)]/20"
+                  className="absolute inset-x-1.5 inset-y-1 bg-white/[0.12] rounded-full -z-10 border border-white/[0.14] shadow-[0_2px_8px_rgba(0,0,0,0.25)]"
                   transition={{
                     type: 'spring',
                     stiffness: 420,
@@ -77,13 +77,13 @@ export const BottomNav = memo(function BottomNav() {
                 <item.icon
                   className={cn(
                     'h-5 w-5 transition-transform duration-200',
-                    isActive ? 'text-primary scale-110 drop-shadow-[0_2px_8px_var(--primary)]/40' : 'text-muted-foreground group-hover:text-primary'
+                    isActive ? 'text-primary scale-105' : 'text-muted-foreground group-hover:text-foreground'
                   )}
                 />
                 {isActive && (
                   <motion.span
                     layoutId="apple-dock-dot"
-                    className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-primary rounded-full shadow-[0_0_6px_var(--primary)]"
+                    className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-primary rounded-full"
                     transition={{
                       type: 'spring',
                       stiffness: 400,

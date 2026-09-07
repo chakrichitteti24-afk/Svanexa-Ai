@@ -187,19 +187,18 @@ export function NotificationBell({
         type="button"
         aria-label="Open notifications"
         onClick={handleToggle}
-        className={`relative inline-flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-200 cursor-pointer ${
+        className={`relative inline-flex items-center justify-center w-9 h-9 rounded-full transition-all duration-200 cursor-pointer ${
           isOpen
-            ? 'bg-purple-500/20 text-white shadow-md shadow-purple-500/20 ring-1 ring-purple-500/40'
-            : 'bg-secondary/30 hover:bg-secondary/60 text-[#9d91c4] hover:text-white border border-border/30'
+            ? 'bg-white/[0.14] text-white shadow-sm ring-1 ring-white/[0.16]'
+            : 'bg-white/[0.06] hover:bg-white/[0.1] text-muted-foreground hover:text-foreground border border-white/[0.08]'
         }`}
       >
-        <Bell className={`h-4.5 w-4.5 transition-transform duration-200 ${isOpen ? 'scale-110 text-pink-400' : ''}`} />
+        <Bell className={`h-4.5 w-4.5 transition-transform duration-200 ${isOpen ? 'scale-105 text-foreground' : ''}`} />
 
-        {/* Glowing Unread Badge */}
+        {/* iOS Style Unread Badge */}
         {unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] px-1 items-center justify-center pointer-events-none">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-60"></span>
-            <span className="relative inline-flex items-center justify-center rounded-full h-4 min-w-[16px] px-1 bg-gradient-to-r from-pink-500 to-rose-500 text-white text-[9px] font-extrabold shadow-sm border border-[#0d0a1a]">
+            <span className="relative inline-flex items-center justify-center rounded-full h-4 min-w-[16px] px-1 bg-[#ff3b30] text-white text-[9px] font-semibold shadow-sm border border-background">
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           </span>

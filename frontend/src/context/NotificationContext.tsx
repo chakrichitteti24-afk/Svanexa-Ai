@@ -248,7 +248,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       // Get public VAPID key from API
       let vapidKey = '';
       try {
-        const res = await fetch('/api/notifications/vapid-key');
+        const res = await apiFetch('/api/notifications/vapid-key');
         const data = await res.json();
         if (data.success && data.publicKey) {
           vapidKey = data.publicKey;

@@ -88,19 +88,19 @@ export function Sidebar({
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group apple-tactile',
                   isActive
-                    ? 'bg-primary/20 text-foreground font-semibold border border-primary/35 shadow-[0_2px_12px_var(--primary)]/15 ring-1 ring-primary/25'
-                    : 'text-muted-foreground/90 hover:text-foreground hover:bg-white/[0.07]'
+                    ? 'bg-white/[0.09] text-foreground font-semibold border border-white/[0.12] shadow-sm'
+                    : 'text-muted-foreground/90 hover:text-foreground hover:bg-white/[0.06]'
                 )}
               >
                 <item.icon
                   className={cn(
                     'h-4.5 w-4.5 shrink-0 transition-transform duration-150',
-                    isActive ? 'text-primary scale-105 drop-shadow-[0_1px_6px_var(--primary)]/40' : 'text-muted-foreground group-hover:text-primary'
+                    isActive ? 'text-primary scale-105' : 'text-muted-foreground group-hover:text-foreground'
                   )}
                 />
                 <span className="flex-1 truncate">{label}</span>
                 {isActive && (
-                  <div className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_var(--primary)]" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary" />
                 )}
               </Link>
             );

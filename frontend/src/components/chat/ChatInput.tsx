@@ -89,20 +89,20 @@ export default function ChatInput({ value, onChange, onSubmit, isLoading, aiName
                   initial={{ scale: 0.8, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0.8, opacity: 0 }}
-                  className="flex items-center justify-center w-8 h-8 rounded-full bg-pink-500/15"
+                  className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/15"
                 >
-                  <Loader2 className="w-4 h-4 text-pink-400 animate-spin" />
+                  <Loader2 className="w-4 h-4 text-primary animate-spin" />
                 </motion.div>
               ) : (
                 <motion.button
                   key="send"
                   type="submit"
                   disabled={!canSend}
-                  whileTap={canSend ? { scale: 0.9 } : {}}
+                  whileTap={canSend ? { scale: 0.92 } : {}}
                   className={`flex items-center justify-center w-8 h-8 rounded-full transition-all duration-200 ${
                     canSend
-                      ? 'bg-gradient-to-br from-pink-500 to-violet-600 text-white shadow-md shadow-violet-500/25 cursor-pointer'
-                      : 'bg-white/5 text-[#4d4668] cursor-not-allowed'
+                      ? 'bg-primary text-white shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] cursor-pointer'
+                      : 'bg-white/5 text-muted-foreground/30 cursor-not-allowed'
                   }`}
                 >
                   <SendHorizontal className="w-3.5 h-3.5" />
@@ -114,7 +114,7 @@ export default function ChatInput({ value, onChange, onSubmit, isLoading, aiName
       </form>
 
       {/* Disclaimer */}
-      <p className="text-[10px] text-center text-[#3d3558] mt-1.5 pb-0.5">
+      <p className="text-[10px] text-center text-muted-foreground mt-1.5 pb-0.5">
         {aiName} can make mistakes. Not a substitute for medical advice.
       </p>
     </div>

@@ -12,7 +12,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans), "Inter", system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "SF Pro", var(--font-geist-sans), "Inter", system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -47,57 +47,57 @@
   --radius-3xl: calc(var(--radius) * 2.2);
 }
 
-/* Force dark mode always for Svanexa */
+/* Force dark mode always for Svanexa — Apple OS OLED Dark HIG */
 :root {
   color-scheme: dark;
 
-  --background: #09080e;
-  --foreground: #f2effa;
-  --card: rgba(18, 16, 26, 0.82);
-  --card-foreground: #f2effa;
-  --popover: #12101a;
-  --popover-foreground: #f2effa;
-  --primary: #c084fc;
-  --primary-foreground: #09080e;
-  --secondary: rgba(255, 255, 255, 0.05);
-  --secondary-foreground: #f2effa;
-  --muted: rgba(255, 255, 255, 0.04);
-  --muted-foreground: #988fb8;
-  --accent: rgba(192, 132, 252, 0.12);
-  --accent-foreground: #d8b4fe;
-  --destructive: #f87171;
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.06);
-  --ring: #a78bfa;
-  --radius: 0.75rem;
+  --background: #000000;
+  --foreground: #f5f5f7;
+  --card: rgba(28, 28, 30, 0.76);
+  --card-foreground: #f5f5f7;
+  --popover: rgba(44, 44, 46, 0.92);
+  --popover-foreground: #f5f5f7;
+  --primary: #ea5475;
+  --primary-foreground: #ffffff;
+  --secondary: rgba(255, 255, 255, 0.07);
+  --secondary-foreground: #f5f5f7;
+  --muted: rgba(255, 255, 255, 0.05);
+  --muted-foreground: #86868b;
+  --accent: rgba(234, 84, 117, 0.14);
+  --accent-foreground: #ff7597;
+  --destructive: #ff453a;
+  --border: rgba(255, 255, 255, 0.09);
+  --input: rgba(255, 255, 255, 0.08);
+  --ring: #ea5475;
+  --radius: 1.125rem;
 
-  /* Sidebar */
-  --sidebar: rgba(12, 10, 18, 0.95);
-  --sidebar-foreground: #f2effa;
-  --sidebar-primary: #c084fc;
-  --sidebar-primary-foreground: #09080e;
-  --sidebar-accent: rgba(192, 132, 252, 0.1);
-  --sidebar-accent-foreground: #d8b4fe;
-  --sidebar-border: rgba(255, 255, 255, 0.07);
-  --sidebar-ring: #a78bfa;
+  /* Sidebar (macOS Sequoia Frosted Translucency) */
+  --sidebar: rgba(20, 20, 22, 0.88);
+  --sidebar-foreground: #f5f5f7;
+  --sidebar-primary: #ea5475;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgba(255, 255, 255, 0.08);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: #ea5475;
 
-  /* Svanexa Brand Tokens (Soft, Calming Lavender & Blush Rose - No Harsh Neon) */
-  --hs-pink: #f472b6;
-  --hs-violet: #a78bfa;
-  --hs-purple: #818cf8;
-  --hs-fuchsia: #c084fc;
-  --hs-glow-pink: rgba(244, 114, 182, 0.12);
-  --hs-glow-violet: rgba(167, 139, 250, 0.12);
-  --hs-glass: rgba(18, 16, 26, 0.75);
-  --hs-glass-border: rgba(255, 255, 255, 0.08);
-  --bg-gradient-color1: rgba(167, 139, 250, 0.06);
-  --bg-gradient-color2: rgba(244, 114, 182, 0.04);
+  /* Svanexa Brand Tokens (Refined Apple System Palette — Zero Neon) */
+  --hs-pink: #ea5475;
+  --hs-violet: #af52de;
+  --hs-purple: #5e5ce6;
+  --hs-fuchsia: #d4649b;
+  --hs-glow-pink: transparent;
+  --hs-glow-violet: transparent;
+  --hs-glass: rgba(28, 28, 30, 0.72);
+  --hs-glass-border: rgba(255, 255, 255, 0.09);
+  --bg-gradient-color1: rgba(234, 84, 117, 0.04);
+  --bg-gradient-color2: rgba(94, 92, 230, 0.03);
 
-  /* Biological Menstrual & Endocrinology Phase Semantic Tokens (Soft & Organic) */
-  --phase-menstrual: #fb7185;
-  --phase-follicular: #c084fc;
-  --phase-ovulatory: #fbbf24;
-  --phase-luteal: #818cf8;
+  /* Biological Menstrual & Endocrinology Phase Semantic Tokens (Apple Palette) */
+  --phase-menstrual: #ff375f;
+  --phase-follicular: #bf5af2;
+  --phase-ovulatory: #ffd60a;
+  --phase-luteal: #5e5ce6;
 
   /* Apple OS Motion Physics Tokens */
   --apple-ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
@@ -107,9 +107,9 @@
 
   /* Apple Liquid Glass Material Tokens */
   --apple-blur: 28px;
-  --apple-specular: inset 0 1px 0 0 rgba(255, 255, 255, 0.14), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-  --apple-specular-hover: inset 0 1px 0 0 rgba(255, 255, 255, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
-  --apple-shadow-dock: 0 16px 40px -6px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  --apple-specular: inset 0 1px 0 0 rgba(255, 255, 255, 0.12), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --apple-specular-hover: inset 0 1px 0 0 rgba(255, 255, 255, 0.2), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --apple-shadow-dock: 0 16px 40px -6px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 /* ── PCOS MODE (Soft Blush Rose, Mauve & Warm Plum - Default when no store theme) ── */
@@ -513,20 +513,28 @@ body[data-dashboard-style="calm"] .glass-card {
   button:active,
   a:active,
   [role="button"]:active {
-    transform: scale(0.97) translateZ(0);
-    opacity: 0.92;
+    transform: scale(0.98) translateZ(0);
+    opacity: 0.94;
   }
 
-  /* Remove default scrollbar in Chrome for chat areas */
-  .scrollbar-thin::-webkit-scrollbar {
-    width: 4px;
+  /* Apple OS Minimalist Translucent Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
   }
-  .scrollbar-thin::-webkit-scrollbar-track {
+  ::-webkit-scrollbar-track {
     background: transparent;
   }
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background: rgba(167, 139, 250, 0.2);
-    border-radius: 2px;
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.16);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.28);
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
   }
 
   /* Safe area support */
@@ -536,94 +544,147 @@ body[data-dashboard-style="calm"] .glass-card {
 }
 
 /* =====================================================
-   GLASSMORPHISM & PREMIUM UTILITY CLASSES
+   GLASSMORPHISM & APPLE HIG UTILITY CLASSES
    ===================================================== */
 @layer components {
   .glass {
     background: var(--hs-glass);
     border: 1px solid var(--hs-glass-border);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
     transform: translateZ(0);
   }
 
   .glass-subtle {
-    background: rgba(18, 16, 26, 0.45);
+    background: rgba(28, 28, 30, 0.45);
     border: 1px solid rgba(255, 255, 255, 0.06);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     transform: translateZ(0);
   }
 
   .glass-hover {
-    transition: background 0.2s, border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+    transition: background-color 0.2s cubic-bezier(0.32, 0.72, 0, 1),
+                border-color 0.2s ease,
+                box-shadow 0.2s ease,
+                transform 0.2s cubic-bezier(0.32, 0.72, 0, 1);
     transform: translateZ(0);
   }
 
   .glass-hover:hover {
-    background: rgba(24, 20, 36, 0.85);
-    border-color: rgba(192, 132, 252, 0.2);
-    box-shadow: 0 6px 24px rgba(167, 139, 250, 0.06);
+    background: rgba(38, 38, 42, 0.85);
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   }
 
-  /* Premium gradient text responding to mode (Soft & Organic) */
+  /* Apple Title Text (Crisp, High Contrast, No Neon Rainbows) */
   .gradient-text {
-    background: linear-gradient(135deg, var(--hs-pink) 0%, var(--hs-purple) 50%, var(--hs-violet) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: #f5f5f7;
+    letter-spacing: -0.025em;
+    font-weight: 700;
   }
 
-  /* Primary action button (Clean, elegant, no harsh neon glow) */
-  .btn-primary {
-    background: linear-gradient(135deg, var(--hs-pink) 0%, var(--hs-violet) 100%);
-    color: white;
-    border: none;
+  /* Apple Prominent Action Button (Clean solid Apple tint + top specular highlight, No neon glow) */
+  .btn-primary,
+  .apple-btn-prominent {
+    background-color: var(--primary);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 9999px;
     font-weight: 600;
-    letter-spacing: 0.01em;
-    transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.16s ease;
-    box-shadow: 0 4px 16px rgba(167, 139, 250, 0.2);
+    font-size: 0.8125rem;
+    letter-spacing: -0.01em;
+    min-height: 42px;
+    padding: 0.5rem 1.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.22), 0 2px 8px rgba(0, 0, 0, 0.24);
+    transition: transform 0.16s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.16s ease;
     transform: translateZ(0);
+    cursor: pointer;
   }
 
-  .btn-primary:hover {
-    box-shadow: 0 6px 22px rgba(167, 139, 250, 0.3);
-    transform: translateY(-1px) translateZ(0);
+  .btn-primary:hover,
+  .apple-btn-prominent:hover {
+    opacity: 0.94;
   }
 
-  .btn-primary:active {
-    transform: scale(0.97) translateZ(0);
+  .btn-primary:active,
+  .apple-btn-prominent:active {
+    transform: scale(0.98) translateZ(0);
+    opacity: 0.88;
   }
 
-  /* Soft Ambient Glows (Non-neon, soothing) */
-  .glow-pink {
-    box-shadow: 0 4px 20px rgba(244, 114, 182, 0.12);
-  }
-
-  .glow-violet {
-    box-shadow: 0 4px 20px rgba(167, 139, 250, 0.12);
-  }
-
-  /* Premium Card — enhanced high-efficiency glassmorphism */
-  .premium-card {
-    background: rgba(18, 16, 26, 0.65);
+  /* Apple Secondary / Frosted Glass Button */
+  .apple-btn-secondary {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f5f5f7;
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 1.25rem;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    border-radius: 9999px;
+    font-weight: 500;
+    font-size: 0.8125rem;
+    letter-spacing: -0.01em;
+    min-height: 42px;
+    padding: 0.5rem 1.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    transition: transform 0.16s cubic-bezier(0.32, 0.72, 0, 1), background-color 0.16s ease;
+    cursor: pointer;
+  }
+
+  .apple-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .apple-btn-secondary:active {
+    transform: scale(0.98) translateZ(0);
+  }
+
+  /* Apple iOS Segmented Control */
+  .apple-segmented-control {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 3px;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    gap: 2px;
+  }
+
+  /* Soft Ambient Glows (Neutralized, Non-neon) */
+  .glow-pink,
+  .glow-violet {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  /* Apple Premium Card — 24px Squircle with Frosted Glass */
+  .premium-card {
+    background: rgba(28, 28, 30, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 1.5rem;
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
     box-shadow:
-      0 12px 36px -8px rgba(0, 0, 0, 0.4),
-      0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+      0 12px 32px -8px rgba(0, 0, 0, 0.45);
     transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
     transform: translateZ(0);
   }
 
   .premium-card:hover {
-    border-color: rgba(192, 132, 252, 0.2);
+    border-color: rgba(255, 255, 255, 0.14);
     box-shadow:
-      0 16px 40px -8px rgba(0, 0, 0, 0.45),
-      0 0 20px rgba(167, 139, 250, 0.06);
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.15),
+      0 16px 40px -8px rgba(0, 0, 0, 0.55);
   }
 
   /* Card hover */

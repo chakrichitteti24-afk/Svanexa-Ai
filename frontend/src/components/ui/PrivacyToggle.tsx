@@ -6,19 +6,31 @@ import { toast } from 'sonner';
 import { triggerHaptic } from '@/utils/haptics';
 
 export function PrivacyToggle() {
-  const [isPrivate, setIsPrivate] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('svanexa_privacy_mode') === 'true';
-    }
-    return false;
-  });
+  const [mounted, setMounted] = useState(false);
+  const [isPrivate, setIsPrivate] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+    try {
+      const stored = localStorage.getItem('svanexa_privacy_mode') === 'true';
+      if (stored) {
+        setIsPrivate(true);
+        document.documentElement.setAttribute('data-privacy', 'active');
+        document.body.setAttribute('data-privacy', 'active');
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
     if (isPrivate) {
       document.documentElement.setAttribute('data-privacy', 'active');
       document.body.setAttribute('data-privacy', 'active');
+    } else {
+      document.documentElement.removeAttribute('data-privacy');
+      document.body.removeAttribute('data-privacy');
     }
-  }, [isPrivate]);
+  }, [isPrivate, mounted]);
 
   const togglePrivacy = () => {
     triggerHaptic('medium');

@@ -18,6 +18,7 @@
 
 export type WellnessMode = 'general' | 'pcos' | 'pregnancy';
 export type CheckinSlot = 'morning' | 'afternoon' | 'evening';
+export type CyclePhase = 'menstrual' | 'follicular' | 'ovulation' | 'luteal' | string;
 
 export type CheckinCategory =
   | 'sleep'
@@ -46,6 +47,23 @@ export type CheckinQuestion = {
   options: QuestionOption[];
   isStressDimension?: boolean;
 };
+
+export interface CheckinQuestionOptions {
+  dateStr?: string;
+  cyclePhase?: CyclePhase;
+  rotation?: number; // Explicit override: 0, 1, or 2
+}
+
+/**
+ * Deterministically calculates a 3-way rotation index (0, 1, 2) from a date string (YYYY-MM-DD).
+ */
+export function getRotationIndex(dateStr?: string): number {
+  if (dateStr && dateStr.length >= 10) {
+    const day = parseInt(dateStr.slice(8, 10), 10);
+    if (!isNaN(day)) return (day % 3);
+  }
+  return new Date().getDate() % 3;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. MORNING — 10 STRUCTURED MCQs
@@ -465,19 +483,931 @@ const EVENING_BASE_QUESTIONS: CheckinQuestion[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MODE CUSTOMIZATION HELPERS (PCOS / Pregnancy Adaptations)
+// ROTATING QUESTION VARIANTS (V1 and V2) FOR 7-DAY ENGAGEMENT & NOVELTY
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MORNING_V1: CheckinQuestion[] = [
+  {
+    id: 'm_sleep',
+    category: 'sleep',
+    title: 'Night Rest Recovery',
+    question: 'How restorative was your rest throughout the night?',
+    options: [
+      { score: 5, label: 'Deeply restorative, woke up energized', emoji: '😴' },
+      { score: 4, label: 'Slept soundly with good rest', emoji: '😌' },
+      { score: 3, label: 'Moderate sleep, woke up a couple times', emoji: '😐' },
+      { score: 2, label: 'Restless with frequent tossing', emoji: '🥱' },
+      { score: 1, label: 'Broken, unrefreshing sleep', emoji: '😫' },
+    ],
+  },
+  {
+    id: 'm_energy',
+    category: 'energy',
+    title: 'Morning Vitality',
+    question: 'How does your natural morning vitality feel today?',
+    options: [
+      { score: 5, label: 'Bursting with clean vitality', emoji: '⚡' },
+      { score: 4, label: 'Good, steady wakefulness', emoji: '✨' },
+      { score: 3, label: 'Warming up gradually', emoji: '☕' },
+      { score: 2, label: 'Heavy and slow to start', emoji: '🔋' },
+      { score: 1, label: 'Completely drained of energy', emoji: '🪫' },
+    ],
+  },
+  {
+    id: 'm_mood',
+    category: 'mood',
+    title: 'Emotional Weather',
+    question: 'What is your emotional weather as you begin today?',
+    options: [
+      { score: 5, label: 'Bright, grateful and sunny', emoji: '🌸' },
+      { score: 4, label: 'Gentle, calm and centered', emoji: '🙂' },
+      { score: 3, label: 'Even-keeled and neutral', emoji: '😐' },
+      { score: 2, label: 'Somewhat cloudy or vulnerable', emoji: '🌧️' },
+      { score: 1, label: 'Stormy, tense or deeply down', emoji: '💔' },
+    ],
+  },
+  {
+    id: 'm_stress',
+    category: 'stress',
+    title: 'Morning Cadence',
+    question: 'How much mental ease do you feel starting off today?',
+    isStressDimension: true,
+    options: [
+      { score: 1, label: 'Completely serene and unhurried', emoji: '🍃' },
+      { score: 2, label: 'Comfortable, light momentum', emoji: '🌤️' },
+      { score: 3, label: 'Standard routine pace', emoji: '👌' },
+      { score: 4, label: 'Feeling pressed for time', emoji: '😰' },
+      { score: 5, label: 'High pressure and racing thoughts', emoji: '🌪️' },
+    ],
+  },
+  {
+    id: 'm_focus',
+    category: 'focus',
+    title: 'Attention & Presence',
+    question: 'How sharp and present is your attention this morning?',
+    isStressDimension: true,
+    options: [
+      { score: 1, label: 'Laser-focused and alert', emoji: '🎯' },
+      { score: 2, label: 'Clear and composed', emoji: '💡' },
+      { score: 3, label: 'Decent, settling in now', emoji: '🧠' },
+      { score: 4, label: 'A bit scattered or daydreaming', emoji: '🌫️' },
+      { score: 5, label: 'Heavy morning brain fog', emoji: '🌀' },
+    ],
+  },
+  {
+    id: 'm_body',
+    category: 'physical_comfort',
+    title: 'Body Lightness',
+    question: 'How light or relaxed is your physical body feeling?',
+    isStressDimension: true,
+    options: [
+      { score: 1, label: 'Fluid, agile and comfortable', emoji: '🧘‍♀️' },
+      { score: 2, label: 'Good, no notable aches', emoji: '😊' },
+      { score: 3, label: 'Mild morning stiffness', emoji: '👍' },
+      { score: 4, label: 'Tense shoulders or lower back', emoji: '😬' },
+      { score: 5, label: 'Heavy aches or physical pain', emoji: '😣' },
+    ],
+  },
+  {
+    id: 'm_hydration',
+    category: 'hydration',
+    title: 'Hydration Intake',
+    question: 'How are you hydrating as you begin the day?',
+    options: [
+      { score: 5, label: 'Chugged 500ml+ fresh water', emoji: '💧' },
+      { score: 4, label: 'Drank a nice glass of water', emoji: '🥛' },
+      { score: 3, label: 'Had warm herbal infusion/lemon water', emoji: '🍵' },
+      { score: 2, label: 'Only coffee or tea so far', emoji: '☕' },
+      { score: 1, label: 'Zero liquids yet', emoji: '🏜️' },
+    ],
+  },
+  {
+    id: 'm_activity',
+    category: 'activity',
+    title: 'Daily Movement Type',
+    question: 'What kind of movement feels right for your body today?',
+    options: [
+      { score: 5, label: 'Full workout or brisk morning walk', emoji: '🏃‍♀️' },
+      { score: 4, label: 'Mindful stretching or yoga flow', emoji: '🤸‍♀️' },
+      { score: 3, label: 'General daytime steps and errands', emoji: '🚶‍♀️' },
+      { score: 2, label: 'Mostly quiet or seated day', emoji: '🛋️' },
+      { score: 1, label: 'Total physical rest needed', emoji: '🛌' },
+    ],
+  },
+  {
+    id: 'm_wellness',
+    category: 'general_wellness',
+    title: 'Daily Alignment',
+    question: 'How aligned and centered do you feel for the hours ahead?',
+    options: [
+      { score: 5, label: 'Empowered, clear and aligned', emoji: '🌟' },
+      { score: 4, label: 'Grounded and positive', emoji: '👍' },
+      { score: 3, label: 'Ready to take things as they come', emoji: '⏳' },
+      { score: 2, label: 'A bit unsettled or hesitant', emoji: '🤔' },
+      { score: 1, label: 'Dreading the day\'s demands', emoji: '🌧️' },
+    ],
+  },
+  {
+    id: 'm_support',
+    category: 'support',
+    title: 'Nurturing Start',
+    question: 'What would nurture your morning routine best right now?',
+    options: [
+      { score: 5, label: '3-minute calming breathwork pause', emoji: '🌿' },
+      { score: 4, label: 'Warm, nutrient-rich breakfast', emoji: '🥣' },
+      { score: 3, label: 'Gentle spinal mobility stretch', emoji: '🧘' },
+      { score: 2, label: 'Uninterrupted peaceful quiet', emoji: '🕊️' },
+      { score: 1, label: 'Clear, step-by-step guidance', emoji: '📋' },
+    ],
+  },
+];
+
+const MORNING_V2: CheckinQuestion[] = [
+  {
+    id: 'm_sleep',
+    category: 'sleep',
+    title: 'Waking Refreshment',
+    question: 'How easily did you wake up and greet the morning?',
+    options: [
+      { score: 5, label: 'Woke naturally, feeling bright', emoji: '😴' },
+      { score: 4, label: 'Woke up easily and rested', emoji: '😌' },
+      { score: 3, label: 'Needed a few minutes to adjust', emoji: '😐' },
+      { score: 2, label: 'Felt groggy and dragged out of bed', emoji: '🥱' },
+      { score: 1, label: 'Struggled immensely to get up', emoji: '😫' },
+    ],
+  },
+  {
+    id: 'm_energy',
+    category: 'energy',
+    title: 'Internal Battery',
+    question: 'How is your internal battery charged for today?',
+    options: [
+      { score: 5, label: '100% — fully charged & vibrant', emoji: '⚡' },
+      { score: 4, label: '80% — ready for a full day', emoji: '✨' },
+      { score: 3, label: '50% — steady, moderate pace', emoji: '☕' },
+      { score: 2, label: '30% — running on low reserves', emoji: '🔋' },
+      { score: 1, label: '10% — critically low / empty', emoji: '🪫' },
+    ],
+  },
+  {
+    id: 'm_mood',
+    category: 'mood',
+    title: 'Morning Mindset',
+    question: 'How is your heart and mindset feeling right now?',
+    options: [
+      { score: 5, label: 'Uplifted, joyful and inspired', emoji: '🌸' },
+      { score: 4, label: 'Peaceful, calm and kind', emoji: '🙂' },
+      { score: 3, label: 'Balanced and open-minded', emoji: '😐' },
+      { score: 2, label: 'A bit anxious or heavy-hearted', emoji: '🌧️' },
+      { score: 1, label: 'Low spirits or overwhelmed', emoji: '💔' },
+    ],
+  },
+  {
+    id: 'm_stress',
+    category: 'stress',
+    title: 'Morning Pressure',
+    question: 'What is your internal sense of urgency this morning?',
+    isStressDimension: true,
+    options: [
+      { score: 1, label: 'Zero rush — perfectly at peace', emoji: '🍃' },
+      { score: 2, label: 'Mild, organized forward motion', emoji: '🌤️' },
+      { score: 3, label: 'Normal daily busyness', emoji: '👌' },
+      { score: 4, label: 'Racing against the clock', emoji: '😰' },
+      { score: 5, label: 'Overwhelmed with heavy pressure', emoji: '🌪️' },
+    ],
+  },
+  {
+    id: 'm_focus',
+    category: 'focus',
+    title: 'Thought Clarity',
+    question: 'How readily can you organize your thoughts right now?',
+    isStressDimension: true,
+    options: [
+      { score: 1, label: 'Effortlessly sharp and organized', emoji: '🎯' },
+      { score: 2, label: 'Good, steady concentration', emoji: '💡' },
+      { score: 3, label: 'Managing fine with one task at a time', emoji: '🧠' },
+      { score: 4, label: 'A bit hazy and distracted', emoji: '🌫️' },
+      { score: 5, label: 'Scattered thoughts / mental overload', emoji: '🌀' },
+    ],
+  },
+  {
+    id: 'm_body',
+    category: 'physical_comfort',
+    title: 'Muscles & Joints',
+    question: 'How are your muscles and joints feeling this morning?',
+    isStressDimension: true,
+    options: [
+      { score: 1, label: 'Supple, loose and tension-free', emoji: '🧘‍♀️' },
+      { score: 2, label: 'Comfortable baseline', emoji: '😊' },
+      { score: 3, label: 'Minor tightness or stiffness', emoji: '👍' },
+      { score: 4, label: 'Noticeably sore or stiff', emoji: '😬' },
+      { score: 5, label: 'Severe physical tension or pain', emoji: '😣' },
+    ],
+  },
+  {
+    id: 'm_hydration',
+    category: 'hydration',
+    title: 'Morning Fluids',
+    question: 'Have you nourished your body with fluids upon waking?',
+    options: [
+      { score: 5, label: '500ml+ fresh water already finished', emoji: '💧' },
+      { score: 4, label: 'A tall glass of water', emoji: '🥛' },
+      { score: 3, label: 'Warm lemon or herbal water', emoji: '🍵' },
+      { score: 2, label: 'Just tea or coffee so far', emoji: '☕' },
+      { score: 1, label: 'Completely parched, need water now', emoji: '🏜️' },
+    ],
+  },
+  {
+    id: 'm_activity',
+    category: 'activity',
+    title: 'Movement Desire',
+    question: 'How does your body want to move today?',
+    options: [
+      { score: 5, label: 'Ready for active exercise or brisk walk', emoji: '🏃‍♀️' },
+      { score: 4, label: 'Gentle mobility, yoga or walking', emoji: '🤸‍♀️' },
+      { score: 3, label: 'Everyday casual movement', emoji: '🚶‍♀️' },
+      { score: 2, label: 'Low-movement day preferred', emoji: '🛋️' },
+      { score: 1, label: 'Needs complete quiet and recovery', emoji: '🛌' },
+    ],
+  },
+  {
+    id: 'm_wellness',
+    category: 'general_wellness',
+    title: 'Confidence',
+    question: 'How confident do you feel about navigating today?',
+    options: [
+      { score: 5, label: 'Confident, capable and enthusiastic', emoji: '🌟' },
+      { score: 4, label: 'Grounded and steady', emoji: '👍' },
+      { score: 3, label: 'Pacing myself step-by-step', emoji: '⏳' },
+      { score: 2, label: 'Feeling slightly hesitant or behind', emoji: '🤔' },
+      { score: 1, label: 'Overwhelmed by today\'s expectations', emoji: '🌧️' },
+    ],
+  },
+  {
+    id: 'm_support',
+    category: 'support',
+    title: 'Morning Boost',
+    question: 'What single habit would give you the biggest boost right now?',
+    options: [
+      { score: 5, label: '3-minute nervous system reset', emoji: '🌿' },
+      { score: 4, label: 'Hydrating water & clean nourishment', emoji: '🥣' },
+      { score: 3, label: '5-minute shoulder & hip stretch', emoji: '🧘' },
+      { score: 2, label: 'A quiet moment to just be', emoji: '🕊️' },
+      { score: 1, label: 'A simple list of 1–2 priorities', emoji: '📋' },
+    ],
+  },
+];
+
+const AFTERNOON_V1: CheckinQuestion[] = [
+  {
+    id: 'a_rest',
+    category: 'sleep',
+    title: 'Midday Battery',
+    question: 'How is your sustained focus and stamina as the afternoon unfolds?',
+    options: [
+      { score: 5, label: 'Sailing through with plenty in reserve', emoji: '☀️' },
+      { score: 4, label: 'Good, steady workflow', emoji: '🙂' },
+      { score: 3, label: 'Noticeable afternoon slump', emoji: '🥱' },
+      { score: 2, label: 'Feeling heavy-eyed and fatigued', emoji: '🛋️' },
+      { score: 1, label: 'Utterly drained of stamina', emoji: '🪫' },
+    ],
+  },
+  {
+    id: 'a_energy',
+    category: 'energy',
+    title: 'Afternoon Rhythm',
+    question: 'What is your current energy pace this afternoon?',
+    options: [
+      { score: 5, label: 'Vibrant and fully engaged', emoji: '⚡' },
+      { score: 4, label: 'Smooth and manageable', emoji: '✨' },
+      { score: 3, label: 'Moderate, need small breaks', emoji: '👌' },
+      { score: 2, label: 'Slowing down significantly', emoji: '🔋' },
+      { score: 1, label: 'Running on fumes', emoji: '😫' },
+    ],
+  },
+  {
+    id: 'a_mood',
+    category: 'mood',
+    title: 'Midday Heart',
+    question: 'How are you holding up emotionally this afternoon?',
+    options: [
+      { score: 5, label: 'Uplifted, smiling and accomplished', emoji: '🌸' },
+      { score: 4, label: 'Content and at peace', emoji: '🙂' },
+      { score: 3, label: 'Routine, handling responsibilities', emoji: '😐' },
+      { score: 2, label: 'Feeling irritated or depleted', emoji: '🌧️' },
+      { score: 1, label: 'Emotionally overwhelmed', emoji: '💔' },
+    ],
+  },
+  {
+    id: 'a_stress',
+    category: 'stress',
+    title: 'Workday Tension',
+    question: 'How much stress or mental friction are you holding right now?',
+    isStressDimension: true,
+    options: [
+      { score: 1, label: 'Zero friction — totally calm', emoji: '🍃' },
+      { score: 2, label: 'Light, manageable tasks', emoji: '🌤️' },
+      { score: 3, label: 'Moderate demands', emoji: '💭' },
+      { score: 4, label: 'Tension rising in head/shoulders', emoji: '😰' },
+      { score: 5, label: 'Severe pressure or anxiety', emoji: '⛈️' },
+    ],
+  },
+  {
+    id: 'a_focus',
+    category: 'focus',
+    title: 'Mental Flow',
+    question: 'How easily can you keep your attention anchored right now?',
+    isStressDimension: true,
+    options: [
+      { score: 1, label: 'Deep focus with zero effort', emoji: '🎯' },
+      { score: 2, label: 'Good focus with brief pauses', emoji: '💡' },
+      { score: 3, label: 'Occasionally checking out, but okay', emoji: '🧠' },
+      { score: 4, label: 'Distracted and seeking breaks', emoji: '🌫️' },
+      { score: 5, label: 'Complete brain freeze or fog', emoji: '🌀' },
+    ],
+  },
+  {
+    id: 'a_body',
+    category: 'physical_comfort',
+    title: 'Physical Ease',
+    question: 'How does your back, neck, and physical frame feel?',
+    isStressDimension: true,
+    options: [
+      { score: 1, label: 'Totally comfortable and relaxed', emoji: '🧘‍♀️' },
+      { score: 2, label: 'Generally fine', emoji: '😊' },
+      { score: 3, label: 'Mild postural fatigue', emoji: '👍' },
+      { score: 4, label: 'Noticeable knotting or stiffness', emoji: '😬' },
+      { score: 5, label: 'Painful stiffness or fatigue', emoji: '😣' },
+    ],
+  },
+  {
+    id: 'a_hydration',
+    category: 'hydration',
+    title: 'Water Tracking',
+    question: 'How well are you keeping up with your daily water goal?',
+    options: [
+      { score: 5, label: 'Crushing it (1.5L+ consumed)', emoji: '💧' },
+      { score: 4, label: 'Good progress (around 1L)', emoji: '🥛' },
+      { score: 3, label: 'A couple glasses so far', emoji: '🍵' },
+      { score: 2, label: 'Under-hydrated, need to catch up', emoji: '☕' },
+      { score: 1, label: 'Almost nothing to drink today', emoji: '🏜️' },
+    ],
+  },
+  {
+    id: 'a_activity',
+    category: 'activity',
+    title: 'Step & Stretch Breaks',
+    question: 'Have you stepped away to stretch your legs today?',
+    options: [
+      { score: 5, label: 'Yes, enjoyed a great brisk walk', emoji: '🚶‍♀️' },
+      { score: 4, label: 'Stood, stretched and took steps', emoji: '🤸‍♀️' },
+      { score: 3, label: 'A few quick steps around the room', emoji: '👍' },
+      { score: 2, label: 'Barely moved from chair', emoji: '🪑' },
+      { score: 1, label: 'Glued to screen all day', emoji: '🛋️' },
+    ],
+  },
+  {
+    id: 'a_wellness',
+    category: 'general_wellness',
+    title: 'Midday Fuel',
+    question: 'How did your lunchtime nourishment treat your body?',
+    options: [
+      { score: 5, label: 'Wholesome, balanced and energizing', emoji: '🥗' },
+      { score: 4, label: 'Satisfying and hearty', emoji: '🍲' },
+      { score: 3, label: 'Standard quick lunch', emoji: '🥪' },
+      { score: 2, label: 'Sugary or heavy, causing lethargy', emoji: '🍪' },
+      { score: 1, label: 'Forgot or skipped lunch entirely', emoji: '😣' },
+    ],
+  },
+  {
+    id: 'a_support',
+    category: 'support',
+    title: 'Afternoon Pause',
+    question: 'What micro-break would recharge you most right now?',
+    options: [
+      { score: 5, label: '5-minute eyes-closed breathing reset', emoji: '💧' },
+      { score: 4, label: 'Neck roll and shoulder stretch', emoji: '🧘' },
+      { score: 3, label: 'Fresh water & a crisp fruit snack', emoji: '🍎' },
+      { score: 2, label: 'Step outside for 3 mins of natural air', emoji: '🌿' },
+      { score: 1, label: 'Simplifying today\'s remaining to-do list', emoji: '🕊️' },
+    ],
+  },
+];
+
+const AFTERNOON_V2: CheckinQuestion[] = [
+  {
+    id: 'a_rest',
+    category: 'sleep',
+    title: 'Afternoon Resilience',
+    question: 'How well are your reserves carrying you past midday?',
+    options: [
+      { score: 5, label: 'Resilient and clear-headed', emoji: '☀️' },
+      { score: 4, label: 'Sustained and steady', emoji: '🙂' },
+      { score: 3, label: 'Midday energy dip, taking it steady', emoji: '🥱' },
+      { score: 2, label: 'Heavy eyelids, craving downtime', emoji: '🛋️' },
+      { score: 1, label: 'Complete exhaustion', emoji: '🪫' },
+    ],
+  },
+  {
+    id: 'a_energy',
+    category: 'energy',
+    title: 'Current Power Level',
+    question: 'What percentage of your energy do you feel you have right now?',
+    options: [
+      { score: 5, label: '90–100% — strong and energetic', emoji: '⚡' },
+      { score: 4, label: '70–80% — good, dependable pace', emoji: '✨' },
+      { score: 3, label: '50% — cruising moderately', emoji: '👌' },
+      { score: 2, label: '20–30% — sluggish and dragging', emoji: '🔋' },
+      { score: 1, label: 'Near 0% — completely wiped out', emoji: '😫' },
+    ],
+  },
+  {
+    id: 'a_mood',
+    category: 'mood',
+    title: 'Emotional Outlook',
+    question: 'What tone has your inner voice taken this afternoon?',
+    options: [
+      { score: 5, label: 'Encouraging, bright and grateful', emoji: '🌸' },
+      { score: 4, label: 'Calm, steady and grounded', emoji: '🙂' },
+      { score: 3, label: 'Neutral, getting through tasks', emoji: '😐' },
+      { score: 2, label: 'A bit self-critical or weary', emoji: '🌧️' },
+      { score: 1, label: 'Discouraged, anxious or down', emoji: '💔' },
+    ],
+  },
+  {
+    id: 'a_stress',
+    category: 'stress',
+    title: 'Current Stress Level',
+    question: 'How much stress is present in your mind right now?',
+    isStressDimension: true,
+    options: [
+      { score: 1, label: 'Very serene, peaceful flow', emoji: '🍃' },
+      { score: 2, label: 'Comfortable daily cadence', emoji: '🌤️' },
+      { score: 3, label: 'Moderate workload pressure', emoji: '💭' },
+      { score: 4, label: 'Notable stress creeping in', emoji: '😰' },
+      { score: 5, label: 'Severe emotional overload', emoji: '⛈️' },
+    ],
+  },
+  {
+    id: 'a_focus',
+    category: 'focus',
+    title: 'Mental Precision',
+    question: 'How easy is it to solve problems and stay sharp today?',
+    isStressDimension: true,
+    options: [
+      { score: 1, label: 'Extremely sharp and agile', emoji: '🎯' },
+      { score: 2, label: 'Clear and capable', emoji: '💡' },
+      { score: 3, label: 'Slower, but getting things done', emoji: '🧠' },
+      { score: 4, label: 'Struggling to hold one train of thought', emoji: '🌫️' },
+      { score: 5, label: 'Complete mental fog', emoji: '🌀' },
+    ],
+  },
+  {
+    id: 'a_body',
+    category: 'physical_comfort',
+    title: 'Physical Tension',
+    question: 'How relaxed does your physical body feel right now?',
+    isStressDimension: true,
+    options: [
+      { score: 1, label: 'Totally relaxed and pain-free', emoji: '🧘‍♀️' },
+      { score: 2, label: 'Mostly comfortable', emoji: '😊' },
+      { score: 3, label: 'A bit stiff from holding position', emoji: '👍' },
+      { score: 4, label: 'Sore back or tight neck', emoji: '😬' },
+      { score: 5, label: 'Heavy physical strain or ache', emoji: '😣' },
+    ],
+  },
+  {
+    id: 'a_hydration',
+    category: 'hydration',
+    title: 'Hydration Routine',
+    question: 'Have you refilled your water bottle or glass this afternoon?',
+    options: [
+      { score: 5, label: 'Yes, on my 3rd or 4th refill', emoji: '💧' },
+      { score: 4, label: 'Had several glasses today', emoji: '🥛' },
+      { score: 3, label: 'Had 1–2 glasses', emoji: '🍵' },
+      { score: 2, label: 'Just sips here and there', emoji: '☕' },
+      { score: 1, label: 'Haven\'t reached for water at all', emoji: '🏜️' },
+    ],
+  },
+  {
+    id: 'a_activity',
+    category: 'activity',
+    title: 'Midday Physical Break',
+    question: 'How much have you moved your body since morning?',
+    options: [
+      { score: 5, label: 'Plenty of steps and good movement', emoji: '🚶‍♀️' },
+      { score: 4, label: 'Took periodic standing & stretch breaks', emoji: '🤸‍♀️' },
+      { score: 3, label: 'Light everyday movement', emoji: '👍' },
+      { score: 2, label: 'Mostly seated in one spot', emoji: '🪑' },
+      { score: 1, label: 'Zero physical movement', emoji: '🛋️' },
+    ],
+  },
+  {
+    id: 'a_wellness',
+    category: 'general_wellness',
+    title: 'Daily Pacing',
+    question: 'How sustainable has your pace felt today?',
+    options: [
+      { score: 5, label: 'Very sustainable and balanced', emoji: '🥗' },
+      { score: 4, label: 'Good, steady balance', emoji: '🍲' },
+      { score: 3, label: 'A little busy, but manageable', emoji: '🥪' },
+      { score: 2, label: 'Too hurried or draining', emoji: '🍪' },
+      { score: 1, label: 'Chaotic and completely depleting', emoji: '😣' },
+    ],
+  },
+  {
+    id: 'a_support',
+    category: 'support',
+    title: 'Afternoon Support',
+    question: 'What would help you finish the workday feeling centered?',
+    options: [
+      { score: 5, label: 'A quick hydration & breathing break', emoji: '💧' },
+      { score: 4, label: 'Shoulder roll and wrist stretches', emoji: '🧘' },
+      { score: 3, label: 'A protein or fiber-rich snack', emoji: '🍎' },
+      { score: 2, label: 'A short 5-minute outdoor walk', emoji: '🌿' },
+      { score: 1, label: 'Permission to leave extra tasks for tomorrow', emoji: '🕊️' },
+    ],
+  },
+];
+
+const EVENING_V1: CheckinQuestion[] = [
+  {
+    id: 'e_sleep',
+    category: 'sleep',
+    title: 'Sleep Wind-Down',
+    question: 'How peaceful is your transition into sleep tonight?',
+    options: [
+      { score: 5, label: 'Drifting into deep peaceful drowsiness', emoji: '😴' },
+      { score: 4, label: 'Ready to turn out lights comfortably', emoji: '🌙' },
+      { score: 3, label: 'Winding down at a relaxed pace', emoji: '🥱' },
+      { score: 2, label: 'Brain still spinning with thoughts', emoji: '💭' },
+      { score: 1, label: 'Wired, agitated or struggling to unwind', emoji: '🌀' },
+    ],
+  },
+  {
+    id: 'e_energy',
+    category: 'energy',
+    title: 'Evening Battery',
+    question: 'How does your physical stamina feel as night settles in?',
+    options: [
+      { score: 5, label: 'Pleasant, cozy and gently relaxed', emoji: '✨' },
+      { score: 4, label: 'Calmly tired in a healthy way', emoji: '😌' },
+      { score: 3, label: 'Ready to lounge and rest', emoji: '☕' },
+      { score: 2, label: 'Heavy and fatigued', emoji: '🔋' },
+      { score: 1, label: 'Burned out and completely depleted', emoji: '🪫' },
+    ],
+  },
+  {
+    id: 'e_mood',
+    category: 'mood',
+    title: 'Evening Gratitude',
+    question: 'When you look back on today, what is your primary feeling?',
+    options: [
+      { score: 5, label: 'Deep gratitude and quiet joy', emoji: '🌸' },
+      { score: 4, label: 'Peaceful and content', emoji: '🙂' },
+      { score: 3, label: 'Neutral, ready for tomorrow', emoji: '😐' },
+      { score: 2, label: 'A bit heavy or exhausted', emoji: '🌧️' },
+      { score: 1, label: 'Deeply frustrated or sad', emoji: '💔' },
+    ],
+  },
+  {
+    id: 'e_stress',
+    category: 'stress',
+    title: 'Releasing the Day',
+    question: 'Can you give yourself full permission to rest tonight?',
+    isStressDimension: true,
+    options: [
+      { score: 1, label: 'Completely — today is done', emoji: '🍃' },
+      { score: 2, label: 'Mostly relaxed and letting go', emoji: '🌤️' },
+      { score: 3, label: 'A few lingering to-do lists', emoji: '💭' },
+      { score: 4, label: 'Feeling guilty or anxious to rest', emoji: '🌪️' },
+      { score: 5, label: 'Unable to turn off worry', emoji: '⛈️' },
+    ],
+  },
+  {
+    id: 'e_focus',
+    category: 'focus',
+    title: 'Night Mental Quiet',
+    question: 'How quiet does your headspace feel right now?',
+    isStressDimension: true,
+    options: [
+      { score: 1, label: 'Quiet, still and serene', emoji: '🎯' },
+      { score: 2, label: 'Comfortably relaxed', emoji: '💡' },
+      { score: 3, label: 'A bit of background mental chatter', emoji: '🧠' },
+      { score: 4, label: 'Mentally overtired and buzzing', emoji: '🌫️' },
+      { score: 5, label: 'Racing thoughts and restlessness', emoji: '🌀' },
+    ],
+  },
+  {
+    id: 'e_body',
+    category: 'physical_comfort',
+    title: 'Body Restoration',
+    question: 'How comfortable does your physical body feel lying or sitting down?',
+    isStressDimension: true,
+    options: [
+      { score: 1, label: 'Completely comfortable and heavy with rest', emoji: '🧘‍♀️' },
+      { score: 2, label: 'Comfortable, ready for bed', emoji: '😊' },
+      { score: 3, label: 'Slight fatigue in joints or muscles', emoji: '👍' },
+      { score: 4, label: 'Tight shoulders or lower-back ache', emoji: '😬' },
+      { score: 5, label: 'High physical discomfort or cramps', emoji: '😣' },
+    ],
+  },
+  {
+    id: 'e_hydration',
+    category: 'hydration',
+    title: 'Full Day Hydration',
+    question: 'How satisfied are you with the liquids you gave your body today?',
+    options: [
+      { score: 5, label: 'Fully hydrated (2L+ drank)', emoji: '💧' },
+      { score: 4, label: 'Drank good amounts throughout', emoji: '🥛' },
+      { score: 3, label: 'Decent, had a few good glasses', emoji: '🍵' },
+      { score: 2, label: 'Fell behind on water', emoji: '☕' },
+      { score: 1, label: 'Hardly drank anything all day', emoji: '🏜️' },
+    ],
+  },
+  {
+    id: 'e_activity',
+    category: 'activity',
+    title: 'Movement Reflection',
+    question: 'How do your legs and body feel about today\'s movement?',
+    options: [
+      { score: 5, label: 'Pleasantly tired from good exercise', emoji: '🏃‍♀️' },
+      { score: 4, label: 'Satisfying amount of walking', emoji: '🚶‍♀️' },
+      { score: 3, label: 'Light routine activity', emoji: '👍' },
+      { score: 2, label: 'A little stiff from sitting too long', emoji: '🪑' },
+      { score: 1, label: 'Inactive and feeling cramped', emoji: '🛋️' },
+    ],
+  },
+  {
+    id: 'e_wellness',
+    category: 'general_wellness',
+    title: 'Self-Compassion',
+    question: 'How kind are you feeling toward yourself this evening?',
+    options: [
+      { score: 5, label: 'Full of pride and warmth for my effort', emoji: '🌟' },
+      { score: 4, label: 'Happy with how I handled today', emoji: '👍' },
+      { score: 3, label: 'Content, taking it in stride', emoji: '🌙' },
+      { score: 2, label: 'A bit self-critical about tasks', emoji: '🤔' },
+      { score: 1, label: 'Harsh on myself or disappointed', emoji: '🌧️' },
+    ],
+  },
+  {
+    id: 'e_support',
+    category: 'support',
+    title: 'Bedtime Nurture',
+    question: 'What night ritual would feel most soothing before sleep?',
+    options: [
+      { score: 5, label: 'Warm chamomile tea and dim lights', emoji: '🕯️' },
+      { score: 4, label: 'Guided sleep meditation or soothing rain sound', emoji: '🎧' },
+      { score: 3, label: 'Gentle bed stretches or legs up the wall', emoji: '🛁' },
+      { score: 2, label: 'A few minutes of offline fiction reading', emoji: '🍵' },
+      { score: 1, label: 'Writing down worries and closing the notebook', emoji: '🕊️' },
+    ],
+  },
+];
+
+const EVENING_V2: CheckinQuestion[] = [
+  {
+    id: 'e_sleep',
+    category: 'sleep',
+    title: 'Night Rest Outlook',
+    question: 'How expectant are you of a deep, restful sleep tonight?',
+    options: [
+      { score: 5, label: 'Very confident — body is primed for sleep', emoji: '😴' },
+      { score: 4, label: 'Looking forward to cozy rest', emoji: '🌙' },
+      { score: 3, label: 'Will likely sleep fine', emoji: '🥱' },
+      { score: 2, label: 'Hoping sleep isn\'t too broken', emoji: '💭' },
+      { score: 1, label: 'Dreading insomnia or restless night', emoji: '🌀' },
+    ],
+  },
+  {
+    id: 'e_energy',
+    category: 'energy',
+    title: 'End of Day Reserve',
+    question: 'How is your energy tank right now at bedtime?',
+    options: [
+      { score: 5, label: 'Soft, gentle and comfortable', emoji: '✨' },
+      { score: 4, label: 'Pleasantly ready to sleep', emoji: '😌' },
+      { score: 3, label: 'Normal bedtime tiredness', emoji: '☕' },
+      { score: 2, label: 'Crashing or physically drained', emoji: '🔋' },
+      { score: 1, label: 'Totally burnt out and exhausted', emoji: '🪫' },
+    ],
+  },
+  {
+    id: 'e_mood',
+    category: 'mood',
+    title: 'Evening Peace',
+    question: 'How peaceful is your heart as you prepare for rest?',
+    options: [
+      { score: 5, label: 'Very peaceful, fulfilled and grateful', emoji: '🌸' },
+      { score: 4, label: 'Calm and steady', emoji: '🙂' },
+      { score: 3, label: 'Neutral, day is done', emoji: '😐' },
+      { score: 2, label: 'A little stressed or melancholy', emoji: '🌧️' },
+      { score: 1, label: 'Deeply troubled or lonely', emoji: '💔' },
+    ],
+  },
+  {
+    id: 'e_stress',
+    category: 'stress',
+    title: 'Mind Disconnect',
+    question: 'How easily can you disconnect from tomorrow\'s schedule right now?',
+    isStressDimension: true,
+    options: [
+      { score: 1, label: 'Completely disconnected — tomorrow will wait', emoji: '🍃' },
+      { score: 2, label: 'Mostly calm and compartmentalized', emoji: '🌤️' },
+      { score: 3, label: 'A couple of thoughts about tomorrow', emoji: '💭' },
+      { score: 4, label: 'Pre-planning tomorrow with some stress', emoji: '🌪️' },
+      { score: 5, label: 'Severe anticipatory anxiety', emoji: '⛈️' },
+    ],
+  },
+  {
+    id: 'e_focus',
+    category: 'focus',
+    title: 'Mental Decompression',
+    question: 'How quiet and clear is your mind this evening?',
+    isStressDimension: true,
+    options: [
+      { score: 1, label: 'Blissfully quiet and decompressing', emoji: '🎯' },
+      { score: 2, label: 'Relaxed and comfortable', emoji: '💡' },
+      { score: 3, label: 'Mild lingering mental chatter', emoji: '🧠' },
+      { score: 4, label: 'Fatigued but still buzzing', emoji: '🌫️' },
+      { score: 5, label: 'Severe mental exhaustion', emoji: '🌀' },
+    ],
+  },
+  {
+    id: 'e_body',
+    category: 'physical_comfort',
+    title: 'Physical Relaxation',
+    question: 'How easily are your muscles letting go of daily tension?',
+    isStressDimension: true,
+    options: [
+      { score: 1, label: 'Effortlessly melting into pillows', emoji: '🧘‍♀️' },
+      { score: 2, label: 'Comfortable and relaxed', emoji: '😊' },
+      { score: 3, label: 'Minor physical tightness', emoji: '👍' },
+      { score: 4, label: 'Noticeable tension in jaw/neck/back', emoji: '😬' },
+      { score: 5, label: 'Cramping, aches or severe soreness', emoji: '😣' },
+    ],
+  },
+  {
+    id: 'e_hydration',
+    category: 'hydration',
+    title: 'Hydration Recap',
+    question: 'How do you feel about your hydration throughout today?',
+    options: [
+      { score: 5, label: 'Well-hydrated, body feels refreshed', emoji: '💧' },
+      { score: 4, label: 'Drank plenty of water', emoji: '🥛' },
+      { score: 3, label: 'A moderate amount', emoji: '🍵' },
+      { score: 2, label: 'Slightly dehydrated', emoji: '☕' },
+      { score: 1, label: 'Parched all day long', emoji: '🏜️' },
+    ],
+  },
+  {
+    id: 'e_activity',
+    category: 'activity',
+    title: 'Daily Movement Recap',
+    question: 'How does your body feel about the physical activity you got today?',
+    options: [
+      { score: 5, label: 'Great — hit my activity targets', emoji: '🏃‍♀️' },
+      { score: 4, label: 'Good healthy steps', emoji: '🚶‍♀️' },
+      { score: 3, label: 'Adequate daily walking', emoji: '👍' },
+      { score: 2, label: 'Could have moved a little more', emoji: '🪑' },
+      { score: 1, label: 'Stationary all day, feeling stiff', emoji: '🛋️' },
+    ],
+  },
+  {
+    id: 'e_wellness',
+    category: 'general_wellness',
+    title: 'Gratitude for Effort',
+    question: 'Can you honor the effort you showed up with today?',
+    options: [
+      { score: 5, label: 'Yes, proud and deeply appreciative', emoji: '🌟' },
+      { score: 4, label: 'Did my best and that is enough', emoji: '👍' },
+      { score: 3, label: 'Glad I got through it', emoji: '🌙' },
+      { score: 2, label: 'Wish I got more done', emoji: '🤔' },
+      { score: 1, label: 'Hard on myself tonight', emoji: '🌧️' },
+    ],
+  },
+  {
+    id: 'e_support',
+    category: 'support',
+    title: 'Evening Healing',
+    question: 'What would feel most healing for you tonight?',
+    options: [
+      { score: 5, label: 'A warm magnesium bath or cozy tea', emoji: '🕯️' },
+      { score: 4, label: 'Calming music and screen-free bedroom', emoji: '🎧' },
+      { score: 3, label: 'Gentle spinal stretches on the rug', emoji: '🛁' },
+      { score: 2, label: 'A soothing book or breathing exercise', emoji: '🍵' },
+      { score: 1, label: 'Letting go of today\'s unfinished business', emoji: '🕊️' },
+    ],
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MODE & CYCLE CUSTOMIZATION HELPERS (PCOS / Pregnancy / Cycle Adaptations)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function adaptQuestionsForMode(
   questions: CheckinQuestion[],
-  mode: WellnessMode
+  mode: WellnessMode,
+  cyclePhase?: CyclePhase
 ): CheckinQuestion[] {
-  if (mode === 'general') return questions;
-
   return questions.map(q => {
-    // Mode-specific adaptations for Body Comfort (category: physical_comfort)
-    if (q.category === 'physical_comfort') {
-      if (mode === 'pcos') {
+    // 1. Cycle Phase Adaptations (for general & PCOS modes)
+    if (cyclePhase && mode !== 'pregnancy') {
+      if (cyclePhase === 'menstrual') {
+        if (q.category === 'physical_comfort') {
+          return {
+            ...q,
+            title: 'Pelvic & Cramp Comfort',
+            question: 'How are your pelvic ease and menstrual cramps feeling right now?',
+            options: [
+              { score: 1, label: 'Cramp-free and comfortably light', emoji: '🧘‍♀️' },
+              { score: 2, label: 'Mostly comfortable with mild warmth', emoji: '😊' },
+              { score: 3, label: 'Noticeable lower belly ache or dull cramps', emoji: '👍' },
+              { score: 4, label: 'Sharp or heavy cramps, taking it slow', emoji: '😬' },
+              { score: 5, label: 'Intense cramping or debilitating pain', emoji: '😣' },
+            ],
+          };
+        }
+        if (q.category === 'support') {
+          return {
+            ...q,
+            title: 'Menstrual Cycle Care',
+            question: 'What soothing support would help your cycle most right now?',
+            options: [
+              { score: 5, label: 'Heating pad & gentle pelvic warmth', emoji: '☕' },
+              { score: 4, label: 'Nourishing warm herbal tea & hydration', emoji: '🍵' },
+              { score: 3, label: 'Quiet restorative lying-down rest', emoji: '🛌' },
+              { score: 2, label: 'Gentle reclining stretch & slow breathing', emoji: '🧘' },
+              { score: 1, label: 'Releasing all pressure and expectations', emoji: '🕊️' },
+            ],
+          };
+        }
+      } else if (cyclePhase === 'luteal') {
+        if (q.category === 'physical_comfort') {
+          return {
+            ...q,
+            title: 'Luteal Body Comfort',
+            question: 'Are you experiencing any premenstrual tenderness, bloating, or fatigue?',
+            options: [
+              { score: 1, label: 'Light and balanced, zero bloating', emoji: '🧘‍♀️' },
+              { score: 2, label: 'Mild water retention, feeling okay', emoji: '😊' },
+              { score: 3, label: 'Noticeable bloating or breast tenderness', emoji: '👍' },
+              { score: 4, label: 'Heavy bloat and low physical energy', emoji: '😬' },
+              { score: 5, label: 'Significant premenstrual discomfort', emoji: '😣' },
+            ],
+          };
+        }
+        if (q.category === 'mood') {
+          return {
+            ...q,
+            title: 'Luteal Emotional Space',
+            question: 'How is your emotional patience and sensitivity holding up today?',
+            options: [
+              { score: 5, label: 'Grounded, patient, and serene', emoji: '🌸' },
+              { score: 4, label: 'Balanced and steady', emoji: '🙂' },
+              { score: 3, label: 'Slightly irritable or easily overstimulated', emoji: '😐' },
+              { score: 2, label: 'Vulnerable, anxious, or tearful', emoji: '🌧️' },
+              { score: 1, label: 'Deeply overwhelmed with PMS mood swings', emoji: '💔' },
+            ],
+          };
+        }
+      } else if (cyclePhase === 'ovulation') {
+        if (q.category === 'energy') {
+          return {
+            ...q,
+            title: 'Mid-Cycle Vitality',
+            question: 'How is your mid-cycle ovulation stamina and vitality today?',
+            options: [
+              { score: 5, label: 'Peak vitality, sharp and magnetic', emoji: '⚡' },
+              { score: 4, label: 'High stamina and upbeat pace', emoji: '✨' },
+              { score: 3, label: 'Steady and comfortable', emoji: '☕' },
+              { score: 2, label: 'Mild mid-cycle twinge or dip', emoji: '🔋' },
+              { score: 1, label: 'Unusually low energy', emoji: '🪫' },
+            ],
+          };
+        }
+      } else if (cyclePhase === 'follicular') {
+        if (q.category === 'focus') {
+          return {
+            ...q,
+            title: 'Follicular Mental Drive',
+            question: 'How is your motivation and creative focus feeling today?',
+            options: [
+              { score: 1, label: 'Inspired, proactive, and razor sharp', emoji: '🎯' },
+              { score: 2, label: 'Clear and motivated', emoji: '💡' },
+              { score: 3, label: 'Steady and focused', emoji: '🧠' },
+              { score: 4, label: 'A bit slow to start', emoji: '🌫️' },
+              { score: 5, label: 'Mentally stalled or foggy', emoji: '🌀' },
+            ],
+          };
+        }
+      }
+    }
+
+    // 2. Mode-Specific Adaptations for PCOS
+    if (mode === 'pcos') {
+      if (q.category === 'physical_comfort' && (!cyclePhase || cyclePhase !== 'menstrual')) {
         return {
           ...q,
           title: 'Body & Cycle Comfort',
@@ -491,25 +1421,7 @@ function adaptQuestionsForMode(
           ],
         };
       }
-      if (mode === 'pregnancy') {
-        return {
-          ...q,
-          title: 'Maternal Comfort',
-          question: 'How comfortable does your body feel right now?',
-          options: [
-            { score: 1, label: 'Restful, light and comfortable', emoji: '🤰' },
-            { score: 2, label: 'Mostly comfortable and steady', emoji: '😊' },
-            { score: 3, label: 'Mild back fatigue or heaviness', emoji: '👍' },
-            { score: 4, label: 'Achy back, nausea, or swelling', emoji: '😬' },
-            { score: 5, label: 'Significant physical discomfort or fatigue', emoji: '😣' },
-          ],
-        };
-      }
-    }
-
-    // Mode-specific adaptations for Support (category: support)
-    if (q.category === 'support') {
-      if (mode === 'pcos') {
+      if (q.category === 'support' && (!cyclePhase || cyclePhase !== 'menstrual')) {
         return {
           ...q,
           title: 'PCOS Lifestyle Care',
@@ -523,7 +1435,25 @@ function adaptQuestionsForMode(
           ],
         };
       }
-      if (mode === 'pregnancy') {
+    }
+
+    // 3. Mode-Specific Adaptations for Pregnancy
+    if (mode === 'pregnancy') {
+      if (q.category === 'physical_comfort') {
+        return {
+          ...q,
+          title: 'Maternal Comfort',
+          question: 'How comfortable does your body feel right now?',
+          options: [
+            { score: 1, label: 'Restful, light and comfortable', emoji: '🤰' },
+            { score: 2, label: 'Mostly comfortable and steady', emoji: '😊' },
+            { score: 3, label: 'Mild back fatigue or heaviness', emoji: '👍' },
+            { score: 4, label: 'Achy back, nausea, or swelling', emoji: '😬' },
+            { score: 5, label: 'Significant physical discomfort or fatigue', emoji: '😣' },
+          ],
+        };
+      }
+      if (q.category === 'support') {
         return {
           ...q,
           title: 'Maternal Support',
@@ -544,22 +1474,36 @@ function adaptQuestionsForMode(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUBLIC API: GET 10 QUESTIONS PER SLOT
+// PUBLIC API: GET 10 QUESTIONS PER SLOT (WITH ROTATION & CYCLE AWARENESS)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Returns the exact 10 MCQ question set for a given slot and wellness mode.
+ * Supports optional date-based rotation and menstrual cycle phase adaptations.
+ * When called without options, it defaults to rotation index 0 for 100% backward compatibility.
  */
 export function getCheckinQuestions(
   slot: CheckinSlot,
-  mode: WellnessMode = 'general'
+  mode: WellnessMode = 'general',
+  options?: CheckinQuestionOptions
 ): CheckinQuestion[] {
-  let base: CheckinQuestion[];
-  if (slot === 'morning') base = MORNING_BASE_QUESTIONS;
-  else if (slot === 'afternoon') base = AFTERNOON_BASE_QUESTIONS;
-  else base = EVENING_BASE_QUESTIONS;
+  let rotationIndex = 0;
+  if (options?.rotation !== undefined) {
+    rotationIndex = options.rotation % 3;
+  } else if (options?.dateStr) {
+    rotationIndex = getRotationIndex(options.dateStr);
+  }
 
-  return adaptQuestionsForMode(base, mode);
+  let base: CheckinQuestion[];
+  if (slot === 'morning') {
+    base = rotationIndex === 1 ? MORNING_V1 : rotationIndex === 2 ? MORNING_V2 : MORNING_BASE_QUESTIONS;
+  } else if (slot === 'afternoon') {
+    base = rotationIndex === 1 ? AFTERNOON_V1 : rotationIndex === 2 ? AFTERNOON_V2 : AFTERNOON_BASE_QUESTIONS;
+  } else {
+    base = rotationIndex === 1 ? EVENING_V1 : rotationIndex === 2 ? EVENING_V2 : EVENING_BASE_QUESTIONS;
+  }
+
+  return adaptQuestionsForMode(base, mode, options?.cyclePhase);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

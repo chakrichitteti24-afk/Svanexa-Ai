@@ -447,10 +447,10 @@ export default function RewardsPage() {
       </div>
 
       {/* 🤝 4. REFER & EARN SECTION */}
-      <div className="p-5 sm:p-8 rounded-3xl bg-gradient-to-br from-pink-500/10 via-card/90 to-violet-500/10 border border-pink-500/25 backdrop-blur-xl shadow-xl space-y-6">
+      <div className="p-5 sm:p-8 rounded-3xl bg-white/[0.04] border border-white/[0.08] backdrop-blur-2xl shadow-sm space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <div className="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-pink-400 bg-pink-500/15 px-2.5 py-0.5 rounded-full border border-pink-500/30">
+            <div className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-primary bg-primary/15 px-2.5 py-0.5 rounded-full border border-primary/25">
               <Gift className="w-3.5 h-3.5" /> Refer & Earn
             </div>
             <h2 className="text-lg sm:text-xl font-bold text-foreground mt-1">
@@ -465,18 +465,18 @@ export default function RewardsPage() {
         {/* Code & Action Box */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
           {/* Referral Code Box */}
-          <div className="p-4 rounded-2xl bg-secondary/60 border border-border/50 flex flex-col justify-between gap-3">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          <div className="p-4 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex flex-col justify-between gap-3">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
               Your Unique Referral Code
             </span>
             <div className="flex items-center justify-between gap-2">
-              <div className="text-xl sm:text-2xl font-black font-mono tracking-widest text-pink-400 select-all">
+              <div className="text-xl sm:text-2xl font-semibold font-mono tracking-widest text-foreground select-all">
                 {summary?.referralCode || 'SVX-......'}
               </div>
               <button
                 type="button"
                 onClick={handleCopyCode}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-pink-500 hover:bg-pink-600 active:scale-95 text-white font-bold text-xs transition-all cursor-pointer shrink-0"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-primary hover:opacity-95 active:scale-[0.98] text-white font-semibold text-xs shadow-sm transition-all cursor-pointer shrink-0"
               >
                 {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copiedCode ? 'Copied' : 'Copy Code'}</span>
@@ -485,15 +485,15 @@ export default function RewardsPage() {
           </div>
 
           {/* Referral Link & Share Box */}
-          <div className="p-4 rounded-2xl bg-secondary/60 border border-border/50 flex flex-col justify-between gap-3">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          <div className="p-4 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex flex-col justify-between gap-3">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
               Shareable Referral Link
             </span>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleCopyLink}
-                className="flex-1 py-2 px-3 rounded-xl bg-background/60 border border-border/60 hover:border-pink-500/40 text-xs font-mono text-muted-foreground truncate text-left transition-colors cursor-pointer flex items-center justify-between"
+                className="flex-1 py-2 px-3 rounded-xl bg-background/60 border border-border/60 hover:border-white/20 text-xs font-mono text-muted-foreground truncate text-left transition-colors cursor-pointer flex items-center justify-between"
               >
                 <span className="truncate">
                   {summary?.referralLink ||
@@ -506,7 +506,7 @@ export default function RewardsPage() {
               <button
                 type="button"
                 onClick={handleShare}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 active:scale-95 text-white font-bold text-xs transition-all cursor-pointer shadow-md shrink-0"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary hover:opacity-95 active:scale-[0.98] text-white font-semibold text-xs transition-all cursor-pointer shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] shrink-0"
               >
                 <Share2 className="w-3.5 h-3.5" />
                 <span>Share Link</span>

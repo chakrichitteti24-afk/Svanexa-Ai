@@ -4,9 +4,12 @@ import {
   calculateCheckinIndicators,
   getStressInterpretation,
   calculateStressScore,
+  getRotationIndex,
   type CheckinSlot,
   type WellnessMode,
+  type CyclePhase,
 } from '../questions/checkin-questions';
+import { WellnessPlanService } from '../services/wellness-plan-service';
 import { getNormalizedDate, isValidDateString } from '../../utils/date-utils';
 
 describe('Comprehensive Check-in Save & Reflection Logic Tests', () => {
@@ -329,5 +332,207 @@ describe('Comprehensive Check-in Save & Reflection Logic Tests', () => {
       expect(step10IsReflection).toBe(true);
     });
   });
+
+  describe('9. Dynamic Question Rotation Variants (V0, V1, V2)', () => {
+    it('calculates deterministic rotation indices across calendar days', () => {
+      const day1 = getRotationIndex('2026-09-07');
+      const day2 = getRotationIndex('2026-09-08');
+      const day3 = getRotationIndex('2026-09-09');
+
+      expect([0, 1, 2]).toContain(day1);
+      expect([0, 1, 2]).toContain(day2);
+      expect([0, 1, 2]).toContain(day3);
+      // Successive calendar dates produce cyclical rotation
+      expect((day1 + 1) % 3).toBe(day2);
+      expect((day2 + 1) % 3).toBe(day3);
+    });
+
+    it('returns diverse questions across rotation variants for all slots', () => {
+      for (const slot of ['morning', 'afternoon', 'evening'] as CheckinSlot[]) {
+        const v0 = getCheckinQuestions(slot, 'general', { rotation: 0 });
+        const v1 = getCheckinQuestions(slot, 'general', { rotation: 1 });
+        const v2 = getCheckinQuestions(slot, 'general', { rotation: 2 });
+
+        expect(v0.length).toBe(10);
+        expect(v1.length).toBe(10);
+        expect(v2.length).toBe(10);
+
+        // Core question IDs remain identical for seamless longitudinal tracking
+        expect(v0.map(q => q.id)).toEqual(v1.map(q => q.id));
+        expect(v1.map(q => q.id)).toEqual(v2.map(q => q.id));
+
+        // Question wording is non-repetitive across rotations
+        expect(v0[0].question).not.toBe(v1[0].question);
+        expect(v1[0].question).not.toBe(v2[0].question);
+
+        // All variants have valid scoring scales (1 to 5)
+        for (const variant of [v0, v1, v2]) {
+          variant.forEach(q => {
+            const scores = q.options.map(o => o.score);
+            expect(scores).toContain(1);
+            expect(scores).toContain(5);
+            expect(scores.length).toBeGreaterThanOrEqual(4);
+          });
+        }
+      }
+    });
+  });
+
+  describe('10. Cycle Phase & Health Mode Dynamic Question Adaptation', () => {
+    it('adapts questions for menstrual cycle phase', () => {
+      const menstrualQs = getCheckinQuestions('morning', 'general', {
+        cyclePhase: 'menstrual',
+      });
+      const comfortQ = menstrualQs.find(q => q.id === 'm_body');
+      expect(comfortQ).toBeDefined();
+      expect(comfortQ?.question.toLowerCase()).toContain('cramp');
+
+      const supportQ = menstrualQs.find(q => q.id === 'm_support');
+      expect(supportQ).toBeDefined();
+      expect(supportQ?.question.toLowerCase()).toContain('cycle');
+    });
+
+    it('adapts questions for luteal cycle phase', () => {
+      const lutealQs = getCheckinQuestions('morning', 'general', {
+        cyclePhase: 'luteal',
+      });
+      const comfortQ = lutealQs.find(q => q.id === 'm_body');
+      expect(comfortQ).toBeDefined();
+      expect(comfortQ?.title).toBe('Luteal Body Comfort');
+
+      const moodQ = lutealQs.find(q => q.id === 'm_mood');
+      expect(moodQ).toBeDefined();
+      expect(moodQ?.title).toBe('Luteal Emotional Space');
+    });
+
+    it('adapts questions for PCOS mode', () => {
+      const pcosQs = getCheckinQuestions('morning', 'pcos');
+      const comfortQ = pcosQs.find(q => q.id === 'm_body');
+      expect(comfortQ).toBeDefined();
+      expect(comfortQ?.title).toBe('Body & Cycle Comfort');
+
+      const supportQ = pcosQs.find(q => q.id === 'm_support');
+      expect(supportQ?.options[0].label.toLowerCase()).toContain('insulin');
+    });
+
+    it('adapts questions for Pregnancy mode', () => {
+      const pregQs = getCheckinQuestions('morning', 'pregnancy');
+      const comfortQ = pregQs.find(q => q.id === 'm_body');
+      expect(comfortQ).toBeDefined();
+      expect(comfortQ?.title).toBe('Maternal Comfort');
+
+      const supportQ = pregQs.find(q => q.id === 'm_support');
+      expect(supportQ?.title).toBe('Maternal Support');
+    });
+  });
+
+  describe('11. Rich Science-Backed Wellness Task Bank', () => {
+    const service = new WellnessPlanService(null as any);
+
+    it('provides at least 8 distinct, evidence-based tasks per slot', () => {
+      for (const slot of ['morning', 'afternoon', 'evening'] as const) {
+        const pool = service.getAllRuleTasksForSlot(slot, 'general');
+        expect(pool.length).toBeGreaterThanOrEqual(8);
+
+        // Valid metadata on every task
+        pool.forEach(task => {
+          expect(task.text).toBeTruthy();
+          expect(task.category).toBeTruthy();
+          expect(['high', 'recommended', 'optional']).toContain(task.priority);
+          expect(task.estimatedTime).toBeTruthy();
+          expect(task.rationale).toBeTruthy();
+        });
+
+        // Diverse categories present
+        const categories = new Set(pool.map(t => t.category));
+        expect(categories.size).toBeGreaterThanOrEqual(4);
+      }
+    });
+
+    it('includes mode-specific tasks for PCOS and Pregnancy', () => {
+      const pcosTasks = service.getAllRuleTasksForSlot('morning', 'pcos');
+      expect(pcosTasks.some(t => t.text.toLowerCase().includes('flaxseed') || t.text.toLowerCase().includes('chia'))).toBe(true);
+
+      const pregTasks = service.getAllRuleTasksForSlot('morning', 'pregnancy');
+      expect(pregTasks.some(t => t.category === 'pregnancy')).toBe(true);
+    });
+
+    it('includes cycle-specific tasks during menstrual phase', () => {
+      const menstrualTasks = service.getAllRuleTasksForSlot('morning', 'general', {
+        cycleStatus: 'menstrual',
+      });
+      expect(menstrualTasks.some(t => t.text.toLowerCase().includes('warmth') || t.text.toLowerCase().includes('pelvic'))).toBe(true);
+    });
+  });
+
+  describe('12. Task Swapping (Reroll) Logic', () => {
+    it('swaps an existing task with an alternative from the diversified bank', async () => {
+      const initialTask1 = {
+        id: 'task-morning-1',
+        text: 'Drink a full glass of warm water (500ml) with optional lemon upon waking.',
+        category: 'hydration',
+        timeSlot: 'morning',
+        priority: 'high',
+        status: 'pending',
+        completed: false,
+        completedAt: null,
+      };
+      const initialTask2 = {
+        id: 'task-morning-2',
+        text: 'Practice 4-7-8 calming breathing technique for 3 minutes.',
+        category: 'stress',
+        timeSlot: 'morning',
+        priority: 'recommended',
+        status: 'pending',
+        completed: false,
+        completedAt: null,
+      };
+
+      const mockPlan = {
+        id: 'plan-xyz',
+        user_id: 'user-123',
+        title: '2026-09-07',
+        wellness_mode: 'general',
+        created_at: new Date().toISOString(),
+        content: JSON.stringify([initialTask1, initialTask2]),
+      };
+
+      let updatedContent: string | null = null;
+      const createBuilder = () => {
+        const builder: any = {
+          eq: () => builder,
+          order: () => builder,
+          maybeSingle: async () => ({ data: mockPlan, error: null }),
+          limit: async () => ({ data: [mockPlan], error: null }),
+        };
+        return builder;
+      };
+
+      const mockSupabase = {
+        from: (table: string) => ({
+          select: () => createBuilder(),
+          update: (payload: any) => {
+            updatedContent = payload.content;
+            return {
+              eq: async () => ({ data: null, error: null }),
+            };
+          },
+        }),
+      };
+
+      const testService = new WellnessPlanService(mockSupabase as any);
+      const res = await testService.swapTask('user-123', 'plan-xyz', 'task-morning-1', '2026-09-07', 'general');
+
+      expect(res.success).toBe(true);
+      expect(res.task).toBeDefined();
+      expect(res.task.id).not.toBe('task-morning-1');
+      // Replacement is not the old task text
+      expect(res.task.text).not.toBe(initialTask1.text);
+      expect(res.tasks.length).toBe(2);
+      expect(res.tasks[0].text).toBe(res.task.text);
+      expect(updatedContent).toBeTruthy();
+    });
+  });
 });
+
 

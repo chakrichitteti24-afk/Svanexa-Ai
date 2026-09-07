@@ -131,7 +131,7 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
   };
 
   return (
-    <div className="flex flex-col h-[min(540px,calc(100dvh-5.5rem))] w-full max-w-[420px] bg-[#0d0a1a]/95 backdrop-blur-2xl border border-purple-500/25 rounded-3xl shadow-2xl shadow-purple-950/50 text-foreground overflow-hidden">
+    <div className="flex flex-col h-[min(540px,calc(100dvh-5.5rem))] w-full max-w-[420px] bg-[#1c1c1e]/95 backdrop-blur-2xl border border-white/[0.12] rounded-3xl shadow-2xl text-foreground overflow-hidden">
       {/* ─────────────────────────────────────────────────────────────────
           HEADER
           ───────────────────────────────────────────────────────────────── */}
@@ -155,7 +155,7 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
             <h2 className="text-xs sm:text-sm font-bold tracking-tight text-white flex items-center gap-1.5 truncate">
               <span>{showSettings ? 'Alert Preferences' : 'Notifications'}</span>
               {!showSettings && unreadCount > 0 && (
-                <span className="px-2 py-0.2 rounded-full text-[10px] font-extrabold bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-sm shrink-0">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary text-white shadow-sm shrink-0">
                   {unreadCount} new
                 </span>
               )}
@@ -345,9 +345,9 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
                   toast.success('Test notification triggered!');
                   setShowSettings(false);
                 }}
-                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-pink-500/20 to-purple-500/20 hover:from-pink-500/30 hover:to-purple-500/30 border border-pink-500/30 text-pink-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                className="w-full py-2.5 rounded-full bg-white/[0.08] hover:bg-white/[0.12] border border-white/[0.12] text-foreground font-semibold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-[0.98]"
               >
-                <Sparkles className="w-3.5 h-3.5" />
+                <Sparkles className="w-3.5 h-3.5 text-primary" />
                 <span>Trigger Live Test Alert</span>
               </button>
             </div>
@@ -356,9 +356,9 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
       ) : (
         <>
           {/* ─────────────────────────────────────────────────────────────────
-              CATEGORY FILTER TABS
+              CATEGORY FILTER TABS (Apple Segmented Control Style)
               ───────────────────────────────────────────────────────────────── */}
-          <div className="px-3 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0 border-b border-border/20 touch-pan-x">
+          <div className="px-3 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0 border-b border-white/[0.08] touch-pan-x">
             {(
               [
                 { id: 'all', label: 'All', count: notifications.length },
@@ -373,17 +373,17 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as FilterTab)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer active:scale-[0.98] ${
                     isActive
-                      ? 'bg-gradient-to-r from-pink-500/25 to-purple-500/20 text-white border border-pink-500/40 shadow-sm'
-                      : 'bg-secondary/20 text-[#9d91c4] hover:bg-secondary/40 hover:text-white border border-transparent'
+                      ? 'bg-white/[0.16] text-white border border-white/[0.18] shadow-sm'
+                      : 'bg-white/[0.04] text-muted-foreground hover:bg-white/[0.08] hover:text-foreground border border-transparent'
                   }`}
                 >
                   <span>{tab.label}</span>
                   {typeof (tab as any).count === 'number' && (tab as any).count > 0 && (
                     <span
                       className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                        isActive ? 'bg-pink-500 text-white' : 'bg-secondary/50 text-[#9d91c4]'
+                        isActive ? 'bg-primary text-white' : 'bg-white/[0.08] text-muted-foreground'
                       }`}
                     >
                       {(tab as any).count}
@@ -429,15 +429,14 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
                     transition={{ duration: 0.2 }}
                     className={`group relative p-3.5 rounded-2xl border transition-all ${
                       item.read
-                        ? 'bg-secondary/10 border-border/20 opacity-80 hover:opacity-100 hover:bg-secondary/20'
-                        : 'bg-gradient-to-br from-purple-950/40 via-card/80 to-purple-900/20 border-purple-500/35 shadow-md shadow-purple-950/20'
+                        ? 'bg-white/[0.03] border-white/[0.06] opacity-75 hover:opacity-100 hover:bg-white/[0.06]'
+                        : 'bg-white/[0.08] border-white/[0.14] shadow-sm'
                     }`}
                   >
-                    {/* Unread Glow Dot */}
+                    {/* Unread Indicator Dot */}
                     {!item.read && (
                       <span className="absolute top-3.5 right-3.5 flex h-2 w-2 pointer-events-none">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-pink-500"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
                       </span>
                     )}
 
@@ -516,7 +515,7 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
                 <button
                   type="button"
                   onClick={requestPushPermission}
-                  className="px-3 py-1 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 hover:opacity-95 text-white text-[11px] font-bold shadow-sm transition-all active:scale-95 cursor-pointer shrink-0"
+                  className="px-3 py-1 rounded-full bg-primary hover:opacity-95 text-white text-[11px] font-semibold shadow-sm transition-all active:scale-[0.98] cursor-pointer shrink-0"
                 >
                   Enable
                 </button>

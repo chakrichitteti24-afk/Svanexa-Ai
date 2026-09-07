@@ -86,10 +86,10 @@ export function HabitBadges() {
           <motion.div
             key={badge.id}
             whileHover={{ scale: 1.02 }}
-            className={`p-3 rounded-xl border transition-all flex flex-col justify-between space-y-2 ${
+            className={`p-3 rounded-2xl border transition-all flex flex-col justify-between space-y-2 ${
               badge.isUnlocked
-                ? 'bg-purple-500/10 border-purple-500/30 shadow-md shadow-purple-500/5'
-                : 'bg-white/[0.015] border-white/5 opacity-60'
+                ? 'bg-white/[0.08] border-white/[0.12] shadow-sm'
+                : 'bg-white/[0.02] border-white/[0.05] opacity-50'
             }`}
           >
             <div className="flex items-center justify-between gap-2">

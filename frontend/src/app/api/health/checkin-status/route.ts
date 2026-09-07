@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/utils/supabase/server';
 import { extractDateFromRequest } from '@/utils/date-utils';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 type CheckinSlot = 'morning' | 'afternoon' | 'evening';
 
 export async function GET(req: Request) {

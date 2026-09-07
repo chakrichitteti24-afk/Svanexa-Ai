@@ -138,7 +138,7 @@ export function DoctorReportModal({
               <button
                 type="button"
                 onClick={handlePrint}
-                className="px-4 py-2 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 hover:opacity-95 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-pink-500/20 transition-all active:scale-95 cursor-pointer"
+                className="px-4 py-2 rounded-full bg-primary hover:opacity-95 text-white font-semibold text-xs flex items-center gap-1.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] transition-all active:scale-[0.98] cursor-pointer"
               >
                 <Printer className="w-3.5 h-3.5" />
                 <span>Print / Save PDF</span>

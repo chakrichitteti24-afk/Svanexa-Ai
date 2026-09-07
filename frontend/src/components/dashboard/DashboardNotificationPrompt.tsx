@@ -56,25 +56,25 @@ export function DashboardNotificationPrompt() {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: -8, scale: 0.98 }}
         transition={{ duration: 0.22 }}
-        className="relative overflow-hidden p-3.5 sm:p-4.5 rounded-3xl bg-gradient-to-r from-violet-950/40 via-purple-900/30 to-pink-950/30 border border-purple-500/30 shadow-lg shadow-purple-950/20 backdrop-blur-md mb-5 text-foreground"
+        className="relative overflow-hidden p-3.5 sm:p-4.5 rounded-3xl bg-white/[0.05] border border-white/[0.1] shadow-sm backdrop-blur-2xl mb-5 text-foreground"
       >
         <div className="flex items-start justify-between gap-2.5 sm:gap-3">
           <div className="flex items-start gap-3 min-w-0 flex-1">
-            <div className="p-2.5 rounded-2xl bg-gradient-to-tr from-pink-500/20 to-purple-500/20 border border-pink-500/30 text-pink-400 shrink-0 mt-0.5 shadow-sm">
-              <BellRing className="w-5 h-5 animate-pulse" />
+            <div className="p-2.5 rounded-2xl bg-white/[0.08] border border-white/[0.12] text-primary shrink-0 mt-0.5 shadow-sm">
+              <BellRing className="w-5 h-5" />
             </div>
 
             <div className="space-y-1 min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <h3 className="text-xs sm:text-sm font-bold text-white tracking-tight">
+                <h3 className="text-xs sm:text-sm font-semibold text-foreground tracking-tight">
                   Stay in rhythm with your daily wellness
                 </h3>
-                <span className="px-2 py-0.2 rounded-full text-[9px] font-bold bg-pink-500/20 text-pink-300 border border-pink-500/30 hidden sm:inline-block">
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-semibold bg-white/[0.08] text-muted-foreground border border-white/[0.12] hidden sm:inline-block">
                   Privacy-First
                 </span>
               </div>
 
-              <p className="text-[11px] sm:text-xs text-[#b4a9d9] leading-relaxed max-w-xl">
+              <p className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed max-w-xl">
                 Receive gentle check-in reminders and daily care plan updates. We never share sensitive health data on lock screens or send spam.
               </p>
 
@@ -85,7 +85,7 @@ export function DashboardNotificationPrompt() {
                   </span>
                   <Link
                     href="/profile"
-                    className="text-[11px] font-bold text-pink-300 hover:text-white flex items-center gap-1 underline underline-offset-2"
+                    className="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1 underline-offset-2"
                   >
                     <Settings className="w-3 h-3" /> Go to Settings
                   </Link>
@@ -96,14 +96,14 @@ export function DashboardNotificationPrompt() {
                     type="button"
                     onClick={handleEnable}
                     disabled={isRequesting}
-                    className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 hover:opacity-95 text-white text-xs font-bold shadow-md shadow-pink-500/20 active:scale-95 transition-all cursor-pointer disabled:opacity-60"
+                    className="px-4 py-2 rounded-full bg-primary hover:opacity-95 text-white text-xs font-semibold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-60"
                   >
                     {isRequesting ? 'Enabling...' : 'Enable Notifications'}
                   </button>
                   <button
                     type="button"
                     onClick={handleDismiss}
-                    className="px-3 py-1.5 rounded-xl bg-secondary/30 hover:bg-secondary/60 text-[#9d91c4] hover:text-white text-xs font-medium transition-colors cursor-pointer"
+                    className="px-4 py-2 rounded-full bg-white/[0.06] hover:bg-white/[0.1] text-muted-foreground hover:text-foreground text-xs font-medium transition-colors cursor-pointer active:scale-[0.98]"
                   >
                     Maybe Later
                   </button>

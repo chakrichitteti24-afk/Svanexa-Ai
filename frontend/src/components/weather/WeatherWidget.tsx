@@ -14,6 +14,7 @@ import {
   Info,
 } from 'lucide-react';
 import type { WeatherData } from '@/app/api/weather/route';
+import { apiFetch } from '@/utils/api-client';
 
 interface WeatherWidgetProps {
   compact?: boolean;
@@ -26,37 +27,11 @@ export function WeatherWidget({
   className = '',
   showSkinFocus = false,
 }: WeatherWidgetProps) {
-  const [weather, setWeather] = useState<WeatherData | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = sessionStorage.getItem('svanexa_weather_cache_v1');
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (parsed?.data && parsed?.timestamp && Date.now() - parsed.timestamp < 30 * 60 * 1000) {
-            return parsed.data;
-          }
-          if (!parsed?.timestamp && parsed?.temperature) {
-            return parsed; // backward compatibility
-          }
-        }
-      } catch {}
-    }
-    return null;
-  });
-  const [loading, setLoading] = useState(!weather);
+  const [mounted, setMounted] = useState(false);
+  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [loading, setLoading] = useState(true);
   const [locationError, setLocationError] = useState<string | null>(null);
-  const [locationName, setLocationName] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = sessionStorage.getItem('svanexa_weather_cache_v1');
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          return parsed?.locationName || 'Local Weather';
-        }
-      } catch {}
-    }
-    return 'Local Weather';
-  });
+  const [locationName, setLocationName] = useState<string>('Local Weather');
 
   const fetchWeather = useCallback(async (lat?: number, lon?: number, locName?: string) => {
     setLoading(true);
@@ -68,7 +43,7 @@ export function WeatherWidget({
         if (locName) url += `&city=${encodeURIComponent(locName)}`;
       }
 
-      const res = await fetch(url);
+      const res = await apiFetch(url);
       const result = await res.json();
 
       if (res.ok && result.success && result.data) {
@@ -157,13 +132,33 @@ export function WeatherWidget({
   }, [fetchWeather, weather]);
 
   useEffect(() => {
-    if (!weather) {
+    setMounted(true);
+    let cachedWeather: WeatherData | null = null;
+    let cachedLoc = 'Local Weather';
+    try {
+      const cached = sessionStorage.getItem('svanexa_weather_cache_v1');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.data && parsed?.timestamp && Date.now() - parsed.timestamp < 30 * 60 * 1000) {
+          cachedWeather = parsed.data;
+        } else if (!parsed?.timestamp && parsed?.temperature) {
+          cachedWeather = parsed;
+        }
+        if (parsed?.locationName) cachedLoc = parsed.locationName;
+      }
+    } catch {}
+
+    if (cachedWeather) {
+      setWeather(cachedWeather);
+      setLocationName(cachedLoc);
+      setLoading(false);
+    } else {
       requestLocation(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // run once on mount only if no weather is cached
+  }, []);
 
-  if (loading && !weather) {
+  if (!mounted || (loading && !weather)) {
     return (
       <div
         className={`rounded-3xl p-4 bg-card/60 border border-violet-500/20 backdrop-blur-md flex items-center justify-center gap-2 text-xs text-muted-foreground min-h-[135px] ${className}`}
@@ -230,13 +225,13 @@ export function WeatherWidget({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className={`rounded-3xl p-4 sm:p-5 bg-gradient-to-br from-card/80 via-card/60 to-violet-950/20 border border-violet-500/20 backdrop-blur-xl shadow-lg shadow-purple-500/5 space-y-3.5 ${className}`}
+      className={`rounded-3xl p-4 sm:p-5 bg-card/75 border border-white/[0.08] backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.3)] space-y-3.5 ${className}`}
     >
       {/* Top Header */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-            <MapPin className="w-3.5 h-3.5 text-pink-400" /> {locationName}
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+            <MapPin className="w-3.5 h-3.5 text-primary" /> {locationName}
           </span>
         </div>
 

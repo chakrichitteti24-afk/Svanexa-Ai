@@ -92,7 +92,7 @@ export default function AppLayout({
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="w-full py-3 px-6 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 text-white font-bold text-xs shadow-md"
+            className="w-full h-11 rounded-full bg-primary text-white font-semibold text-xs shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] hover:opacity-95 transition-all active:scale-[0.98] cursor-pointer"
           >
             Retry
           </button>
@@ -116,7 +116,7 @@ export default function AppLayout({
               <Navbar />
             </SafeBoundary>
             
-            <main className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden p-3 sm:p-6 md:p-8 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-8 max-w-full smooth-scroll">
+            <main className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden p-3 sm:p-6 md:p-8 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-8 max-w-full smooth-scroll overscroll-y-contain">
               <SafeBoundary name="AppMainContent">
                 {children}
               </SafeBoundary>

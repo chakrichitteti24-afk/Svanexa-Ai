@@ -105,19 +105,19 @@ const CalendarDay = memo(
 
     if (range.inRange) {
       if (range.type === 'period') {
-        textStyle = 'text-white font-bold';
+        textStyle = 'text-white font-semibold';
         if (range.isStart && range.isEnd) {
           rangeStyle =
-            'w-10 h-10 rounded-full bg-gradient-to-tr from-pink-600 to-rose-500 text-white font-bold shadow-md shadow-pink-500/30 mx-auto flex items-center justify-center';
+            'w-10 h-10 rounded-full bg-primary text-white font-semibold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] mx-auto flex items-center justify-center';
         } else if (range.isStart) {
           rangeStyle =
-            'w-full h-10 rounded-l-full rounded-r-none bg-pink-500 text-white font-bold flex items-center justify-center';
+            'w-full h-10 rounded-l-full rounded-r-none bg-primary text-white font-semibold flex items-center justify-center shadow-sm';
         } else if (range.isEnd) {
           rangeStyle =
-            'w-full h-10 rounded-r-full rounded-l-none bg-pink-500 text-white font-bold flex items-center justify-center';
+            'w-full h-10 rounded-r-full rounded-l-none bg-primary text-white font-semibold flex items-center justify-center shadow-sm';
         } else {
           rangeStyle =
-            'w-full h-10 rounded-none bg-pink-500 text-white font-bold flex items-center justify-center';
+            'w-full h-10 rounded-none bg-primary text-white font-semibold flex items-center justify-center';
         }
       } else if (range.type === 'pregnancy') {
         textStyle = 'text-white font-bold';
@@ -236,8 +236,12 @@ export default function CycleTrackerPage() {
     refreshCycleHistory,
     pregnancyDueDate,
   } = useHerSync();
-
+  const [mounted, setMounted] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -755,6 +759,22 @@ export default function CycleTrackerPage() {
   const selectedRange = selectedDate ? getDayRangeStyle(selectedDate) : null;
   const targetLockedCycle = selectedRange?.cycle;
 
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-background pb-32 select-none max-w-4xl mx-auto w-full px-3 sm:px-6 pt-4 sm:pt-6 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="h-8 w-48 bg-muted/40 rounded-lg animate-pulse" />
+            <div className="h-4 w-64 bg-muted/20 rounded-md animate-pulse mt-2" />
+          </div>
+          <div className="h-9 w-36 bg-muted/40 rounded-full animate-pulse" />
+        </div>
+        <div className="h-72 w-full bg-card/40 rounded-3xl border border-border/40 animate-pulse" />
+        <div className="h-48 w-full bg-card/40 rounded-3xl border border-border/40 animate-pulse" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background pb-32 select-none max-w-4xl mx-auto w-full px-3 sm:px-6 pt-4 sm:pt-6 space-y-6">
       {/* ─────────────────────────────────────────────────────────────────
@@ -794,7 +814,7 @@ export default function CycleTrackerPage() {
             setSelectedDate(new Date());
             setSheetView('menu');
           }}
-          className="px-4 py-2 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 hover:opacity-95 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-pink-500/20 active:scale-95 transition-all self-start sm:self-auto cursor-pointer"
+          className="px-4 py-2 rounded-full bg-primary hover:opacity-90 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] transition-all self-start sm:self-auto cursor-pointer"
         >
           <Droplets className="w-3.5 h-3.5" />
           <span>{activeCycle ? 'Complete Active Period' : 'Log Today’s Period'}</span>
@@ -993,7 +1013,7 @@ export default function CycleTrackerPage() {
           3. DYNAMIC 4-PHASE HORMONAL BLUEPRINT
           ───────────────────────────────────────────────────────────────── */}
       {wellnessMode !== 'pregnancy' && (
-        <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-card/80 via-card/50 to-purple-950/20 border border-purple-500/25 shadow-xl shadow-purple-950/15 space-y-5">
+        <div className="p-5 sm:p-6 rounded-3xl bg-white/[0.04] backdrop-blur-2xl border border-white/[0.08] shadow-sm space-y-5">
           {/* Phase Header with Progress */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/30 pb-4">
             <div className="space-y-1">
@@ -1636,10 +1656,10 @@ export default function CycleTrackerPage() {
                                 : [...currentSymptoms, sym];
                               saveCheckinMeta({ symptoms: next });
                             }}
-                            className={`px-3.5 py-2 rounded-full text-xs font-bold transition-all ${
+                            className={`px-3.5 py-2 rounded-full text-xs font-semibold transition-all ${
                               isActive
-                                ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-sm'
-                                : 'bg-secondary/50 text-foreground hover:bg-secondary border border-border/30'
+                                ? 'bg-primary text-white shadow-sm'
+                                : 'bg-white/[0.06] text-foreground hover:bg-white/[0.1] border border-white/[0.08]'
                             }`}
                           >
                             {sym}
@@ -1664,13 +1684,13 @@ export default function CycleTrackerPage() {
                           ? 'Write your note here (e.g. Energy levels, emotional observations, food triggers)...'
                           : 'Event details (e.g. Doctor appointment, blood test, ultrasound, LH strip test)...'
                       }
-                      className="w-full p-4 rounded-2xl bg-secondary/60 border border-border/40 resize-none min-h-[130px] text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                      className="w-full p-4 rounded-2xl bg-white/[0.05] border border-white/[0.1] resize-none min-h-[130px] text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                     />
                     <button
                       onClick={() =>
                         saveCheckinMeta(sheetView === 'note' ? { note: inputValue } : { event: inputValue })
                       }
-                      className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-pink-500 to-purple-600 hover:opacity-95 text-white font-bold text-sm shadow-md active:scale-95 transition-all"
+                      className="w-full py-3.5 rounded-full bg-primary hover:opacity-90 text-white font-semibold text-sm shadow-sm active:scale-[0.98] transition-all cursor-pointer"
                     >
                       Save {sheetView === 'note' ? 'Note' : 'Event'}
                     </button>

@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import {
   BrainCircuit, Loader2, Droplets, Dumbbell,
   Check, CheckSquare, Moon, Smile, Activity, Flame, Heart,
   Calendar, BarChart2, Sun, Sunset, Sparkles,
-  ArrowRight, RotateCcw
+  ArrowRight, RotateCcw, Wind, RefreshCw
 } from 'lucide-react';
 import { useHerSync } from '@/context/HerSyncContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -22,6 +22,7 @@ import { WeatherWidget } from '@/components/weather/WeatherWidget';
 import { triggerHaptic } from '@/utils/haptics';
 import { DashboardNotificationPrompt } from '@/components/dashboard/DashboardNotificationPrompt';
 import { useTranslation } from '@/i18n/useTranslation';
+import { BreathingExerciseModal } from '@/components/wellness/BreathingExerciseModal';
 
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
@@ -44,15 +45,49 @@ export default function DashboardPage() {
     isLoading,
     refreshAll,
     toggleTask,
+    swapTask,
     setWellnessTasks,
     updateTodayLogLocally,
     updateCheckinSlotLocally,
   } = useHerSync();
   const [togglingTask, setTogglingTask] = useState<string | null>(null);
+  const [swappingTaskId, setSwappingTaskId] = useState<string | null>(null);
+  const [breathingTask, setBreathingTask] = useState<any | null>(null);
   const [lunaReaction, setLunaReaction] = useState<string | null>(null);
   const [showSparkles, setShowSparkles] = useState<string | null>(null);
   const [isRefreshingPlan, setIsRefreshingPlan] = useState(false);
   const [activeDashboardTab, setActiveDashboardTab] = useState<'focus' | 'nutrition' | 'insights'>('focus');
+  const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'synced'>('idle');
+  const autoPlanTriggeredRef = useRef<string | null>(null);
+
+  const handleManualSync = useCallback(async () => {
+    setSyncState('syncing');
+    try {
+      await refreshAll();
+      setSyncState('synced');
+      setTimeout(() => setSyncState('idle'), 2500);
+    } catch {
+      setSyncState('idle');
+    }
+  }, [refreshAll]);
+
+  const handleSwapTask = async (taskId: string) => {
+    if (swappingTaskId) return;
+    setSwappingTaskId(taskId);
+    triggerHaptic('selection');
+    try {
+      const ok = await swapTask(taskId);
+      if (ok) {
+        toast.success('Task swapped with an alternative 🔄');
+      } else {
+        toast.error('Could not swap task at this time.');
+      }
+    } catch {
+      toast.error('Could not swap task at this time.');
+    } finally {
+      setSwappingTaskId(null);
+    }
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -180,7 +215,7 @@ export default function DashboardPage() {
     }
   };
 
-  const handleFetchOrGeneratePlan = async () => {
+  const handleFetchOrGeneratePlan = useCallback(async () => {
     setIsRefreshingPlan(true);
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     try {
@@ -200,7 +235,21 @@ export default function DashboardPage() {
     } finally {
       setIsRefreshingPlan(false);
     }
-  };
+  }, [activeSlot, wellnessMode, setWellnessTasks, refreshAll]);
+
+  // Auto-generate or auto-fetch tasks when current slot is completed but has no tasks yet
+  useEffect(() => {
+    if (
+      mounted &&
+      isCheckinCompleted &&
+      slotTasks.length === 0 &&
+      !isRefreshingPlan &&
+      autoPlanTriggeredRef.current !== activeSlot
+    ) {
+      autoPlanTriggeredRef.current = activeSlot;
+      handleFetchOrGeneratePlan();
+    }
+  }, [mounted, isCheckinCompleted, slotTasks.length, isRefreshingPlan, activeSlot, handleFetchOrGeneratePlan]);
 
   const handleQuickLogWater = (amountLiters: number) => {
     try {
@@ -217,6 +266,7 @@ export default function DashboardPage() {
         body: JSON.stringify({
           slot: activeSlot,
           date: todayStr,
+          isMicroLog: true,
           data: {
             water: newWater,
             note: `Quick hydration log (+${Math.round(amountLiters * 1000)}ml)`,
@@ -251,6 +301,7 @@ export default function DashboardPage() {
         body: JSON.stringify({
           slot: activeSlot,
           date: todayStr,
+          isMicroLog: true,
           data: {
             mood: moodText.toLowerCase(),
             stress: stressScore,
@@ -289,8 +340,13 @@ export default function DashboardPage() {
         body: JSON.stringify({
           slot: slotToFill,
           date: todayStr,
+          isCatchUp: true,
           data: defaultData[slotToFill],
         }),
+      }).then(() => {
+        if (slotToFill === activeSlot && slotTasks.length === 0) {
+          handleFetchOrGeneratePlan();
+        }
       }).catch(err => {
         if (process.env.NODE_ENV === 'development') {
           console.debug('Catch-up background sync notice:', err);
@@ -341,12 +397,9 @@ export default function DashboardPage() {
         <Link
           href="/check-in"
           prefetch={true}
-          className="flex items-center justify-center gap-1.5 text-xs font-bold px-5 py-2.5 min-h-[44px] rounded-full transition-all active:scale-95 shadow-md shadow-pink-500/20 text-white w-full sm:w-auto shrink-0"
-          style={{ 
-            background: allSlotsComplete 
-              ? 'linear-gradient(135deg, #10B981, #14B8A6)' 
-              : 'linear-gradient(135deg, var(--hs-pink), var(--hs-violet))', 
-          }}
+          className={`flex items-center justify-center gap-1.5 text-xs font-semibold px-5 py-2.5 min-h-[44px] rounded-full transition-all active:scale-[0.98] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] text-white w-full sm:w-auto shrink-0 ${
+            allSlotsComplete ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-primary hover:opacity-95'
+          }`}
         >
           {allSlotsComplete ? (
             <>{t('dashboard.allSlotsComplete')} <CheckSquare className="w-3.5 h-3.5" /></>
@@ -361,7 +414,7 @@ export default function DashboardPage() {
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2 }}
-        className="w-full p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-amber-500/10 via-card/80 to-background border border-amber-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm backdrop-blur-md"
+        className="w-full p-4 sm:p-5 rounded-3xl bg-white/[0.04] border border-white/[0.08] flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm backdrop-blur-2xl"
       >
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-xl shrink-0">
@@ -405,16 +458,16 @@ export default function DashboardPage() {
                 triggerHaptic('selection');
                 setActiveDashboardTab(tab.id);
               }}
-              className={`relative px-4 py-2 rounded-full text-xs font-bold transition-colors duration-150 flex items-center gap-1.5 shrink-0 cursor-pointer apple-tactile ${
+              className={`relative px-4 py-2 rounded-full text-xs transition-colors duration-150 flex items-center gap-1.5 shrink-0 cursor-pointer apple-tactile ${
                 isActive
-                  ? 'text-white font-bold'
-                  : 'text-muted-foreground hover:text-foreground'
+                  ? 'text-white font-semibold'
+                  : 'text-muted-foreground hover:text-foreground font-medium'
               }`}
             >
               {isActive && (
                 <motion.div
                   layoutId="activeDashboardTabPill"
-                  className="absolute inset-0 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 shadow-md shadow-pink-500/25 -z-10"
+                  className="absolute inset-0 rounded-full bg-white/[0.14] border border-white/[0.16] shadow-[0_2px_8px_rgba(0,0,0,0.3)] -z-10"
                   transition={{ type: 'spring', stiffness: 420, damping: 32 }}
                 />
               )}
@@ -433,16 +486,16 @@ export default function DashboardPage() {
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="w-full p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-violet-950/40 via-card to-pink-950/30 border border-violet-500/20 shadow-xl shadow-purple-500/5 relative overflow-hidden backdrop-blur-xl"
+            className="w-full p-4 sm:p-5 rounded-3xl bg-card/75 border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.36)] relative overflow-hidden backdrop-blur-2xl"
           >
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div className="space-y-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] sm:text-xs font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-300">
+                  <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-white/[0.08] border border-white/[0.08] text-foreground/90">
                     {isMorning ? '🌅 Morning Focus' : isEvening ? '🌙 Evening Wind-Down' : '☀️ Midday Vitality'}
                   </span>
                   {!isCheckinCompleted && (
-                    <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                    <span className="text-[10px] font-semibold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
                       🪙 +10 Coins
                     </span>
                   )}
@@ -460,7 +513,7 @@ export default function DashboardPage() {
                 ) : topPriorityTask ? (
                   <div>
                     <h2 className="text-sm sm:text-base font-bold text-foreground flex items-center gap-1.5 truncate">
-                      <Sparkles className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+                      <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
                       Focus: {topPriorityTask.text}
                     </h2>
                     <p className="text-xs text-muted-foreground">
@@ -485,7 +538,7 @@ export default function DashboardPage() {
                   <Link
                     href="/check-in"
                     prefetch={true}
-                    className="w-full sm:w-auto px-5 py-2.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 hover:opacity-95 text-white font-bold text-xs shadow-md shadow-pink-500/20 flex items-center justify-center gap-1.5 transition-all active:scale-95 min-h-[40px]"
+                    className="w-full sm:w-auto px-5 py-2.5 rounded-full bg-primary hover:opacity-90 text-white font-semibold text-xs shadow-sm flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] min-h-[40px]"
                   >
                     <span>Start Check-In</span>
                     <ArrowRight className="w-3.5 h-3.5" />
@@ -496,7 +549,7 @@ export default function DashboardPage() {
                       <button
                         type="button"
                         onClick={() => handleToggleTask(topPriorityTask.id)}
-                        className="flex-1 sm:flex-initial px-3.5 py-2 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 min-h-[38px]"
+                        className="flex-1 sm:flex-initial px-3.5 py-2 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 text-emerald-200 font-semibold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] min-h-[38px]"
                       >
                         <Check className="w-3.5 h-3.5" /> Done
                       </button>
@@ -504,7 +557,7 @@ export default function DashboardPage() {
                     <button
                       type="button"
                       onClick={() => handleQuickLogWater(0.25)}
-                      className="flex-1 sm:flex-initial px-3.5 py-2 rounded-full bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 font-bold text-xs flex items-center justify-center gap-1 transition-all active:scale-95 min-h-[38px]"
+                      className="flex-1 sm:flex-initial px-3.5 py-2 rounded-full bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/30 text-cyan-200 font-semibold text-xs flex items-center justify-center gap-1 transition-all active:scale-[0.98] min-h-[38px]"
                     >
                       <Droplets className="w-3.5 h-3.5" /> +250ml
                     </button>
@@ -522,25 +575,48 @@ export default function DashboardPage() {
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="w-full p-4 rounded-3xl bg-card/60 border border-border/40 backdrop-blur-md space-y-3"
+            className="w-full p-4 rounded-3xl bg-card/75 border border-white/[0.08] backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.3)] space-y-3"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="p-1.5 rounded-lg bg-pink-500/10 text-pink-400 text-xs">⚡</span>
-                <h3 className="text-xs font-bold text-foreground">1-Tap Quick Loggers</h3>
+                <span className="p-1.5 rounded-lg bg-white/[0.08] text-foreground text-xs">⚡</span>
+                <h3 className="text-xs font-semibold text-foreground">1-Tap Quick Loggers</h3>
                 <span className="text-[10px] text-muted-foreground hidden sm:inline">• Save in 1 second without opening forms</span>
               </div>
-              <span className="text-[10px] font-semibold text-pink-400">Instant Sync ✨</span>
+              <button
+                type="button"
+                onClick={handleManualSync}
+                disabled={syncState === 'syncing'}
+                className="text-[10px] font-semibold text-foreground/80 hover:text-foreground transition-colors flex items-center gap-1 cursor-pointer bg-white/[0.08] hover:bg-white/[0.12] border border-white/[0.08] px-2.5 py-1 rounded-full apple-tactile"
+                title="Tap to synchronize data with server"
+              >
+                {syncState === 'syncing' ? (
+                  <>
+                    <RefreshCw className="w-2.5 h-2.5 animate-spin text-foreground/70" />
+                    <span>Syncing...</span>
+                  </>
+                ) : syncState === 'synced' ? (
+                  <>
+                    <Check className="w-2.5 h-2.5 text-emerald-400" />
+                    <span className="text-emerald-400">Synced ✓</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>Instant Sync ✨</span>
+                  </>
+                )}
+              </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Quick Water Bar */}
-              <div className="p-3 rounded-2xl bg-secondary/15 border border-border/20 space-y-2">
+              <div className="p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.06] space-y-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-semibold text-foreground flex items-center gap-1.5">
                     <Droplets className="w-3.5 h-3.5 text-cyan-400" /> Hydration
                   </span>
-                  <span className="font-mono text-cyan-300 text-[11px] font-bold">
+                  <span className="font-mono text-cyan-300 text-[11px] font-semibold">
                     {waterLogged.toFixed(1)} / {waterTarget}L
                   </span>
                 </div>
@@ -548,23 +624,23 @@ export default function DashboardPage() {
                   <button
                     type="button"
                     onClick={() => handleQuickLogWater(0.25)}
-                    className="flex-1 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 font-bold text-[11px] transition-all active:scale-95 flex items-center justify-center gap-1 cursor-pointer"
+                    className="flex-1 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-foreground font-semibold text-[11px] transition-all active:scale-[0.98] flex items-center justify-center gap-1 cursor-pointer"
                   >
                     <span>+250ml</span>
-                    <span className="text-[9px] opacity-75 font-normal">Cup</span>
+                    <span className="text-[9px] text-muted-foreground font-normal">Cup</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => handleQuickLogWater(0.50)}
-                    className="flex-1 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/35 text-cyan-200 font-bold text-[11px] transition-all active:scale-95 flex items-center justify-center gap-1 cursor-pointer"
+                    className="flex-1 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.12] border border-white/[0.1] text-foreground font-semibold text-[11px] transition-all active:scale-[0.98] flex items-center justify-center gap-1 cursor-pointer"
                   >
                     <span>+500ml</span>
-                    <span className="text-[9px] opacity-75 font-normal">Bottle</span>
+                    <span className="text-[9px] text-muted-foreground font-normal">Bottle</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => handleQuickLogWater(0.75)}
-                    className="flex-1 py-1.5 rounded-xl bg-cyan-500/25 hover:bg-cyan-500/35 border border-cyan-500/40 text-cyan-100 font-bold text-[11px] transition-all active:scale-95 flex items-center justify-center gap-1 cursor-pointer"
+                    className="flex-1 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-foreground font-semibold text-[11px] transition-all active:scale-[0.98] flex items-center justify-center gap-1 cursor-pointer"
                   >
                     <span>+750ml</span>
                   </button>
@@ -572,10 +648,10 @@ export default function DashboardPage() {
               </div>
 
               {/* Quick Mood Bar */}
-              <div className="p-3 rounded-2xl bg-secondary/15 border border-border/20 space-y-2">
+              <div className="p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.06] space-y-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-semibold text-foreground flex items-center gap-1.5">
-                    <Smile className="w-3.5 h-3.5 text-pink-400" /> How are you feeling right now?
+                    <Smile className="w-3.5 h-3.5 text-primary" /> How are you feeling right now?
                   </span>
                   <span className="text-[10px] text-muted-foreground capitalize">
                     {l?.mood ? `Current: ${l.mood}` : 'Tap to log'}
@@ -593,10 +669,10 @@ export default function DashboardPage() {
                       key={m.label}
                       type="button"
                       onClick={() => handleQuickLogMood(m.label, m.emoji)}
-                      className={`py-1 rounded-xl text-center transition-all active:scale-95 cursor-pointer ${
+                      className={`py-1.5 rounded-xl text-center transition-all active:scale-[0.98] cursor-pointer ${
                         l?.mood === m.label.toLowerCase()
-                          ? 'bg-pink-500/25 border border-pink-500/40 text-pink-200 font-bold'
-                          : 'bg-secondary/25 hover:bg-secondary/40 border border-border/20 text-muted-foreground'
+                          ? 'bg-primary/20 border border-primary/35 text-white font-semibold'
+                          : 'bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-muted-foreground'
                       }`}
                     >
                       <div className="text-sm">{m.emoji}</div>
@@ -609,13 +685,13 @@ export default function DashboardPage() {
 
             {/* 🌙 ZERO-GUILT EVENING CATCH-UP */}
             {pendingSlots.length > 0 && (
-              <div className="p-3 rounded-2xl bg-gradient-to-r from-purple-950/40 via-purple-900/20 to-pink-950/30 border border-purple-500/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+              <div className="p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
                 <div className="space-y-0.5 min-w-0">
-                  <p className="text-xs font-bold text-purple-200 flex items-center gap-1.5">
+                  <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                     <span>🌙</span> Busy day? 20-Second Quick Catch-Up
                   </p>
                   <p className="text-[11px] text-muted-foreground">
-                    Preserve your <span className="text-amber-400 font-bold">{currentStreak}-day streak 🔥</span> by catching up on pending check-ins:
+                    Preserve your <span className="text-amber-300 font-semibold">{currentStreak}-day streak 🔥</span> by catching up on pending check-ins:
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5 w-full sm:w-auto shrink-0">
@@ -624,7 +700,7 @@ export default function DashboardPage() {
                       key={slot}
                       type="button"
                       onClick={() => handleQuickCatchUpSlot(slot)}
-                      className="flex-1 sm:flex-initial px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/35 text-purple-200 font-bold text-[11px] flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+                      className="flex-1 sm:flex-initial px-3 py-1.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.1] text-foreground font-semibold text-[11px] flex items-center justify-center gap-1 transition-all active:scale-[0.98] cursor-pointer"
                     >
                       <span>+</span>
                       <span className="capitalize">{slot}</span>
@@ -642,9 +718,9 @@ export default function DashboardPage() {
             transition={{ duration: 0.2, ease: 'easeOut' }}
             className="relative"
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-3">
               <h2 className={styles.sectionTitle}>Today&apos;s Active Wellness Plan</h2>
-              <Link href="/wellness-plan" className="text-xs font-semibold text-pink-400 hover:text-pink-300 transition-colors">
+              <Link href="/wellness-plan" className="text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors">
                 View All Slots →
               </Link>
             </div>
@@ -655,12 +731,12 @@ export default function DashboardPage() {
             <div className={styles.premiumCard} style={{ padding: '1.25rem', position: 'relative', zIndex: 10 }}>
               {!isCheckinCompleted ? (
                 <div className="flex flex-col items-center text-center py-6">
-                   <Sun className="w-10 h-10 text-violet-400 mb-3 opacity-60" />
+                   <Sun className="w-10 h-10 text-primary mb-3 opacity-60" />
                    <h3 className="font-semibold text-foreground mb-1 text-lg">Your {activeSlotTitle} plan is waiting!</h3>
                    <p className="text-sm text-muted-foreground mb-4 max-w-[280px]">
                      Complete your {activeSlot} check-in to generate your personalized tasks based on how you feel right now.
                    </p>
-                   <Link href="/check-in" className="px-5 py-2.5 bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 text-white font-semibold text-sm rounded-full transition-all shadow-md shadow-pink-500/20">
+                   <Link href="/check-in" className="px-5 py-2.5 bg-primary hover:opacity-90 text-white font-semibold text-sm rounded-full transition-all shadow-sm">
                      Log Today&apos;s Reflection 🌸
                    </Link>
                 </div>
@@ -668,16 +744,16 @@ export default function DashboardPage() {
                 <motion.div 
                   initial={{ opacity: 0, scale: 0.96 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="flex flex-col items-center text-center py-6 px-4 bg-gradient-to-b from-emerald-500/10 via-card to-card rounded-2xl border border-emerald-500/30 shadow-lg"
+                  className="flex flex-col items-center text-center py-6 px-4 bg-white/[0.04] rounded-2xl border border-white/[0.08] shadow-sm backdrop-blur-xl"
                 >
                   <div className="relative mb-3">
-                    <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                    <div className="w-16 h-16 rounded-full bg-emerald-500/15 flex items-center justify-center">
                       <Check className="w-8 h-8 text-emerald-400" />
                     </div>
                     <Sparkles className="w-5 h-5 text-amber-300 absolute -top-1 -right-1 animate-bounce" />
                   </div>
                   
-                  <h3 className="font-extrabold text-foreground mb-1 text-lg">
+                  <h3 className="font-semibold text-foreground mb-1 text-lg">
                     {activeSlot === 'evening' 
                       ? "🎉 Today's Wellness Journey Completed" 
                       : activeSlot === 'morning' 
@@ -782,14 +858,58 @@ export default function DashboardPage() {
                               ⏱️ {task.estimatedTime}
                             </span>
                           )}
+                          {(!task.completed && task.status !== 'completed' && (task.text.toLowerCase().includes('breath') || task.category === 'stress')) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setBreathingTask(task);
+                              }}
+                              className="px-2 py-0.5 rounded-full bg-pink-500/15 hover:bg-pink-500/25 text-pink-400 text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                            >
+                              <Wind className="w-2.5 h-2.5" />
+                              <span>Guide</span>
+                            </button>
+                          )}
                         </div>
                       </div>
+                      {(!task.completed && task.status !== 'completed') && (
+                        <button
+                          type="button"
+                          disabled={swappingTaskId === task.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSwapTask(task.id);
+                          }}
+                          title="Swap with an alternative task"
+                          aria-label={`Swap task ${task.text}`}
+                          className="p-1.5 rounded-lg text-muted-foreground hover:text-pink-400 hover:bg-pink-500/10 transition-colors cursor-pointer shrink-0"
+                        >
+                          {swappingTaskId === task.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-pink-400" />
+                          ) : (
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
               )}
             </div>
           </motion.section>
+
+          {/* Interactive Breathwork Guide Modal */}
+          <BreathingExerciseModal
+            isOpen={!!breathingTask}
+            onClose={() => setBreathingTask(null)}
+            onComplete={() => {
+              if (breathingTask) {
+                handleToggleTask(breathingTask.id);
+              }
+            }}
+            technique={breathingTask?.text.toLowerCase().includes('box') ? 'box' : '4-7-8'}
+          />
         </div>
       )}
 
@@ -1032,15 +1152,15 @@ export default function DashboardPage() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 15, scale: 0.9 }}
             transition={{ type: 'spring', bounce: 0.4 }}
-            className="fixed bottom-6 right-6 z-50 flex items-center gap-3 p-3.5 pr-5 rounded-2xl bg-card/90 backdrop-blur-xl border border-pink-500/30 shadow-2xl shadow-pink-500/20 pointer-events-none"
+            className="fixed bottom-6 right-6 z-50 flex items-center gap-3 p-3.5 pr-5 rounded-2xl bg-card/85 backdrop-blur-2xl border border-white/[0.12] shadow-[0_12px_36px_rgba(0,0,0,0.5)] pointer-events-none"
           >
-            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-pink-500 to-violet-500 p-0.5 shadow-md flex-shrink-0">
+            <div className="w-10 h-10 rounded-full bg-white/[0.1] border border-white/[0.12] p-0.5 shadow-sm flex-shrink-0">
               <div className="w-full h-full rounded-full bg-card flex items-center justify-center overflow-hidden relative">
                 <Image src="/mascot-cute.jpg" alt="Luna AI" fill className="object-cover" />
               </div>
             </div>
             <div>
-              <div className="text-[10px] font-bold text-pink-400 uppercase tracking-wider">Luna AI Companion</div>
+              <div className="text-[10px] font-semibold text-primary uppercase tracking-wider">Luna AI Companion</div>
               <div className="text-xs font-semibold text-foreground">{lunaReaction}</div>
             </div>
           </motion.div>

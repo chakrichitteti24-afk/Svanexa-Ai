@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/utils/supabase/server';
 import { extractDateFromRequest } from '@/utils/date-utils';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 type CheckinSlot = 'morning' | 'afternoon' | 'evening';
 const VALID_SLOTS: CheckinSlot[] = ['morning', 'afternoon', 'evening'];
 
@@ -267,12 +270,32 @@ export async function POST(req: Request) {
     }
     if (typeof slotMeta !== 'object' || slotMeta === null) slotMeta = {};
 
-    // Store slot data — preserve existing claimed flag
+    const isMicroLog = Boolean(data?.quick_log || data?.answers?.quick_log || (!data.answers && (data.water !== undefined || data.mood !== undefined)));
+    const isCatchUp = Boolean(data?.isCatchUp);
+
+    // Store slot data — preserve existing answers if this is a micro-log update
+    const existingSlot = slotMeta[slot] || {};
+    const previousData = existingSlot.data || {};
+    const shouldMarkCompleted = isCatchUp || (!isMicroLog && Boolean(data.answers && Object.keys(data.answers).length > 2)) || existingSlot.completed;
+
     slotMeta[slot] = {
-      completed: true,
-      completedAt,
-      data,
-      claimed: slotMeta[slot]?.claimed ?? false,
+      completed: shouldMarkCompleted,
+      completedAt: shouldMarkCompleted ? (existingSlot.completedAt || completedAt) : null,
+      data: {
+        ...previousData,
+        ...data,
+      },
+      claimed: existingSlot.claimed ?? false,
+    };
+
+    // Store micro-log vitals in slotMeta.today_vitals so /api/health/summary always has instant access
+    slotMeta.today_vitals = {
+      ...(slotMeta.today_vitals || {}),
+      ...(data.water !== undefined ? { water: data.water } : {}),
+      ...(data.mood !== undefined ? { mood: data.mood } : {}),
+      ...(data.sleep !== undefined ? { sleep: data.sleep } : {}),
+      ...(data.stress !== undefined ? { stress: data.stress } : {}),
+      ...(data.exercise !== undefined ? { exercise: data.exercise } : {}),
     };
 
     const newSummary = JSON.stringify(slotMeta);

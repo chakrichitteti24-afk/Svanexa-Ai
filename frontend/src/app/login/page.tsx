@@ -105,17 +105,17 @@ export default function LoginPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-dvh bg-background p-4">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-pink-500 to-violet-500 flex items-center justify-center text-white shadow-xl shadow-pink-500/20 animate-pulse">
+          <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-white shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_4px_16px_rgba(0,0,0,0.25)] animate-pulse">
             <Heart className="w-6 h-6 fill-white" />
           </div>
-          <Loader2 className="w-5 h-5 text-pink-500 animate-spin" />
+          <Loader2 className="w-5 h-5 text-primary animate-spin" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-dvh bg-background py-8 px-4 sm:py-12 sm:px-6 w-full max-w-full overflow-x-hidden selection:bg-pink-500/20">
+    <div className="flex flex-col items-center justify-center min-h-dvh bg-background py-8 px-4 sm:py-12 sm:px-6 w-full max-w-full overflow-x-hidden selection:bg-primary/20">
       <div className="w-full max-w-md mx-auto space-y-5 sm:space-y-6 animate-in fade-in duration-300">
         
         {/* Language Selector in Auth Header */}
@@ -124,24 +124,24 @@ export default function LoginPage() {
         </div>
 
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-tr from-pink-500 to-violet-500 text-white mb-2 shadow-lg shadow-pink-500/20">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-primary text-white mb-2 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_4px_16px_rgba(0,0,0,0.25)]">
             <Heart className="w-6 h-6 fill-white" />
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">{t('auth.welcomeBack')}</h1>
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">{t('auth.welcomeBack')}</h1>
           <p className="text-xs sm:text-sm text-muted-foreground">{t('auth.signInSubtitle')}</p>
         </div>
 
-        {/* Segmented Tab Control */}
-        <div className="w-full grid grid-cols-2 p-1 rounded-xl bg-secondary/50 border border-border/40">
-          <Link href="/login" className="text-center py-2.5 sm:py-2 text-sm font-semibold rounded-lg bg-background shadow-sm text-foreground transition-all">
+        {/* Apple Segmented Tab Control */}
+        <div className="w-full grid grid-cols-2 p-1 rounded-full bg-white/[0.06] border border-white/[0.08]">
+          <Link href="/login" className="text-center py-2 text-sm font-semibold rounded-full bg-white/[0.14] shadow-sm text-foreground transition-all">
             {t('auth.signIn')}
           </Link>
-          <Link href="/signup" className="text-center py-2.5 sm:py-2 text-sm font-medium rounded-lg text-muted-foreground hover:text-foreground transition-colors">
+          <Link href="/signup" className="text-center py-2 text-sm font-medium rounded-full text-muted-foreground hover:text-foreground transition-colors">
             {t('auth.signUp')}
           </Link>
         </div>
 
-        <Card className="border-pink-500/15 shadow-xl shadow-pink-500/5 bg-card/60 backdrop-blur-xl relative overflow-hidden py-0 gap-0">
+        <Card className="border-white/[0.1] shadow-xl bg-white/[0.04] backdrop-blur-2xl relative overflow-hidden py-0 gap-0 rounded-3xl">
           <CardContent className="pt-6 pb-6 px-4 sm:px-6">
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
@@ -204,7 +204,7 @@ export default function LoginPage() {
 
               <Button 
                 type="submit" 
-                className="w-full bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 text-white shadow-md shadow-pink-500/20 h-11 mt-4 font-semibold"
+                className="w-full h-11 rounded-full bg-primary hover:opacity-95 text-white font-semibold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] mt-4 active:scale-[0.98] transition-all cursor-pointer"
                 disabled={loading}
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}

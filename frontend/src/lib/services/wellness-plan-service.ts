@@ -258,6 +258,116 @@ export class WellnessPlanService {
     };
   }
 
+  /**
+   * Swaps an individual task with an alternative from the diversified wellness task bank.
+   */
+  async swapTask(
+    userId: string,
+    planId: string,
+    taskId: string,
+    todayStr: string,
+    wellnessMode: string = 'general'
+  ) {
+    let planData: any = null;
+
+    if (planId && planId !== 'temp' && !planId.startsWith('plan-')) {
+      const { data } = await this.supabase
+        .from('wellness_plans')
+        .select('*')
+        .eq('id', planId)
+        .maybeSingle();
+      planData = data;
+    }
+
+    if (!planData) {
+      const { data } = await this.supabase
+        .from('wellness_plans')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('title', todayStr)
+        .maybeSingle();
+      planData = data;
+    }
+
+    if (!planData) {
+      throw new Error(`Wellness plan not found for date ${todayStr}`);
+    }
+
+    let tasks: WellnessTask[] = [];
+    try {
+      tasks = JSON.parse(planData.content);
+    } catch {
+      tasks = [];
+    }
+
+    const taskIndex = tasks.findIndex(t => t.id === taskId);
+    if (taskIndex === -1) {
+      throw new Error(`Task with id ${taskId} not found in plan`);
+    }
+
+    const currentTask = tasks[taskIndex];
+    const metrics = await this.loadMetrics(userId, todayStr);
+    const candidateTasks = this.getAllRuleTasksForSlot(currentTask.timeSlot, wellnessMode, metrics);
+
+    // Filter out candidate tasks already present in user's plan
+    const existingTexts = new Set(tasks.map(t => t.text.toLowerCase().trim()));
+    let alternatives = candidateTasks.filter(c => !existingTexts.has(c.text.toLowerCase().trim()));
+
+    // Prefer same category if available, otherwise take any different task for this slot
+    const sameCategory = alternatives.filter(c => c.category === currentTask.category);
+    const chosenCandidate = sameCategory.length > 0
+      ? sameCategory[Math.floor(Math.random() * sameCategory.length)]
+      : alternatives.length > 0
+        ? alternatives[Math.floor(Math.random() * alternatives.length)]
+        : candidateTasks[0];
+
+    const randSuffix = Math.random().toString(36).substring(2, 7);
+    const replacementTask: WellnessTask = {
+      id: `task-${todayStr}-${currentTask.timeSlot}-${chosenCandidate.category}-${randSuffix}`,
+      text: chosenCandidate.text,
+      category: chosenCandidate.category as TaskCategory,
+      timeSlot: currentTask.timeSlot,
+      priority: currentTask.priority,
+      status: 'pending',
+      estimatedTime: chosenCandidate.estimatedTime || '5 mins',
+      rationale: chosenCandidate.rationale || 'Tailored alternative selected for your daily routine.',
+      completed: false,
+      completedAt: null,
+    };
+
+    tasks[taskIndex] = replacementTask;
+
+    const newScore = this.computeScore(metrics, tasks);
+    const newInsight = this.generateInsight(metrics, planData.wellness_mode || wellnessMode, tasks);
+
+    await this.supabase
+      .from('wellness_plans')
+      .update({
+        content: JSON.stringify(tasks),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', planData.id);
+
+    return {
+      success: true,
+      task: replacementTask,
+      tasks,
+      wellnessScore: newScore,
+      insight: newInsight,
+      plan: {
+        id: planData.id,
+        userId,
+        planDate: todayStr,
+        tasks,
+        wellnessScore: newScore,
+        aiInsight: newInsight,
+        wellnessMode: planData.wellness_mode || wellnessMode,
+        createdAt: planData.created_at,
+        updatedAt: new Date().toISOString(),
+      }
+    };
+  }
+
   // ── METRICS ────────────────────────────────────────────────────────────────
 
   private async loadMetrics(userId: string, todayStr: string) {
@@ -525,7 +635,7 @@ export class WellnessPlanService {
     }
 
     if (!Array.isArray(raw) || raw.length < 3) {
-      raw = this.ruleTasksForSlot(m, mode, slot);
+      raw = this.ruleTasksForSlot(m, mode, slot, todayStr);
     }
 
     const now = new Date().toISOString();
@@ -561,10 +671,22 @@ export class WellnessPlanService {
       evening: 'The user is winding down. Tasks should promote relaxation, reflection, and preparation for restful sleep.',
     }[slot];
 
+    const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
     const slotSpecificData = m.slotMeta?.[slot]?.data || m.latestSlotData || {};
     const slotIndicators = slotSpecificData.indicators || m.indicators || {};
 
-    return `You are a premium personal AI wellness coach. Generate exactly 3 to 4 personalized daily tasks for the ${slot.toUpperCase()} time slot based on the user's daily wellness check-in.
+    let cycleContext = 'standard wellness balance';
+    if (m.cycleStatus === 'menstrual') {
+      cycleContext = 'User is in menstrual phase. Emphasize warm hydration, iron-rich nutrition, gentle pelvic ease, and calming rest.';
+    } else if (m.cycleStatus === 'follicular') {
+      cycleContext = 'User is in follicular phase. Energy is rising. Support progressive mobility, creative focus, and nutrient variety.';
+    } else if (m.cycleStatus === 'ovulation') {
+      cycleContext = 'User is in ovulation phase. Peak vitality and confidence. Support hydration, steady movement, and high motivation.';
+    } else if (m.cycleStatus === 'luteal') {
+      cycleContext = 'User is in luteal phase. Prioritize blood-sugar balance, cortisol lowering, magnesium, and soothing premenstrual tension.';
+    }
+
+    return `You are a premium personal AI wellness coach. Generate exactly 3 to 4 personalized, non-repetitive daily tasks for the ${slot.toUpperCase()} time slot on ${dayName} based on the user's daily wellness check-in.
 
 SLOT CONTEXT: ${slotContext}
 
@@ -576,19 +698,20 @@ USER 10-DIMENSION WELLNESS ASSESSMENT FOR TODAY:
 - Energy Level: ${slotIndicators.energy?.level ?? m.todayEnergy ?? 'Moderate'}
 - Sleep Quality: ${m.todaySleep ? `${m.todaySleep}h` : 'not logged'}
 - Support Focus: ${slotSpecificData.supportChoice ?? m.todaySupport ?? 'general wellness'}
-- Cycle Phase: ${m.cycleStatus}
+- Cycle Phase: ${m.cycleStatus} (${cycleContext})
 - Skin / Acne Condition: ${m.acneAvg.toFixed(1)}/10
 
 SMART PERSONALIZATION RULES:
+- High Variety: Create fresh, distinctive micro-actions for today (${dayName}) rather than repetitive generic tasks.
 - If energy is Low or sleep was poor: recommend a gentler, restorative plan (e.g. 5-min breathing, light stretch, warm hydration).
 - If hydration is needed: prioritize water intake.
-- If stress signals are elevated: include a calming nervous system reset task.
+- If stress signals are elevated: include an interactive calming nervous system reset task (e.g. box breathing or 4-7-8 breath).
 - Only generate tasks for the '${slot}' slot — DO NOT mix slots.
 - Provide a brief 1-sentence 'rationale' explaining WHY this task was assigned based on the user's check-in.
 - NEVER recommend medicines, medical drugs, or diagnose diseases.
 - PCOS mode: prioritize stress reduction, metabolic rhythm, gentle mobility.
 - PREGNANCY mode: gentle maternal wellness, hydration, posture rest.
-- Include realistic 'estimatedTime' (e.g. "2 mins", "5 mins", "10 mins").
+- Include realistic 'estimatedTime' (e.g. "2 mins", "3 mins", "5 mins", "10 mins").
 
 Return ONLY raw JSON with schema:
 {
@@ -604,120 +727,336 @@ Return ONLY raw JSON with schema:
 }`;
   }
 
-  private ruleTasksForSlot(m: any, mode: string, slot: TaskTimeSlot): any[] {
-    const tasks: any[] = [];
-    const isElevatedStress = (m.todayStress !== null && m.todayStress > 3.0) || m.todayEnergy === 'Low';
+  /**
+   * Complete 36+ science-backed wellness tasks library across all dimensions,
+   * adapted for mode and menstrual cycle phase.
+   */
+  getAllRuleTasksForSlot(slot: TaskTimeSlot, mode: string, m?: any): any[] {
+    const cycle = m?.cycleStatus || 'insufficient_data';
+    const isElevatedStress = (m?.todayStress !== null && m?.todayStress > 3.0) || m?.todayEnergy === 'Low';
 
     if (slot === 'morning') {
-      tasks.push({
-        text: 'Drink a full glass of warm water (500ml) upon waking.',
-        category: 'hydration',
-        priority: 'high',
-        estimatedTime: '2 mins',
-        rationale: 'Rehydrating upon waking jumpstarts your metabolism and supports mental focus.'
-      });
-      if (isElevatedStress) {
-        tasks.push({
+      const pool = [
+        {
+          text: 'Drink a full glass of warm water (500ml) with optional lemon upon waking.',
+          category: 'hydration',
+          priority: 'high',
+          estimatedTime: '2 mins',
+          rationale: 'Rehydrating upon waking jumpstarts metabolism and clears morning brain fog.',
+        },
+        {
+          text: 'Sip a glass of water before reaching for coffee or tea.',
+          category: 'hydration',
+          priority: 'recommended',
+          estimatedTime: '2 mins',
+          rationale: 'Pre-caffeine hydration prevents cortisol spikes and supports adrenal balance.',
+        },
+        {
           text: 'Practice 4-7-8 calming breathing technique for 3 minutes.',
           category: 'stress',
-          priority: 'high',
+          priority: isElevatedStress ? 'high' : 'recommended',
           estimatedTime: '3 mins',
-          rationale: 'Your check-in responses suggest a calmer pace today. Controlled breathing resets the nervous system.'
-        });
-      } else {
-        tasks.push({
-          text: 'Start with 5 deep breath cycles to center your morning.',
+          rationale: 'Controlled breathing down-regulates morning sympathetic nervous activation.',
+        },
+        {
+          text: 'Do 3 minutes of grounding box breathing (4s in, 4s hold, 4s out, 4s hold).',
+          category: 'stress',
+          priority: 'recommended',
+          estimatedTime: '3 mins',
+          rationale: 'Box breathing stabilizes blood pressure and clears mental scatter.',
+        },
+        {
+          text: 'Take 5 deep conscious breath cycles and set one gentle intention for today.',
           category: 'mindfulness',
           priority: 'recommended',
           estimatedTime: '3 mins',
-          rationale: 'Deep breathing oxygenates your brain and gently activates your morning energy.'
+          rationale: 'Conscious intention setting centers your headspace before daytime demands.',
+        },
+        {
+          text: 'Step by a window or outside for 3 minutes of natural morning sunlight.',
+          category: 'mindfulness',
+          priority: 'recommended',
+          estimatedTime: '3 mins',
+          rationale: 'Morning sunlight stimulates retinal receptors to set your circadian rhythm and nighttime melatonin.',
+        },
+        {
+          text: 'Do a gentle 5-minute morning mobility stretch for spine and hips.',
+          category: 'exercise',
+          priority: 'recommended',
+          estimatedTime: '5 mins',
+          rationale: 'Gentle stretching lubricates joints and promotes full-body circulation after sleep.',
+        },
+        {
+          text: 'Take an energizing 10-minute brisk walk to wake up your body.',
+          category: 'exercise',
+          priority: 'optional',
+          estimatedTime: '10 mins',
+          rationale: 'Brisk morning walking promotes glucose uptake and elevates natural dopamine.',
+        },
+        {
+          text: 'Enjoy a balanced breakfast with protein and healthy fats to stabilize insulin.',
+          category: 'nutrition',
+          priority: 'high',
+          estimatedTime: '15 mins',
+          rationale: 'Protein-first morning fuel prevents blood-sugar crashes and reduces afternoon cravings.',
+        },
+        {
+          text: 'Sip warm ginger or spearmint infusion to soothe digestion and balance hormones.',
+          category: 'cycle',
+          priority: 'recommended',
+          estimatedTime: '5 mins',
+          rationale: 'Spearmint and ginger support gentle androgen balance and digestive comfort.',
+        },
+      ];
+
+      if (mode === 'pcos') {
+        pool.push({
+          text: 'Add 1 tablespoon of ground flaxseeds or chia seeds to your morning meal.',
+          category: 'nutrition',
+          priority: 'high',
+          estimatedTime: '2 mins',
+          rationale: 'Lignans and omega-3s in seeds assist healthy estrogen metabolism and insulin response.',
         });
-      }
-      if (mode === 'pregnancy') {
-        tasks.push({
-          text: 'Enjoy a nourishing, nutrient-dense maternal breakfast.',
+      } else if (mode === 'pregnancy') {
+        pool.push({
+          text: 'Enjoy a nourishing maternal breakfast with eggs or whole oats and hydrate slowly.',
           category: 'pregnancy',
           priority: 'high',
           estimatedTime: '15 mins',
-          rationale: 'Balanced blood sugar in the morning stabilizes energy and minimizes pregnancy fatigue.'
+          rationale: 'Steady morning protein supports maternal tissue growth and minimizes morning nausea.',
         });
-      } else {
-        tasks.push({
-          text: 'Do a gentle 5-minute morning mobility stretch.',
-          category: 'exercise',
-          priority: 'recommended',
-          estimatedTime: '5 mins',
-          rationale: 'Gentle morning stretching lubricates joints and promotes full-body circulation.'
-        });
-      }
-    } else if (slot === 'afternoon') {
-      tasks.push({
-        text: 'Drink 2 full glasses of water to maintain midday hydration.',
-        category: 'hydration',
-        priority: 'high',
-        estimatedTime: '2 mins',
-        rationale: 'Sustained hydration prevents the common afternoon energy slump.'
-      });
-      if (isElevatedStress) {
-        tasks.push({
-          text: 'Take a 5-minute quiet pause and step away from all screens.',
-          category: 'stress',
+      } else if (cycle === 'menstrual') {
+        pool.push({
+          text: 'Apply gentle warmth to your lower abdomen and do seated pelvic tilts.',
+          category: 'cycle',
           priority: 'high',
           estimatedTime: '5 mins',
-          rationale: 'A screen break reduces ocular strain and resets mental fatigue.'
+          rationale: 'Gentle pelvic mobility relaxes uterine ligaments and eases menstrual cramp tension.',
         });
-      } else {
-        tasks.push({
-          text: 'Stand up and do a quick 3-minute posture and shoulder roll.',
+      }
+
+      return pool;
+    }
+
+    if (slot === 'afternoon') {
+      const pool = [
+        {
+          text: 'Drink 2 full glasses of water (500ml) to conquer the afternoon energy dip.',
+          category: 'hydration',
+          priority: 'high',
+          estimatedTime: '2 mins',
+          rationale: 'Midday hydration directly combats cellular fatigue and improves focus.',
+        },
+        {
+          text: 'Infuse cold water with cucumber or fresh mint for refreshing cellular hydration.',
+          category: 'hydration',
+          priority: 'recommended',
+          estimatedTime: '3 mins',
+          rationale: 'Electrolyte-infused water encourages optimal fluid absorption during peak afternoon hours.',
+        },
+        {
+          text: 'Take a 5-minute screen-free quiet pause to rest your eyes and nervous system.',
+          category: 'stress',
+          priority: isElevatedStress ? 'high' : 'recommended',
+          estimatedTime: '5 mins',
+          rationale: 'Stepping away from blue light reduces optic strain and lowers midday cortisol.',
+        },
+        {
+          text: 'Practice a 3-minute physiological sigh (double inhale through nose, long slow exhale through mouth).',
+          category: 'stress',
+          priority: 'recommended',
+          estimatedTime: '3 mins',
+          rationale: 'The double inhale rapidly offloads carbon dioxide and immediately slows heart rate.',
+        },
+        {
+          text: 'Stand up and do a quick 3-minute posture reset with shoulder and neck rolls.',
           category: 'exercise',
           priority: 'recommended',
           estimatedTime: '3 mins',
-          rationale: 'Releasing neck and shoulder tension improves posture and focus.'
+          rationale: 'Releasing trapezius tension relieves desk posture strain and opens the chest for better breathing.',
+        },
+        {
+          text: 'Take a short 8-minute walking lap around your building or block.',
+          category: 'exercise',
+          priority: 'optional',
+          estimatedTime: '8 mins',
+          rationale: 'Post-lunch walking blunts the glucose peak and prevents sluggish brain fog.',
+        },
+        {
+          text: 'Enjoy a protein or fiber-rich afternoon snack (handful of almonds or berries).',
+          category: 'nutrition',
+          priority: 'recommended',
+          estimatedTime: '5 mins',
+          rationale: 'A smart fiber-protein snack prevents cortisol-driven sugar cravings before dinner.',
+        },
+        {
+          text: 'Opt for warm green or herbal tea instead of high-sugar coffee.',
+          category: 'nutrition',
+          priority: 'recommended',
+          estimatedTime: '5 mins',
+          rationale: 'L-theanine in green tea provides calm, focused alert energy without caffeine jitters.',
+        },
+        {
+          text: 'Do a 2-minute posture check: relax your jaw, drop your shoulders, and breathe into your belly.',
+          category: 'mindfulness',
+          priority: 'recommended',
+          estimatedTime: '2 mins',
+          rationale: 'Releasing subconscious micro-tensions restores natural alignment.',
+        },
+        {
+          text: 'Rest your lower back against a supportive cushion and take 5 slow deep breaths.',
+          category: 'cycle',
+          priority: 'recommended',
+          estimatedTime: '5 mins',
+          rationale: 'Relieving pelvic pressure supports lumbar stability during luteal or menstrual phases.',
+        },
+      ];
+
+      if (mode === 'pcos') {
+        pool.push({
+          text: 'Pair any afternoon snack with raw nuts or cinnamon to smooth the insulin response.',
+          category: 'nutrition',
+          priority: 'high',
+          estimatedTime: '3 mins',
+          rationale: 'Cinnamon and healthy fats slow carbohydrate absorption for hormonal stability.',
+        });
+      } else if (mode === 'pregnancy') {
+        pool.push({
+          text: 'Sit comfortably with feet elevated on a stool for 10 minutes to support venous return.',
+          category: 'pregnancy',
+          priority: 'high',
+          estimatedTime: '10 mins',
+          rationale: 'Gentle leg elevation reduces dependent edema and relieves maternal pelvic pressure.',
         });
       }
-      tasks.push({
-        text: 'Enjoy a healthy, protein or fiber-rich midday snack.',
-        category: 'nutrition',
-        priority: 'recommended',
-        estimatedTime: '5 mins',
-        rationale: 'Nourishing fuel stabilizes afternoon blood sugar.'
-      });
-    } else {
-      // Evening
-      tasks.push({
-        text: 'Dim bright screens and switch to warmer evening lighting.',
+
+      return pool;
+    }
+
+    // Evening slot
+    const pool = [
+      {
+        text: 'Dim bright overhead lights and switch to warm, soft lighting 1 hour before bed.',
         category: 'sleep',
         priority: 'high',
         estimatedTime: '2 mins',
-        rationale: 'Lower light levels stimulate natural melatonin production for deeper sleep.'
-      });
-      if (isElevatedStress) {
-        tasks.push({
-          text: 'Write down 3 lingering thoughts on paper to release them before bed.',
-          category: 'stress',
-          priority: 'high',
-          estimatedTime: '5 mins',
-          rationale: 'Externalizing active thoughts prevents nighttime rumination.'
-        });
-      } else {
-        tasks.push({
-          text: 'Reflect on one positive moment from today with gratitude.',
-          category: 'mindfulness',
-          priority: 'recommended',
-          estimatedTime: '3 mins',
-          rationale: 'Positive evening reflection cultivates emotional peace before sleep.'
-        });
-      }
-      tasks.push({
-        text: 'Do 5 minutes of gentle lying-down restorative stretches.',
+        rationale: 'Warm low light signals your pineal gland to naturally produce melatonin for deep sleep.',
+      },
+      {
+        text: 'Put all work screens into Night Mode or step away from digital devices 30 minutes before sleep.',
+        category: 'sleep',
+        priority: 'recommended',
+        estimatedTime: '5 mins',
+        rationale: 'Eliminating blue light before bed prevents sleep fragmentation.',
+      },
+      {
+        text: 'Do a 5-minute brain dump on paper to release lingering to-do thoughts.',
+        category: 'stress',
+        priority: isElevatedStress ? 'high' : 'recommended',
+        estimatedTime: '5 mins',
+        rationale: 'Externalizing worries onto paper clears working memory and halts bedtime rumination.',
+      },
+      {
+        text: 'Practice 3 minutes of legs-up-the-wall pose (Viparita Karani) to calm your nervous system.',
+        category: 'stress',
+        priority: 'recommended',
+        estimatedTime: '5 mins',
+        rationale: 'Elevating legs promotes venous drainage and strongly stimulates vagal tone for deep relaxation.',
+      },
+      {
+        text: 'Reflect on 2 things you are grateful for or proud of navigating today.',
+        category: 'mindfulness',
+        priority: 'recommended',
+        estimatedTime: '3 mins',
+        rationale: 'Gratitude rewires neural pathways for safety and restful emotional processing during sleep.',
+      },
+      {
+        text: 'Listen to a soothing 5-minute guided sleep meditation or ambient white noise.',
+        category: 'mindfulness',
+        priority: 'recommended',
+        estimatedTime: '5 mins',
+        rationale: 'Soothing frequencies lower autonomic arousal and prepare brain waves for slow-wave sleep.',
+      },
+      {
+        text: 'Sip a warm cup of caffeine-free chamomile, peppermint, or lavender tea.',
+        category: 'hydration',
+        priority: 'recommended',
+        estimatedTime: '5 mins',
+        rationale: 'Warm herbal tea relaxes gastrointestinal muscles and creates a soothing sensory bedtime cue.',
+      },
+      {
+        text: 'Do 5 minutes of gentle lying-down restorative twists and hamstring stretches in bed.',
         category: 'exercise',
         priority: 'optional',
         estimatedTime: '5 mins',
-        rationale: 'Restorative stretching relaxes spinal muscles and prepares the body for deep rest.'
+        rationale: 'Restorative stretching down-regulates muscle spindles and eases somatic tension.',
+      },
+      {
+        text: 'Take 3 long, audible exhales, letting go of today’s unfinished tasks until tomorrow.',
+        category: 'stress',
+        priority: 'recommended',
+        estimatedTime: '2 mins',
+        rationale: 'Verbalized exhalations signal absolute completion of the day to your subconscious mind.',
+      },
+    ];
+
+    if (mode === 'pcos') {
+      pool.push({
+        text: 'Take a warm magnesium bath or sip magnesium glycinate tea for restorative sleep and cortisol support.',
+        category: 'nutrition',
+        priority: 'high',
+        estimatedTime: '10 mins',
+        rationale: 'Magnesium regulates GABA receptors, soothing the nervous system and improving insulin sensitivity.',
+      });
+    } else if (mode === 'pregnancy') {
+      pool.push({
+        text: 'Settle into a comfortable side-sleeping position with a pillow between knees for spine alignment.',
+        category: 'pregnancy',
+        priority: 'high',
+        estimatedTime: '5 mins',
+        rationale: 'Left-side sleeping optimizes placental blood flow and relieves pressure on the inferior vena cava.',
+      });
+    } else if (cycle === 'menstrual') {
+      pool.push({
+        text: 'Apply a warm hot water bottle or heating pad to lower abdomen for 10 minutes.',
+        category: 'cycle',
+        priority: 'high',
+        estimatedTime: '10 mins',
+        rationale: 'Mild warmth increases local vasodilation, easing uterine contractions and pelvic stiffness.',
       });
     }
 
-    return tasks;
+    return pool;
+  }
+
+  private ruleTasksForSlot(m: any, mode: string, slot: TaskTimeSlot, todayStr?: string): any[] {
+    const all = this.getAllRuleTasksForSlot(slot, mode, m);
+    const dayIndex = todayStr && todayStr.length >= 10
+      ? (parseInt(todayStr.slice(8, 10), 10) || 0) % 3
+      : new Date().getDay() % 3;
+
+    // Pick 3 diverse tasks rotated by dayIndex
+    const isElevatedStress = (m?.todayStress !== null && m?.todayStress > 3.0) || m?.todayEnergy === 'Low';
+    const selected: any[] = [];
+
+    // 1. Primary Slot Task
+    selected.push(all[0]);
+
+    // 2. Stress / Mindfulness Task
+    const stressOrMind = all.filter(t => t.category === 'stress' || t.category === 'mindfulness');
+    if (stressOrMind.length > 0) {
+      const idx = isElevatedStress ? 0 : (dayIndex % stressOrMind.length);
+      selected.push(stressOrMind[idx]);
+    }
+
+    // 3. Movement / Mode / Nutrition Task
+    const modeOrMovement = all.filter(t => ['exercise', 'nutrition', 'pregnancy', 'cycle'].includes(t.category));
+    if (modeOrMovement.length > 0) {
+      const idx = (dayIndex + 1) % modeOrMovement.length;
+      selected.push(modeOrMovement[idx]);
+    }
+
+    return selected;
   }
 
   // ── STREAK ─────────────────────────────────────────────────────────────────

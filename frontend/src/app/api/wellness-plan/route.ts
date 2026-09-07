@@ -5,6 +5,8 @@ import { extractDateFromRequest } from '@/utils/date-utils';
 import { TaskTimeSlot } from '@/types/wellness-plan';
 
 export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(req: Request) {
   try {
@@ -46,8 +48,15 @@ export async function POST(req: Request) {
     let forceRegenerate = false;
     let requestedMode: string | undefined = undefined;
 
+    let action: string | undefined = undefined;
+    let taskId: string | undefined = undefined;
+    let planId: string | undefined = undefined;
+
     try {
       const body = await req.json();
+      if (body.action) action = body.action;
+      if (body.taskId) taskId = body.taskId;
+      if (body.planId) planId = body.planId;
       if (body.date) todayStr = body.date;
       if (body.slot && ['morning', 'afternoon', 'evening'].includes(body.slot)) {
         slot = body.slot as TaskTimeSlot;
@@ -75,6 +84,12 @@ export async function POST(req: Request) {
     }
 
     const service = new WellnessPlanService(supabase as any);
+
+    if (action === 'swap' && taskId) {
+      const swapResult = await service.swapTask(userId, planId || '', taskId, todayStr, wellnessMode);
+      return NextResponse.json({ ...swapResult });
+    }
+
     const result = await service.getDailyWellnessPlan(userId, todayStr, wellnessMode, slot, forceRegenerate);
 
     return NextResponse.json({ success: true, ...result });

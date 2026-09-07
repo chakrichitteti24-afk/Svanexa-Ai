@@ -23,6 +23,7 @@ export type BroadcastSyncMessage =
   | { type: 'CHECKIN_UPDATED'; slot: 'morning' | 'afternoon' | 'evening'; completed: boolean; partialLog?: Partial<TodayLog> }
   | { type: 'TODAY_LOG_UPDATED'; partialLog: Partial<TodayLog> }
   | { type: 'TASK_TOGGLED'; taskId: string; completed: boolean; status: string; coinsEarned?: number; newBalance?: number }
+  | { type: 'PLAN_UPDATED'; tasks: WellnessTask[] }
   | { type: 'COIN_UPDATED'; newBalance: number; earnedAmount?: number }
   | { type: 'CUSTOMIZATION_ACTIVATED'; itemType: string; itemId: string }
   | { type: 'LANGUAGE_CHANGED'; language: string }
@@ -144,6 +145,8 @@ interface HerSyncContextValue extends HealthState {
   refreshSkinLogs: () => Promise<void>;
   /** Toggle wellness task completion */
   toggleTask: (taskId: string) => Promise<void>;
+  /** Swap an individual task with an alternative */
+  swapTask: (taskId: string) => Promise<boolean>;
   /** Set wellness tasks from the wellness plan page */
   setWellnessTasks: (tasks: WellnessTask[]) => void;
   /** Set cycle history optimistically */
@@ -336,13 +339,13 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
     setState(prev => {
       const updatedLog = { ...prev.todayLog, ...partialLog };
       try {
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
         const cached = localStorage.getItem('svanexa_app_cache_v1');
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          parsed.todayLog = updatedLog;
-          parsed.hasCheckedInToday = true;
-          localStorage.setItem('svanexa_app_cache_v1', JSON.stringify(parsed));
-        }
+        const parsed = cached ? JSON.parse(cached) : {};
+        parsed.cacheDate = todayStr;
+        parsed.todayLog = updatedLog;
+        parsed.hasCheckedInToday = true;
+        localStorage.setItem('svanexa_app_cache_v1', JSON.stringify(parsed));
       } catch {}
       return {
         ...prev,
@@ -367,14 +370,14 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       };
       const allComplete = Object.values(updatedSlots).every(s => s.completed);
       try {
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
         const cached = localStorage.getItem('svanexa_app_cache_v1');
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          parsed.checkinSlots = updatedSlots;
-          parsed.allSlotsComplete = allComplete;
-          parsed.hasCheckedInToday = true;
-          localStorage.setItem('svanexa_app_cache_v1', JSON.stringify(parsed));
-        }
+        const parsed = cached ? JSON.parse(cached) : {};
+        parsed.cacheDate = todayStr;
+        parsed.checkinSlots = updatedSlots;
+        parsed.allSlotsComplete = allComplete;
+        parsed.hasCheckedInToday = true;
+        localStorage.setItem('svanexa_app_cache_v1', JSON.stringify(parsed));
       } catch {}
       return {
         ...prev,
@@ -396,11 +399,7 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
   const fetchAll = useCallback(async (options: { skipCycleHistory?: boolean } = {}) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        setState(prev => ({ ...prev, isLoading: false }));
-        return;
-      }
-      const userId = session.user.id;
+      const userId = session?.user?.id || null;
       const todayStr = format(new Date(), 'yyyy-MM-dd');
 
       // Execute ALL health, coin, skin, and cycle requests safely in parallel
@@ -417,13 +416,15 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
           }
           return new Response(JSON.stringify({ success: false }), { status: 500 });
         }),
-        supabase
-          .from('skin_logs')
-          .select('*')
-          .eq('user_id', userId)
-          .order('log_date', { ascending: false })
-          .limit(10),
-        options.skipCycleHistory
+        userId
+          ? supabase
+              .from('skin_logs')
+              .select('*')
+              .eq('user_id', userId)
+              .order('log_date', { ascending: false })
+              .limit(10)
+          : Promise.resolve({ data: [] }),
+        options.skipCycleHistory || !userId
           ? Promise.resolve({ data: null })
           : supabase
               .from('cycle_logs')
@@ -449,10 +450,12 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       let pregnancyDueDate: string | null = null;
       let wellnessTasks: WellnessTask[] = [];
 
+      let hasServerHealthData = false;
       if (healthRes.ok) {
         try {
           const { data } = await healthRes.json();
           if (data) {
+            hasServerHealthData = true;
             profile = data.profile || null;
             preferences = data.preferences || null;
             hasCheckedInToday = !!data.has_checked_in_today;
@@ -478,10 +481,12 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       let activeDashboardStyle = 'minimal';
       let activeCompanionStyle = 'friendly';
 
+      let hasServerCoinData = false;
       if (coinsRes.ok) {
         try {
           const { data: coinData } = await coinsRes.json();
           if (coinData) {
+            hasServerCoinData = true;
             coinBalance = typeof coinData.balance === 'number' ? coinData.balance : 0;
             unlockedItems = Array.isArray(coinData.unlockedItems)
               ? coinData.unlockedItems.map((u: any) => ({
@@ -502,56 +507,108 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
 
       const cycleData = Array.isArray(cycleRes.data) ? (cycleRes.data as CycleLog[]) : undefined;
 
-      const newStatePartial = {
-        profile,
-        preferences,
-        todayLog,
-        checkinSlots,
-        allSlotsComplete,
-        hasCheckedInToday,
-        totalCheckIns,
-        currentStreak,
-        cycleStatus,
-        pregnancyDueDate,
-        skinLogs: Array.isArray(skinRes.data) ? (skinRes.data as SkinLog[]) : [],
-        wellnessTasks,
-        coinBalance,
-        unlockedItems,
-        activeTheme,
-        activeDashboardStyle,
-        activeCompanionStyle,
-        isLoading: false,
-        lastRefreshed: Date.now(),
-      };
+      setState(prev => {
+        // Smart non-destructive merge: preserve local vitals if server has null or lower values
+        const mergedTodayLog: TodayLog = {
+          sleep: todayLog?.sleep ?? prev.todayLog?.sleep ?? null,
+          water: (typeof todayLog?.water === 'number' && todayLog.water > 0)
+            ? Math.max(todayLog.water, prev.todayLog?.water || 0)
+            : (prev.todayLog?.water ?? null),
+          mood: todayLog?.mood ?? prev.todayLog?.mood ?? null,
+          stress: todayLog?.stress ?? prev.todayLog?.stress ?? null,
+          exercise: (typeof todayLog?.exercise === 'number' && todayLog.exercise > 0)
+            ? Math.max(todayLog.exercise, prev.todayLog?.exercise || 0)
+            : (prev.todayLog?.exercise ?? null),
+        };
 
-      setState(prev => ({
-        ...prev,
-        ...newStatePartial,
-        cycleHistory: cycleData !== undefined ? cycleData : prev.cycleHistory,
-      }));
+        // Smart merge checkinSlots: if either server OR local says completed, preserve completed: true
+        const mergedCheckinSlots = {
+          morning: {
+            completed: !!(checkinSlots?.morning?.completed || prev.checkinSlots?.morning?.completed),
+            completedAt: checkinSlots?.morning?.completedAt || prev.checkinSlots?.morning?.completedAt || null,
+          },
+          afternoon: {
+            completed: !!(checkinSlots?.afternoon?.completed || prev.checkinSlots?.afternoon?.completed),
+            completedAt: checkinSlots?.afternoon?.completedAt || prev.checkinSlots?.afternoon?.completedAt || null,
+          },
+          evening: {
+            completed: !!(checkinSlots?.evening?.completed || prev.checkinSlots?.evening?.completed),
+            completedAt: checkinSlots?.evening?.completedAt || prev.checkinSlots?.evening?.completedAt || null,
+          },
+        };
+        const mergedAllComplete = mergedCheckinSlots.morning.completed &&
+                                  mergedCheckinSlots.afternoon.completed &&
+                                  mergedCheckinSlots.evening.completed;
+        const mergedHasCheckedIn = hasCheckedInToday ||
+                                   prev.hasCheckedInToday ||
+                                   mergedCheckinSlots.morning.completed ||
+                                   mergedCheckinSlots.afternoon.completed ||
+                                   mergedCheckinSlots.evening.completed;
 
-      // Cache snapshot tagged with today's local date
-      try {
-        localStorage.setItem(
-          'svanexa_app_cache_v1',
-          JSON.stringify({
-            cacheDate: todayStr,
-            profile,
-            preferences,
-            activeTheme,
-            activeDashboardStyle,
-            activeCompanionStyle,
-            coinBalance,
-            unlockedItems,
-            hasCheckedInToday,
-            currentStreak,
-            totalCheckIns,
-            checkinSlots,
-            todayLog,
-            wellnessTasks,
-          })
-        );
-      } catch {}
+        // Smart merge wellnessTasks:
+        let mergedTasks: WellnessTask[] = [];
+        if (wellnessTasks && wellnessTasks.length > 0) {
+          mergedTasks = wellnessTasks.map(srvTask => {
+            const localTask = prev.wellnessTasks.find(lt => lt.id === srvTask.id);
+            if (localTask && (localTask.completed || localTask.status === 'completed') && !srvTask.completed) {
+              return { ...srvTask, completed: true, status: 'completed', completedAt: localTask.completedAt };
+            }
+            return srvTask;
+          });
+        } else {
+          // If server returned empty tasks, never wipe out existing local tasks
+          mergedTasks = prev.wellnessTasks.length > 0 ? prev.wellnessTasks : [];
+        }
+
+        const mergedCoinBalance = hasServerCoinData ? Math.max(coinBalance, prev.coinBalance) : prev.coinBalance;
+
+        // Cache snapshot tagged with today's local date
+        try {
+          localStorage.setItem(
+            'svanexa_app_cache_v1',
+            JSON.stringify({
+              cacheDate: todayStr,
+              profile: profile || prev.profile,
+              preferences: preferences || prev.preferences,
+              activeTheme: hasServerCoinData ? activeTheme : prev.activeTheme,
+              activeDashboardStyle: hasServerCoinData ? activeDashboardStyle : prev.activeDashboardStyle,
+              activeCompanionStyle: hasServerCoinData ? activeCompanionStyle : prev.activeCompanionStyle,
+              coinBalance: mergedCoinBalance,
+              unlockedItems: unlockedItems.length > 0 ? unlockedItems : prev.unlockedItems,
+              hasCheckedInToday: mergedHasCheckedIn,
+              currentStreak: Math.max(currentStreak, prev.currentStreak),
+              totalCheckIns: Math.max(totalCheckIns, prev.totalCheckIns),
+              checkinSlots: mergedCheckinSlots,
+              todayLog: mergedTodayLog,
+              wellnessTasks: mergedTasks,
+            })
+          );
+        } catch {}
+
+        return {
+          ...prev,
+          profile: profile || prev.profile,
+          preferences: preferences || prev.preferences,
+          todayLog: mergedTodayLog,
+          checkinSlots: mergedCheckinSlots,
+          allSlotsComplete: mergedAllComplete,
+          hasCheckedInToday: mergedHasCheckedIn,
+          totalCheckIns: Math.max(totalCheckIns, prev.totalCheckIns),
+          currentStreak: Math.max(currentStreak, prev.currentStreak),
+          cycleStatus: cycleStatus !== 'insufficient_data' ? cycleStatus : prev.cycleStatus,
+          pregnancyDueDate: pregnancyDueDate || prev.pregnancyDueDate,
+          skinLogs: skinRes.data && skinRes.data.length > 0 ? (skinRes.data as SkinLog[]) : prev.skinLogs,
+          wellnessTasks: mergedTasks,
+          coinBalance: mergedCoinBalance,
+          unlockedItems: unlockedItems.length > 0 ? unlockedItems : prev.unlockedItems,
+          activeTheme: hasServerCoinData && activeTheme !== 'default' ? activeTheme : prev.activeTheme,
+          activeDashboardStyle: hasServerCoinData && activeDashboardStyle !== 'minimal' ? activeDashboardStyle : prev.activeDashboardStyle,
+          activeCompanionStyle: hasServerCoinData && activeCompanionStyle !== 'friendly' ? activeCompanionStyle : prev.activeCompanionStyle,
+          isLoading: false,
+          lastRefreshed: Date.now(),
+          cycleHistory: cycleData !== undefined ? cycleData : prev.cycleHistory,
+        };
+      });
     } catch (err) {
       if (process.env.NODE_ENV === 'development') {
         console.debug('[HerSyncContext] fetchAll sync note:', err);
@@ -590,8 +647,17 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
   }, [supabase]);
 
   const setWellnessTasks = useCallback((tasks: WellnessTask[]) => {
-    setState(prev => ({ ...prev, wellnessTasks: tasks }));
-  }, []);
+    setState(prev => {
+      try {
+        const cached = localStorage.getItem('svanexa_app_cache_v1');
+        const parsed = cached ? JSON.parse(cached) : {};
+        parsed.wellnessTasks = tasks;
+        localStorage.setItem('svanexa_app_cache_v1', JSON.stringify(parsed));
+      } catch {}
+      return { ...prev, wellnessTasks: tasks };
+    });
+    postSyncBroadcast({ type: 'PLAN_UPDATED', tasks });
+  }, [postSyncBroadcast]);
 
   const setCycleHistory = useCallback((history: CycleLog[]) => {
     setState(prev => ({ ...prev, cycleHistory: history }));
@@ -601,22 +667,32 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
     const targetTask = state.wellnessTasks.find(t => t.id === taskId);
     if (!targetTask) return;
     const nextCompleted = !targetTask.completed;
-    const nextStatus = nextCompleted ? 'completed' : 'pending';
+    const nextStatus: 'completed' | 'pending' = nextCompleted ? 'completed' : 'pending';
     const todayStr = format(new Date(), 'yyyy-MM-dd');
 
-    // Optimistic UI update
-    setState(prev => ({
-      ...prev,
-      wellnessTasks: prev.wellnessTasks.map(t => {
-        if (t.id !== taskId) return t;
-        return {
-          ...t,
-          completed: nextCompleted,
-          status: nextStatus,
-          completedAt: nextCompleted ? (t.completedAt || new Date().toISOString()) : null,
-        };
-      }),
-    }));
+    const updatedTasks: WellnessTask[] = state.wellnessTasks.map(t => {
+      if (t.id !== taskId) return t;
+      return {
+        ...t,
+        completed: nextCompleted,
+        status: nextStatus,
+        completedAt: nextCompleted ? (t.completedAt || new Date().toISOString()) : null,
+      };
+    });
+
+    // Optimistic UI update + instant cache persistence
+    setState(prev => {
+      try {
+        const cached = localStorage.getItem('svanexa_app_cache_v1');
+        const parsed = cached ? JSON.parse(cached) : {};
+        parsed.wellnessTasks = updatedTasks;
+        localStorage.setItem('svanexa_app_cache_v1', JSON.stringify(parsed));
+      } catch {}
+      return {
+        ...prev,
+        wellnessTasks: updatedTasks,
+      };
+    });
 
     postSyncBroadcast({
       type: 'TASK_TOGGLED',
@@ -637,7 +713,16 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
           updateCoinBalanceLocally(data.newBalance, data.coinsEarned);
         }
         if (data.tasks) {
-          setState(prev => ({ ...prev, wellnessTasks: data.tasks }));
+          setState(prev => {
+            try {
+              const cached = localStorage.getItem('svanexa_app_cache_v1');
+              const parsed = cached ? JSON.parse(cached) : {};
+              parsed.wellnessTasks = data.tasks;
+              localStorage.setItem('svanexa_app_cache_v1', JSON.stringify(parsed));
+            } catch {}
+            return { ...prev, wellnessTasks: data.tasks };
+          });
+          postSyncBroadcast({ type: 'PLAN_UPDATED', tasks: data.tasks });
         }
       } else {
         // Enqueue for offline background retry
@@ -660,6 +745,47 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       );
     }
   }, [state.wellnessTasks, updateCoinBalanceLocally, postSyncBroadcast]);
+
+  const swapTask = useCallback(
+    async (taskId: string): Promise<boolean> => {
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      try {
+        const res = await apiFetch('/api/wellness-plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'swap',
+            taskId,
+            date: todayStr,
+            mode: state.preferences?.theme || 'general',
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.tasks) {
+            setState(prev => {
+              try {
+                const cached = localStorage.getItem('svanexa_app_cache_v1');
+                const parsed = cached ? JSON.parse(cached) : {};
+                parsed.wellnessTasks = data.tasks;
+                localStorage.setItem('svanexa_app_cache_v1', JSON.stringify(parsed));
+              } catch {}
+              return { ...prev, wellnessTasks: data.tasks };
+            });
+            postSyncBroadcast({ type: 'PLAN_UPDATED', tasks: data.tasks });
+            return true;
+          }
+        }
+        return false;
+      } catch (err) {
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('[HerSyncContext] Task swap error:', err);
+        }
+        return false;
+      }
+    },
+    [state.preferences?.theme, postSyncBroadcast]
+  );
 
   const purchaseItem = useCallback(
     async (itemType: string, itemId: string, cost: number, itemName: string): Promise<boolean> => {
@@ -878,6 +1004,12 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
                 updateCoinBalanceLocally(msg.newBalance, msg.coinsEarned, false);
               }
               break;
+            case 'PLAN_UPDATED':
+              setState(prev => ({
+                ...prev,
+                wellnessTasks: msg.tasks,
+              }));
+              break;
             case 'COIN_UPDATED':
               updateCoinBalanceLocally(msg.newBalance, msg.earnedAmount, false);
               break;
@@ -970,17 +1102,70 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
                   const afternoonDone = !!meta.afternoon?.completed;
                   const eveningDone = !!meta.evening?.completed;
                   const allDone = morningDone && afternoonDone && eveningDone;
-                  setState(prev => ({
-                    ...prev,
-                    hasCheckedInToday: true,
-                    checkinSlots: {
-                      morning: { completed: morningDone, completedAt: meta.morning?.completedAt || null },
-                      afternoon: { completed: afternoonDone, completedAt: meta.afternoon?.completedAt || null },
-                      evening: { completed: eveningDone, completedAt: meta.evening?.completedAt || null },
-                    },
-                    allSlotsComplete: allDone,
-                  }));
+                  const vitals = meta.today_vitals || {};
+                  setState(prev => {
+                    const mergedLog: TodayLog = {
+                      sleep: vitals.sleep ?? prev.todayLog?.sleep ?? null,
+                      water: (typeof vitals.water === 'number' && vitals.water > 0)
+                        ? Math.max(vitals.water, prev.todayLog?.water || 0)
+                        : (prev.todayLog?.water ?? null),
+                      mood: vitals.mood ?? prev.todayLog?.mood ?? null,
+                      stress: vitals.stress ?? prev.todayLog?.stress ?? null,
+                      exercise: (typeof vitals.exercise === 'number' && vitals.exercise > 0)
+                        ? Math.max(vitals.exercise, prev.todayLog?.exercise || 0)
+                        : (prev.todayLog?.exercise ?? null),
+                    };
+                    return {
+                      ...prev,
+                      hasCheckedInToday: true,
+                      todayLog: mergedLog,
+                      checkinSlots: {
+                        morning: { completed: morningDone, completedAt: meta.morning?.completedAt || null },
+                        afternoon: { completed: afternoonDone, completedAt: meta.afternoon?.completedAt || null },
+                        evening: { completed: eveningDone, completedAt: meta.evening?.completedAt || null },
+                      },
+                      allSlotsComplete: allDone,
+                    };
+                  });
                 } catch {}
+              }
+            }
+          )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'wellness_plans', filter: `user_id=eq.${userId}` },
+            (payload: any) => {
+              if (payload.new && Array.isArray(payload.new.tasks)) {
+                setState(prev => ({
+                  ...prev,
+                  wellnessTasks: payload.new.tasks,
+                }));
+                try {
+                  const cached = localStorage.getItem('svanexa_app_cache_v1');
+                  if (cached) {
+                    const parsed = JSON.parse(cached);
+                    parsed.wellnessTasks = payload.new.tasks;
+                    localStorage.setItem('svanexa_app_cache_v1', JSON.stringify(parsed));
+                  }
+                } catch {}
+              }
+            }
+          )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'water_logs', filter: `user_id=eq.${userId}` },
+            (payload: any) => {
+              if (payload.new && typeof payload.new.amount_ml === 'number') {
+                fetchAll();
+              }
+            }
+          )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'mood_logs', filter: `user_id=eq.${userId}` },
+            (payload: any) => {
+              if (payload.new && payload.new.mood) {
+                updateTodayLogLocally({ mood: payload.new.mood }, false);
               }
             }
           )
@@ -1023,7 +1208,7 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
         supabase.removeChannel(realtimeChannel);
       }
     };
-  }, [supabase, updateCoinBalanceLocally]);
+  }, [supabase, updateCoinBalanceLocally, updateTodayLogLocally, fetchAll]);
 
   // ── 4. Offline Mutation Queue & Auto-Replay on Reconnect ───────────────────
   useEffect(() => {
@@ -1124,6 +1309,7 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       refreshCycleHistory,
       refreshSkinLogs,
       toggleTask,
+      swapTask,
       setWellnessTasks,
       setCycleHistory,
       purchaseItem,
@@ -1145,6 +1331,7 @@ export function HerSyncProvider({ children }: { children: ReactNode }) {
       refreshCycleHistory,
       refreshSkinLogs,
       toggleTask,
+      swapTask,
       setWellnessTasks,
       setCycleHistory,
       purchaseItem,
@@ -1199,6 +1386,7 @@ const defaultContextValue: HerSyncContextValue = {
   refreshCycleHistory: async () => {},
   refreshSkinLogs: async () => {},
   toggleTask: async () => {},
+  swapTask: async () => false,
   setWellnessTasks: () => {},
   setCycleHistory: () => {},
   purchaseItem: async () => false,

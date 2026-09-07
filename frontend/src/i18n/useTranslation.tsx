@@ -54,14 +54,18 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    let bc: BroadcastChannel | null = null;
+    let bcHealth: BroadcastChannel | null = null;
+    let bcSync: BroadcastChannel | null = null;
     try {
-      bc = new BroadcastChannel('hersync_sync_channel');
-      bc.onmessage = (event) => {
+      const handleMsg = (event: MessageEvent) => {
         if (event.data?.type === 'LANGUAGE_CHANGED' && event.data?.language) {
           setLanguageState(normalizeLanguage(event.data.language));
         }
       };
+      bcHealth = new BroadcastChannel('svanexa_health_sync');
+      bcSync = new BroadcastChannel('hersync_sync_channel');
+      bcHealth.onmessage = handleMsg;
+      bcSync.onmessage = handleMsg;
     } catch {}
 
     window.addEventListener('storage', handleStorage);
@@ -69,7 +73,8 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     return () => {
       window.removeEventListener('storage', handleStorage);
       try {
-        bc?.close();
+        bcHealth?.close();
+        bcSync?.close();
       } catch {}
     };
   }, []);
@@ -85,9 +90,12 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
 
       // Broadcast to other tabs & components
       try {
-        const bc = new BroadcastChannel('hersync_sync_channel');
-        bc.postMessage({ type: 'LANGUAGE_CHANGED', language: normalized });
-        bc.close();
+        const bc1 = new BroadcastChannel('svanexa_health_sync');
+        bc1.postMessage({ type: 'LANGUAGE_CHANGED', language: normalized });
+        bc1.close();
+        const bc2 = new BroadcastChannel('hersync_sync_channel');
+        bc2.postMessage({ type: 'LANGUAGE_CHANGED', language: normalized });
+        bc2.close();
       } catch {}
 
       // If user is authenticated, sync to Supabase user_preferences

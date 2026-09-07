@@ -18,23 +18,23 @@ export default function WellnessPlanError({
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-background">
       <div className="max-w-md w-full text-center bg-card/80 backdrop-blur-xl border border-border/50 p-8 rounded-3xl shadow-2xl">
-        <div className="w-16 h-16 rounded-full bg-violet-500/10 text-violet-400 flex items-center justify-center mx-auto mb-4 font-mono">
+        <div className="w-16 h-16 rounded-full bg-white/[0.08] border border-white/[0.12] text-primary flex items-center justify-center mx-auto mb-4 font-mono">
           <RefreshCcw className="w-8 h-8" />
         </div>
-        <h2 className="text-xl font-extrabold text-foreground mb-2">No wellness plan available yet</h2>
+        <h2 className="text-xl font-semibold tracking-tight text-foreground mb-2">No wellness plan available yet</h2>
         <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
           Complete your Morning Check-in to generate today&apos;s personalized wellness plan.
         </p>
         <div className="flex flex-col gap-3">
           <Link
             href="/check-in"
-            className="w-full py-3.5 bg-gradient-to-r from-pink-500 to-violet-500 text-white font-bold rounded-full shadow-lg shadow-pink-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all text-center flex items-center justify-center gap-2 text-sm"
+            className="w-full h-11 bg-primary text-white font-semibold rounded-full shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] hover:opacity-95 active:scale-[0.98] transition-all text-center flex items-center justify-center gap-2 text-sm"
           >
             Go to Daily Check-in <ArrowRight className="w-4 h-4" />
           </Link>
           <button
             onClick={() => reset()}
-            className="w-full py-3 bg-secondary/60 hover:bg-secondary text-muted-foreground font-semibold rounded-full border border-border/50 text-xs transition-all"
+            className="w-full h-11 bg-white/[0.06] hover:bg-white/[0.1] text-muted-foreground hover:text-foreground font-medium rounded-full border border-white/[0.08] text-xs transition-all active:scale-[0.98]"
           >
             Retry Loading
           </button>

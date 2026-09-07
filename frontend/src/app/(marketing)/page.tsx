@@ -13,8 +13,8 @@ export default function LandingPage() {
     <div className="min-h-screen flex flex-col">
       <header className="px-6 py-4 flex items-center justify-between border-b border-border/40 backdrop-blur-md sticky top-0 z-50">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-6 w-6 text-pink-500" />
-          <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-violet-500">
+          <Sparkles className="h-5 w-5 text-primary" />
+          <span className="text-xl font-bold tracking-tight text-foreground">
             Svanexa AI
           </span>
         </div>
@@ -26,7 +26,7 @@ export default function LandingPage() {
         <div className="flex items-center gap-3">
           <LanguageSelector variant="header" />
           <Link href="/login">
-            <Button className="bg-gradient-to-r from-pink-600 to-violet-600 hover:from-pink-500 hover:to-violet-500 text-white border-0">
+            <Button className="rounded-full bg-primary hover:opacity-95 text-white font-semibold h-10 px-5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] border-0 active:scale-[0.98] transition-all">
               {t('auth.signIn')}
             </Button>
           </Link>
@@ -36,11 +36,11 @@ export default function LandingPage() {
       <main className="flex-1">
         {/* Hero Section */}
         <section className="py-24 px-6 md:px-12 text-center relative overflow-hidden">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-pink-500/20 rounded-full blur-[120px] -z-10 pointer-events-none" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/10 rounded-full blur-[140px] -z-10 pointer-events-none" />
           
-          <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 max-w-4xl mx-auto">
+          <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-6 max-w-4xl mx-auto text-foreground">
             Your AI Companion for <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-violet-500">
+            <span className="text-primary">
               PCOS & PCOD Wellness
             </span>
           </h1>

@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/utils/supabase/server';
 import { extractDateFromRequest } from '@/utils/date-utils';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 type CheckinSlot = 'morning' | 'afternoon' | 'evening';
 
 export async function GET(req: Request) {
@@ -9,7 +12,37 @@ export async function GET(req: Request) {
     const { supabase, user, error: authError } = await getAuthenticatedUser(req);
 
     if (authError || !user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({
+        success: true,
+        data: {
+          date: extractDateFromRequest(req),
+          profile: null,
+          preferences: {
+            user_id: 'guest',
+            theme: 'general',
+            language: 'en',
+            communication_style: 'friendly',
+            emoji_preference: true,
+            response_length: 'concise',
+            notifications_enabled: true,
+          },
+          total_logs_count: 0,
+          has_checked_in_today: false,
+          current_streak: 1,
+          cycle_status: 'insufficient_data',
+          pregnancy: null,
+          today_log: { sleep: null, water: null, mood: null, stress: null, exercise: null },
+          checkin_slots: {
+            morning: { completed: false, completedAt: null },
+            afternoon: { completed: false, completedAt: null },
+            evening: { completed: false, completedAt: null },
+          },
+          all_slots_complete: false,
+          wellness_tasks: [],
+          isGuest: true,
+          message: 'Guest session summary initialized.',
+        },
+      }, { status: 200 });
     }
 
 
@@ -161,12 +194,45 @@ export async function GET(req: Request) {
       notifications_enabled: userPref?.notifications_enabled ?? true,
     };
 
+    // Resolve vitals from granular logs with fallback to daily_checkins slot data
+    const slotVitals = slotMeta.today_vitals || {};
+    const fallbackWater =
+      slotVitals.water !== undefined
+        ? slotVitals.water
+        : slotMeta.afternoon?.data?.water ?? slotMeta.morning?.data?.water ?? slotMeta.evening?.data?.water ?? null;
+
+    const fallbackMood =
+      slotVitals.mood !== undefined
+        ? slotVitals.mood
+        : slotMeta.morning?.data?.mood ?? slotMeta.afternoon?.data?.mood ?? slotMeta.evening?.data?.mood ?? null;
+
+    const fallbackStress =
+      slotVitals.stress !== undefined
+        ? slotVitals.stress
+        : slotMeta.morning?.data?.stress ?? slotMeta.afternoon?.data?.stress ?? slotMeta.evening?.data?.stress ?? null;
+
+    const fallbackSleep =
+      slotVitals.sleep !== undefined
+        ? slotVitals.sleep
+        : slotMeta.morning?.data?.sleep ?? null;
+
+    const fallbackExercise =
+      slotVitals.exercise !== undefined
+        ? slotVitals.exercise
+        : slotMeta.morning?.data?.exercise ?? slotMeta.afternoon?.data?.exercise ?? null;
+
+    const resolvedWater = water
+      ? (water.amount_ml / 1000).toFixed(1)
+      : fallbackWater !== null
+        ? Number(fallbackWater).toFixed(1)
+        : null;
+
     const today_log = {
-      sleep:    sleep    ? sleep.duration_hours                  : null,
-      water:    water    ? (water.amount_ml / 1000).toFixed(1)  : null,
-      mood:     mood     ? mood.mood                             : null,
-      stress:   mood     ? mood.intensity                        : null,
-      exercise: exercise ? exercise.duration_minutes             : null,
+      sleep: sleep ? sleep.duration_hours : fallbackSleep,
+      water: resolvedWater,
+      mood: mood ? mood.mood : fallbackMood,
+      stress: mood ? mood.intensity : fallbackStress,
+      exercise: exercise ? exercise.duration_minutes : fallbackExercise,
     };
 
     return NextResponse.json({

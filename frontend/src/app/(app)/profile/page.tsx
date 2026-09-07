@@ -499,14 +499,14 @@ export default function ProfilePage() {
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="p-6 md:p-8 rounded-3xl bg-card/70 backdrop-blur-xl border border-border/40 shadow-xl shadow-purple-500/5 relative overflow-hidden"
+        className="p-6 md:p-8 rounded-3xl bg-white/[0.04] backdrop-blur-2xl border border-white/[0.08] shadow-sm relative overflow-hidden"
       >
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
-          {/* Avatar with gradient & initials */}
+          {/* Avatar with frosted glass ring & clean initials */}
           <div className="relative shrink-0">
-            <div className="w-20 h-20 md:w-22 md:h-22 rounded-full bg-gradient-to-tr from-pink-500 via-purple-500 to-indigo-500 p-[2px] shadow-lg shadow-pink-500/20">
-              <div className="w-full h-full rounded-full bg-background flex items-center justify-center">
-                <span className="text-2xl md:text-3xl font-extrabold bg-gradient-to-tr from-pink-400 to-purple-400 bg-clip-text text-transparent">
+            <div className="w-20 h-20 md:w-22 md:h-22 rounded-full p-[2px] bg-white/[0.12] border border-white/[0.15] shadow-sm">
+              <div className="w-full h-full rounded-full bg-white/[0.06] flex items-center justify-center backdrop-blur-md">
+                <span className="text-2xl md:text-3xl font-semibold text-foreground tracking-tight">
                   {userInitials}
                 </span>
               </div>
@@ -560,7 +560,7 @@ export default function ProfilePage() {
       </motion.div>
 
       {/* 🪙 Compact Svanexa Rewards Summary */}
-      <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-amber-500/10 via-card/80 to-background border border-amber-500/25 flex items-center justify-between gap-4 shadow-sm backdrop-blur-md">
+      <div className="p-4 sm:p-5 rounded-3xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-between gap-4 shadow-sm backdrop-blur-2xl">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-lg shrink-0">
             🪙
@@ -748,7 +748,7 @@ export default function ProfilePage() {
                         ? `${mode.bgActive} ${mode.borderActive} opacity-100 cursor-default`
                         : 'bg-secondary/10 border-border/20 opacity-50 cursor-not-allowed'
                       : isSelected
-                      ? `${mode.bgActive} ${mode.borderActive} shadow-lg shadow-purple-500/5 ring-2 ring-purple-500/40 cursor-pointer`
+                      ? `${mode.bgActive} ${mode.borderActive} shadow-sm ring-1 ring-white/20 cursor-pointer`
                       : 'bg-secondary/20 border-border/40 hover:bg-secondary/40 cursor-pointer'
                   }`}
                 >
@@ -939,7 +939,7 @@ export default function ProfilePage() {
             <button
               type="button"
               onClick={handleStartEditing}
-              className="w-full h-12 rounded-2xl bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 hover:opacity-95 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-purple-500/25 transition-all active:scale-[0.99] cursor-pointer min-h-[48px]"
+              className="w-full h-11 rounded-full bg-primary text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] hover:opacity-95 transition-all active:scale-[0.98] cursor-pointer min-h-[44px]"
             >
               <Edit3 className="w-4 h-4" /> Edit Profile
             </button>
@@ -949,7 +949,7 @@ export default function ProfilePage() {
               <button
                 type="submit"
                 disabled={saving}
-                className="w-full sm:flex-1 h-12 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:opacity-95 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 transition-all active:scale-[0.99] cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed min-h-[48px]"
+                className="w-full sm:flex-1 h-11 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] transition-all active:scale-[0.98] cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed min-h-[44px]"
               >
                 {saving ? (
                   <>
@@ -966,7 +966,7 @@ export default function ProfilePage() {
                 type="button"
                 disabled={saving}
                 onClick={handleCancelEditing}
-                className="w-full sm:w-auto px-6 h-12 rounded-2xl border border-border/60 hover:bg-secondary text-foreground text-sm font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-[0.99] cursor-pointer min-h-[48px]"
+                className="w-full sm:w-auto px-6 h-11 rounded-full bg-white/[0.08] hover:bg-white/[0.12] border border-white/[0.12] text-foreground text-sm font-medium flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer min-h-[44px]"
               >
                 <X className="w-4 h-4" /> Cancel
               </button>

@@ -53,22 +53,19 @@ export function BottomNavBar() {
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              {/* Active Ambient Glow Pill */}
+              {/* Active Apple Frosted Pill */}
               {isActive && (
-                <div className="absolute inset-x-2 inset-y-1 bg-gradient-to-tr from-pink-500/20 via-violet-500/15 to-transparent rounded-2xl -z-10 border border-pink-500/25 shadow-[0_0_12px_rgba(236,72,153,0.2)]" />
+                <div className="absolute inset-x-2 inset-y-1 bg-white/[0.12] rounded-2xl -z-10 border border-white/[0.15] shadow-sm" />
               )}
 
               <div className="relative">
                 <IconComponent
                   className={`w-5 h-5 transition-transform duration-200 ${
                     isActive
-                      ? 'text-pink-400 scale-110'
-                      : 'text-muted-foreground group-hover:text-violet-300'
+                      ? 'text-foreground scale-105'
+                      : 'text-muted-foreground group-hover:text-foreground'
                   }`}
                 />
-                {isActive && (
-                  <span className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-pink-400 rounded-full shadow-[0_0_6px_#ec4899]" />
-                )}
               </div>
 
               <span

@@ -2,7 +2,7 @@
 
 import React, { Component, ReactNode, useEffect, useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BrainCircuit, CheckCircle2, Circle, Loader2, Sparkles, ArrowRight, Lock, Trophy, RotateCcw } from 'lucide-react';
+import { BrainCircuit, CheckCircle2, Circle, Loader2, Sparkles, ArrowRight, Lock, Trophy, RotateCcw, Wind } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { apiFetch } from '@/utils/api-client';
@@ -10,6 +10,7 @@ import { useHerSync } from '@/context/HerSyncContext';
 import { format } from 'date-fns';
 import { safeFormat } from '@/utils/date-utils';
 import { useTranslation } from '@/i18n/useTranslation';
+import { BreathingExerciseModal } from '@/components/wellness/BreathingExerciseModal';
 import styles from './wellness.module.css';
 
 class WellnessErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
@@ -41,7 +42,7 @@ class WellnessErrorBoundary extends Component<{ children: ReactNode }, { hasErro
             <div className="flex flex-col gap-3">
               <Link
                 href="/check-in"
-                className="w-full py-3.5 bg-gradient-to-r from-pink-500 to-violet-500 text-white font-bold rounded-full shadow-lg shadow-pink-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all text-center flex items-center justify-center gap-2 text-sm"
+                className="w-full py-3.5 bg-primary hover:opacity-90 text-white font-semibold rounded-full shadow-sm active:scale-[0.98] transition-all text-center flex items-center justify-center gap-2 text-sm"
               >
                 Go to Daily Check-in <ArrowRight className="w-4 h-4" />
               </Link>
@@ -150,7 +151,7 @@ function getCurrentSlot(): TimeSlot {
 
 function WellnessPlanContent() {
   const { t } = useTranslation();
-  const { aiName, setWellnessTasks, refreshAll, checkinSlots, updateCoinBalanceLocally } = useHerSync();
+  const { aiName, setWellnessTasks, refreshAll, checkinSlots, updateCoinBalanceLocally, swapTask } = useHerSync();
 
   const [loading, setLoading]       = useState(true);
   const [isError, setIsError]       = useState(false);
@@ -162,6 +163,15 @@ function WellnessPlanContent() {
   const [animScore, setAnimScore]   = useState(0);
   const [activeFilter, setActiveFilter] = useState<TaskCategory | 'all'>('all');
   const [activePlanSlot, setActivePlanSlot] = useState<TimeSlot>(getCurrentSlot());
+  const [swappingTaskId, setSwappingTaskId] = useState<string | null>(null);
+  const [breathingTask, setBreathingTask] = useState<WellnessTask | null>(null);
+
+  const isBreathingTask = (t: WellnessTask) =>
+    t.category === 'stress' ||
+    t.category === 'mindfulness' ||
+    t.text.toLowerCase().includes('breath') ||
+    t.text.toLowerCase().includes('meditat') ||
+    t.text.toLowerCase().includes('calm');
 
   // ── Load Plan ──
   const loadPlan = useCallback(async () => {
@@ -279,6 +289,24 @@ function WellnessPlanContent() {
     handleStatusChange(taskId, nextStatus);
   };
 
+  const handleSwap = async (taskId: string) => {
+    if (!plan) return;
+    setSwappingTaskId(taskId);
+    try {
+      const success = await swapTask(taskId);
+      if (success) {
+        toast.success('Task swapped with fresh activity!');
+        await loadPlan();
+      } else {
+        toast.error('Could not swap task at this time.');
+      }
+    } catch {
+      toast.error('Failed to swap task.');
+    } finally {
+      setSwappingTaskId(null);
+    }
+  };
+
   // ── Regenerate ──
   const handleRegenerate = async () => {
     setGenerating(true);
@@ -337,15 +365,14 @@ function WellnessPlanContent() {
           <motion.div 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col items-center justify-center text-center p-6 bg-card/80 backdrop-blur-xl border border-violet-500/25 rounded-3xl shadow-xl space-y-3 relative overflow-hidden"
+            className="flex flex-col items-center justify-center text-center p-6 bg-white/[0.04] backdrop-blur-2xl border border-white/[0.08] rounded-3xl shadow-sm space-y-3 relative overflow-hidden"
           >
-            <div className="absolute inset-0 bg-gradient-to-r from-violet-500/10 via-pink-500/10 to-violet-500/10 animate-pulse pointer-events-none" />
-            <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-violet-500 to-pink-500 flex items-center justify-center text-white shadow-lg shadow-pink-500/25 animate-bounce">
-              <Sparkles className="w-7 h-7 fill-white/20 animate-pulse" />
+            <div className="w-14 h-14 rounded-full bg-primary flex items-center justify-center text-white shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_4px_16px_rgba(0,0,0,0.25)]">
+              <Sparkles className="w-7 h-7 fill-white/20" />
             </div>
             <div className="space-y-1 z-10">
-              <h3 className="text-base md:text-lg font-bold text-foreground flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin text-pink-400" />
+              <h3 className="text-base md:text-lg font-semibold tracking-tight text-foreground flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
                 Creating your personalized wellness plan...
               </h3>
               <p className="text-xs text-muted-foreground font-medium">
@@ -385,7 +412,7 @@ function WellnessPlanContent() {
           </p>
           <button
             onClick={loadPlan}
-            className="w-full py-3.5 bg-gradient-to-r from-pink-500 to-violet-500 text-white font-bold rounded-full shadow-lg shadow-pink-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all text-center flex items-center justify-center gap-2 text-sm"
+            className="w-full py-3.5 bg-primary hover:opacity-90 text-white font-semibold rounded-full shadow-sm active:scale-[0.98] transition-all text-center flex items-center justify-center gap-2 text-sm"
           >
             <RotateCcw className="w-4 h-4" /> Retry Loading
           </button>
@@ -402,10 +429,10 @@ function WellnessPlanContent() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="flex flex-col items-center justify-center text-center p-8 bg-card/80 backdrop-blur-md border border-border/40 rounded-3xl shadow-xl"
+            className="flex flex-col items-center justify-center text-center p-8 bg-card/75 backdrop-blur-2xl border border-white/[0.08] rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.3)]"
           >
-            <div className="w-20 h-20 rounded-full bg-violet-500/10 flex items-center justify-center mb-6">
-              <Sparkles className="w-10 h-10 text-violet-400" />
+            <div className="w-20 h-20 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center mb-6">
+              <Sparkles className="w-10 h-10 text-primary" />
             </div>
             <h2 className="text-2xl font-bold text-foreground mb-2">
               No wellness plan available yet
@@ -415,7 +442,7 @@ function WellnessPlanContent() {
             </p>
             <Link
               href="/check-in"
-              className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 text-white font-bold shadow-lg shadow-pink-500/25 transition-all hover:scale-105 flex items-center justify-center gap-2"
+              className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-primary hover:opacity-90 text-white font-semibold shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2"
             >
               Go to Daily Check-in <ArrowRight className="w-4 h-4" />
             </Link>
@@ -668,15 +695,15 @@ function WellnessPlanContent() {
                   key={slot}
                   type="button"
                   onClick={() => setActivePlanSlot(slot)}
-                  className={`flex-1 min-w-0 py-2 sm:py-2.5 px-2 sm:px-3 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 active:scale-[0.98] ${
+                  className={`flex-1 min-w-0 py-2 sm:py-2.5 px-2 sm:px-3 rounded-xl text-[11px] sm:text-xs transition-all flex items-center justify-center gap-1 sm:gap-1.5 active:scale-[0.98] ${
                     isTabActive
-                      ? 'bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-md shadow-pink-500/20'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary/80'
+                      ? 'bg-white/[0.14] text-white font-semibold shadow-sm border border-white/[0.1]'
+                      : 'text-muted-foreground hover:text-foreground font-medium hover:bg-white/[0.06]'
                   }`}
                 >
                   <span className="shrink-0">{cfg.emoji}</span>
                   <span className="truncate">{cfg.label}</span>
-                  {isTabUnlocked && <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-300 ml-0.5 shrink-0" />}
+                  {isTabUnlocked && <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-400 ml-0.5 shrink-0" />}
                 </button>
               );
             })}
@@ -870,6 +897,32 @@ function WellnessPlanContent() {
                           >
                             ⏭️ Skip
                           </button>
+
+                          {isBreathingTask(task) && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setBreathingTask(task); }}
+                              className="px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer min-h-[32px] bg-sky-500/15 text-sky-300 hover:bg-sky-500/25 flex items-center gap-1.5"
+                              title="Open interactive breathing guide"
+                            >
+                              <Wind size={13} />
+                              <span>Guide</span>
+                            </button>
+                          )}
+
+                          {!isDone && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleSwap(task.id); }}
+                              disabled={swappingTaskId === task.id}
+                              className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all active:scale-95 cursor-pointer min-h-[32px] bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground flex items-center gap-1.5 disabled:opacity-50"
+                              title="Swap for a different activity"
+                            >
+                              <RotateCcw size={12} className={swappingTaskId === task.id ? 'animate-spin' : ''} />
+                              <span>Swap</span>
+                            </button>
+                          )}
+
                           {task.completedAt && (
                             <span className="text-[10px] sm:text-xs text-emerald-400 font-semibold ml-auto truncate">
                               Completed {safeFormat(task.completedAt, 'h:mm a')}
@@ -885,6 +938,18 @@ function WellnessPlanContent() {
           })}
         </div>
       </div>
+
+      {breathingTask && (
+        <BreathingExerciseModal
+          isOpen={Boolean(breathingTask)}
+          onClose={() => setBreathingTask(null)}
+          taskTitle={breathingTask.text}
+          onComplete={() => {
+            handleStatusChange(breathingTask.id, 'completed');
+            setBreathingTask(null);
+          }}
+        />
+      )}
     </div>
   );
 }

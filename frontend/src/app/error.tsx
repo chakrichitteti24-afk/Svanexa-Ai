@@ -22,12 +22,12 @@ export default function RootError({
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-background text-foreground">
       <div className="max-w-md w-full text-center bg-card/90 backdrop-blur-2xl border border-border/50 p-8 rounded-3xl shadow-2xl space-y-5">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-pink-500/20 to-violet-500/20 border border-pink-500/30 flex items-center justify-center mx-auto text-pink-400">
+        <div className="w-16 h-16 rounded-2xl bg-white/[0.08] border border-white/[0.12] flex items-center justify-center mx-auto text-primary">
           <Sparkles className="w-8 h-8" />
         </div>
 
         <div>
-          <h2 className="text-xl font-extrabold text-foreground">Welcome to Svanexa AI</h2>
+          <h2 className="text-xl font-semibold tracking-tight text-foreground">Welcome to Svanexa AI</h2>
           <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
             We encountered a temporary hiccup loading this screen. Please try again.
           </p>
@@ -35,7 +35,7 @@ export default function RootError({
 
         {error?.message && (
           <div className="text-left p-3 rounded-2xl bg-destructive/10 border border-destructive/20 text-destructive text-xs font-mono break-all max-h-36 overflow-y-auto space-y-1">
-            <p className="font-bold">Error Info:</p>
+            <p className="font-semibold">Error Info:</p>
             <p>{error.message}</p>
             {error.digest && <p className="text-[10px] text-muted-foreground">Digest: {error.digest}</p>}
           </div>
@@ -52,7 +52,7 @@ export default function RootError({
                 reset();
               }
             }}
-            className="w-full py-3.5 px-6 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 text-white font-bold text-xs shadow-lg shadow-pink-500/20 flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer"
+            className="w-full h-11 rounded-full bg-primary hover:opacity-95 text-white font-semibold text-xs shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" /> Try Again
           </button>
@@ -60,7 +60,7 @@ export default function RootError({
 
           <Link
             href="/"
-            className="w-full py-3 px-6 rounded-full bg-secondary/70 hover:bg-secondary text-muted-foreground hover:text-foreground font-semibold text-xs border border-border/40 flex items-center justify-center gap-2 active:scale-95 transition-all"
+            className="w-full h-11 rounded-full bg-white/[0.06] hover:bg-white/[0.1] text-muted-foreground hover:text-foreground font-medium text-xs border border-white/[0.08] flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
           >
             <Home className="w-3.5 h-3.5" /> Return Home
           </Link>

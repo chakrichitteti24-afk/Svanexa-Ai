@@ -49,26 +49,26 @@ const ModeCard = ({
   return (
     <div
       onClick={() => setWellnessMode(mode as any)}
-      className={`p-3.5 sm:p-4 rounded-xl cursor-pointer border-2 transition-all active:scale-[0.98] select-none flex items-start gap-3.5 ${
+      className={`p-3.5 sm:p-4 rounded-2xl cursor-pointer border transition-all active:scale-[0.98] select-none flex items-start gap-3.5 ${
         isSelected
-          ? 'border-pink-500 bg-pink-500/10 shadow-sm shadow-pink-500/10'
-          : 'border-border/60 hover:border-pink-500/40 bg-card/80'
+          ? 'border-primary bg-primary/10 shadow-sm'
+          : 'border-white/[0.08] hover:border-white/[0.15] bg-white/[0.04]'
       }`}
     >
       <div
-        className={`p-2 rounded-lg shrink-0 mt-0.5 ${
-          isSelected ? 'bg-pink-500/20 text-pink-500' : 'bg-secondary text-muted-foreground'
+        className={`p-2 rounded-xl shrink-0 mt-0.5 ${
+          isSelected ? 'bg-primary/20 text-primary' : 'bg-white/[0.06] text-muted-foreground'
         }`}
       >
         <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <h3 className={`text-sm sm:text-base font-semibold ${isSelected ? 'text-pink-500' : 'text-foreground'}`}>
+          <h3 className={`text-sm sm:text-base font-semibold ${isSelected ? 'text-primary' : 'text-foreground'}`}>
             {title}
           </h3>
           {isSelected ? (
-            <CheckCircle2 className="w-4 h-4 text-pink-500 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
           ) : (
             <Circle className="w-4 h-4 text-muted-foreground/40 shrink-0" />
           )}
@@ -280,10 +280,10 @@ export default function SignUpPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-dvh bg-background p-4">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-pink-500 to-violet-500 flex items-center justify-center text-white shadow-xl shadow-pink-500/20 animate-pulse">
+          <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-white shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_4px_16px_rgba(0,0,0,0.25)] animate-pulse">
             <Heart className="w-6 h-6 fill-white" />
           </div>
-          <Loader2 className="w-5 h-5 text-pink-500 animate-spin" />
+          <Loader2 className="w-5 h-5 text-primary animate-spin" />
         </div>
       </div>
     );
@@ -291,14 +291,14 @@ export default function SignUpPage() {
 
   if (isEmailSent) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-dvh bg-background py-8 px-4 sm:py-12 sm:px-6 w-full max-w-full overflow-x-hidden selection:bg-pink-500/20">
+      <div className="flex flex-col items-center justify-center min-h-dvh bg-background py-8 px-4 sm:py-12 sm:px-6 w-full max-w-full overflow-x-hidden selection:bg-primary/20">
         <div className="w-full max-w-md mx-auto space-y-5 animate-in fade-in duration-300">
-          <Card className="border-pink-500/20 shadow-2xl shadow-pink-500/10 bg-card/70 backdrop-blur-xl p-6 sm:p-8 text-center space-y-5">
-            <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-tr from-pink-500/20 to-violet-500/20 border border-pink-500/30 flex items-center justify-center text-pink-400 shadow-inner">
-              <Mail className="w-8 h-8 animate-pulse" />
+          <Card className="border-white/[0.1] shadow-xl bg-white/[0.04] backdrop-blur-2xl p-6 sm:p-8 text-center space-y-5 rounded-3xl">
+            <div className="mx-auto w-16 h-16 rounded-2xl bg-white/[0.08] border border-white/[0.12] flex items-center justify-center text-primary shadow-sm">
+              <Mail className="w-8 h-8" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-2xl font-bold text-foreground">Verify Your Email</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-foreground">Verify Your Email</h2>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 We sent a confirmation link to <strong className="text-foreground">{email}</strong>.
               </p>
@@ -306,7 +306,7 @@ export default function SignUpPage() {
                 Please click the link in your email to activate your account and start earning Svanexa Coins.
               </p>
               {referralCode && (
-                <div className="mt-3 p-3 rounded-xl bg-pink-500/10 border border-pink-500/20 text-xs text-pink-300">
+                <div className="mt-3 p-3 rounded-2xl bg-white/[0.06] border border-white/[0.1] text-xs text-foreground">
                   🪙 Once your email is verified, your referrer ({referralCode}) will automatically receive their +500 Coins bonus!
                 </div>
               )}
@@ -314,7 +314,7 @@ export default function SignUpPage() {
             <div className="pt-2 space-y-2">
               <Button
                 onClick={() => router.push('/login')}
-                className="w-full bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 text-white font-semibold h-11 rounded-xl shadow-md shadow-pink-500/20"
+                className="w-full h-11 rounded-full bg-primary hover:opacity-95 text-white font-semibold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] active:scale-[0.98] transition-all cursor-pointer"
               >
                 Go to Sign In
               </Button>
@@ -326,7 +326,7 @@ export default function SignUpPage() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-dvh bg-background py-8 px-4 sm:py-12 sm:px-6 w-full max-w-full overflow-x-hidden selection:bg-pink-500/20">
+    <div className="flex flex-col items-center justify-center min-h-dvh bg-background py-8 px-4 sm:py-12 sm:px-6 w-full max-w-full overflow-x-hidden selection:bg-primary/20">
       <div className="w-full max-w-md mx-auto space-y-5 sm:space-y-6 animate-in fade-in duration-300">
         {/* Language selector */}
         <div className="flex justify-end">
@@ -335,35 +335,35 @@ export default function SignUpPage() {
 
         {/* Brand Header */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-tr from-pink-500 to-violet-500 text-white mb-1 shadow-lg shadow-pink-500/20">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-primary text-white mb-1 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_4px_16px_rgba(0,0,0,0.25)]">
             <Heart className="w-6 h-6 fill-white" />
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">{t('auth.createAccount')}</h1>
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">{t('auth.createAccount')}</h1>
           <p className="text-xs sm:text-sm text-muted-foreground">{t('auth.signUpSubtitle')}</p>
         </div>
 
-        {/* Segmented Tab Control */}
-        <div className="w-full grid grid-cols-2 p-1 rounded-xl bg-secondary/50 border border-border/40">
+        {/* Apple Segmented Tab Control */}
+        <div className="w-full grid grid-cols-2 p-1 rounded-full bg-white/[0.06] border border-white/[0.08]">
           <Link
             href="/login"
-            className="text-center py-2.5 sm:py-2 text-sm font-medium rounded-lg text-muted-foreground hover:text-foreground transition-colors"
+            className="text-center py-2 text-sm font-medium rounded-full text-muted-foreground hover:text-foreground transition-colors"
           >
             {t('auth.signIn')}
           </Link>
           <Link
             href="/signup"
-            className="text-center py-2.5 sm:py-2 text-sm font-semibold rounded-lg bg-background shadow-sm text-foreground transition-all"
+            className="text-center py-2 text-sm font-semibold rounded-full bg-white/[0.14] shadow-sm text-foreground transition-all"
           >
             {t('auth.signUp')}
           </Link>
         </div>
 
         {/* Card Form */}
-        <Card className="border-pink-500/15 shadow-xl shadow-pink-500/5 bg-card/60 backdrop-blur-xl relative overflow-hidden py-0 gap-0">
+        <Card className="border-white/[0.1] shadow-xl bg-white/[0.04] backdrop-blur-2xl relative overflow-hidden py-0 gap-0 rounded-3xl">
           {/* Top Step Progress Line */}
-          <div className="absolute top-0 left-0 w-full h-1 bg-secondary">
+          <div className="absolute top-0 left-0 w-full h-1 bg-white/[0.08]">
             <motion.div
-              className="h-full bg-gradient-to-r from-pink-500 to-violet-500"
+              className="h-full bg-primary"
               initial={{ width: step === 1 ? '33%' : step === 2 ? '66%' : '100%' }}
               animate={{ width: step === 1 ? '33%' : step === 2 ? '66%' : '100%' }}
               transition={{ duration: 0.3 }}
@@ -374,7 +374,7 @@ export default function SignUpPage() {
             {/* Step Indicator Header */}
             <div className="flex items-center justify-between pb-3 border-b border-border/40 mb-4">
               <div className="flex items-center gap-2">
-                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-pink-500/20 text-pink-500 text-[11px] font-bold">
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/20 text-primary text-[11px] font-semibold">
                   {step}
                 </span>
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -398,78 +398,63 @@ export default function SignUpPage() {
                 >
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
                     <div className="space-y-1.5">
-                      <Label htmlFor="firstName" className="text-xs sm:text-sm font-medium text-foreground">
+                      <Label htmlFor="firstName" className="text-xs font-medium text-muted-foreground">
                         First Name
                       </Label>
-                      <div className="relative flex items-center">
-                        <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                        <Input
-                          id="firstName"
-                          value={firstName}
-                          onChange={(e) => setFirstName(e.target.value)}
-                          required
-                          placeholder="Jane"
-                          className="pl-10 pr-4"
-                        />
-                      </div>
+                      <Input
+                        id="firstName"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        required
+                        placeholder="Maya"
+                      />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="lastName" className="text-xs sm:text-sm font-medium text-foreground">
+                      <Label htmlFor="lastName" className="text-xs font-medium text-muted-foreground">
                         Last Name
                       </Label>
-                      <div className="relative flex items-center">
-                        <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                        <Input
-                          id="lastName"
-                          value={lastName}
-                          onChange={(e) => setLastName(e.target.value)}
-                          required
-                          placeholder="Doe"
-                          className="pl-10 pr-4"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="email" className="text-xs sm:text-sm font-medium text-foreground">
-                      {t('auth.email')}
-                    </Label>
-                    <div className="relative flex items-center">
-                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                       <Input
-                        id="email"
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        id="lastName"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
                         required
-                        placeholder="jane@example.com"
-                        className="pl-10 pr-4"
+                        placeholder="Chen"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="password" className="text-xs sm:text-sm font-medium text-foreground">
-                      {t('auth.password')}
+                    <Label htmlFor="email" className="text-xs font-medium text-muted-foreground">
+                      Email address
                     </Label>
-                    <div className="relative flex items-center">
-                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="name@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="password" className="text-xs font-medium text-muted-foreground">
+                      Password
+                    </Label>
+                    <div className="relative">
                       <Input
                         id="password"
                         type={showPassword ? 'text' : 'password'}
+                        placeholder="••••••••"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
-                        minLength={8}
-                        placeholder="••••••••"
-                        className="pl-10 pr-11"
+                        className="pr-10"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                        className="absolute right-1.5 top-1/2 -translate-y-1/2 h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
@@ -477,26 +462,23 @@ export default function SignUpPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="confirmPassword" className="text-xs sm:text-sm font-medium text-foreground">
-                      {t('auth.confirmPassword')}
+                    <Label htmlFor="confirmPassword" className="text-xs font-medium text-muted-foreground">
+                      Confirm Password
                     </Label>
-                    <div className="relative flex items-center">
-                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <div className="relative">
                       <Input
                         id="confirmPassword"
                         type={showConfirmPassword ? 'text' : 'password'}
+                        placeholder="••••••••"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         required
-                        minLength={8}
-                        placeholder="••••••••"
-                        className="pl-10 pr-11"
+                        className="pr-10"
                       />
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                        className="absolute right-1.5 top-1/2 -translate-y-1/2 h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                       >
                         {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
@@ -505,14 +487,14 @@ export default function SignUpPage() {
 
                   {/* Referral Code Indicator / Input */}
                   {referralCode ? (
-                    <div className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-pink-500/10 to-violet-500/10 border border-pink-500/25 text-xs text-pink-300">
+                    <div className="flex items-center justify-between p-3 rounded-2xl bg-white/[0.06] border border-white/[0.1] text-xs text-foreground">
                       <div className="flex items-center gap-2 min-w-0">
-                        <Sparkles className="w-4 h-4 text-pink-400 shrink-0" />
+                        <Sparkles className="w-4 h-4 text-primary shrink-0" />
                         <span className="truncate">
-                          Referred by <strong className="text-white font-semibold">{referrerName || 'a friend'}</strong> ({referralCode})
+                          Referred by <strong className="text-foreground font-semibold">{referrerName || 'a friend'}</strong> ({referralCode})
                         </span>
                       </div>
-                      <span className="text-[10px] uppercase font-extrabold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 shrink-0 ml-2">
+                      <span className="text-[10px] uppercase font-semibold text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded-full border border-emerald-500/25 shrink-0 ml-2">
                         Linked ✓
                       </span>
                     </div>
@@ -520,7 +502,7 @@ export default function SignUpPage() {
                     <div className="space-y-1.5 pt-1">
                       <Label htmlFor="referralCode" className="text-xs font-medium text-muted-foreground flex items-center justify-between">
                         <span>Referral Code (Optional)</span>
-                        <span className="text-[10px] text-amber-400 font-bold">🪙 Friend earns 500 coins</span>
+                        <span className="text-[10px] text-amber-400 font-semibold">🪙 Friend earns 500 coins</span>
                       </Label>
                       <Input
                         id="referralCode"
@@ -560,7 +542,7 @@ export default function SignUpPage() {
 
                   <Button
                     type="submit"
-                    className="w-full bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 text-white shadow-md shadow-pink-500/20 h-11 font-semibold mt-2 rounded-xl"
+                    className="w-full h-11 rounded-full bg-primary hover:opacity-95 text-white font-semibold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] mt-2 active:scale-[0.98] transition-all cursor-pointer"
                   >
                     Continue <ChevronRight className="w-4 h-4 ml-2" />
                   </Button>
@@ -634,13 +616,13 @@ export default function SignUpPage() {
                       type="button"
                       variant="outline"
                       onClick={() => setStep(1)}
-                      className="h-11 px-5 shrink-0 font-medium rounded-xl border-border/80 hover:bg-secondary transition-colors"
+                      className="h-11 px-5 rounded-full shrink-0 font-medium border border-white/[0.12] hover:bg-white/[0.08] transition-colors cursor-pointer"
                     >
                       Back
                     </Button>
                     <Button
                       type="submit"
-                      className="flex-1 bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 text-white shadow-md shadow-pink-500/20 h-11 min-w-0 font-semibold px-4 text-sm rounded-xl transition-all"
+                      className="flex-1 h-11 rounded-full bg-primary hover:opacity-95 text-white font-semibold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] min-w-0 px-4 text-sm active:scale-[0.98] transition-all cursor-pointer"
                     >
                       Next: Notifications <ChevronRight className="w-4 h-4 ml-1.5" />
                     </Button>
@@ -659,10 +641,10 @@ export default function SignUpPage() {
                   className="space-y-4 sm:space-y-5"
                 >
                   <div className="text-center space-y-2 py-1">
-                    <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-violet-500/20 to-pink-500/20 border border-violet-500/30 text-violet-400 mb-1">
-                      <Bell className="w-7 h-7 animate-bounce text-violet-400" />
+                    <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-white/[0.08] border border-white/[0.12] text-primary mb-1">
+                      <Bell className="w-7 h-7 text-primary" />
                     </div>
-                    <h3 className="text-base sm:text-lg font-bold text-foreground">
+                    <h3 className="text-base sm:text-lg font-semibold tracking-tight text-foreground">
                       Never Miss a Health Check-In
                     </h3>
                     <p className="text-xs text-muted-foreground leading-relaxed px-2">
@@ -671,10 +653,10 @@ export default function SignUpPage() {
                   </div>
 
                   {/* Core Feature Card */}
-                  <div className="p-4 rounded-2xl bg-violet-500/10 border border-violet-500/25 space-y-3">
+                  <div className="p-4 rounded-2xl bg-white/[0.04] border border-white/[0.08] space-y-3">
                     <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-violet-400" />
-                      <p className="text-xs font-bold text-violet-200">
+                      <Clock className="w-4 h-4 text-primary" />
+                      <p className="text-xs font-semibold text-foreground">
                         Check-In Reminder Frequency:
                       </p>
                     </div>
@@ -690,10 +672,10 @@ export default function SignUpPage() {
                           key={item.value}
                           type="button"
                           onClick={() => setReminderInterval(item.value)}
-                          className={`p-2.5 rounded-xl text-xs font-bold transition-all border text-center ${
+                          className={`p-2.5 rounded-xl text-xs font-medium transition-all border text-center cursor-pointer active:scale-[0.98] ${
                             reminderInterval === item.value
-                              ? 'bg-violet-500/30 border-violet-500 text-violet-200 shadow-sm'
-                              : 'bg-card/60 border-border/60 text-muted-foreground hover:bg-secondary'
+                              ? 'bg-white/[0.14] border-white/[0.18] text-foreground shadow-sm font-semibold'
+                              : 'bg-white/[0.04] border-white/[0.08] text-muted-foreground hover:bg-white/[0.08]'
                           }`}
                         >
                           {item.label}
@@ -721,7 +703,7 @@ export default function SignUpPage() {
                       type="button"
                       onClick={() => handleSignUp(true)}
                       disabled={loading}
-                      className="w-full bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 text-white shadow-md shadow-pink-500/20 h-11 font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2"
+                      className="w-full h-11 rounded-full bg-primary hover:opacity-95 text-white font-semibold text-sm shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer"
                     >
                       {loading ? (
                         <Loader2 className="w-5 h-5 animate-spin" />

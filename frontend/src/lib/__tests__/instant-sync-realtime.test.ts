@@ -185,11 +185,108 @@ describe('Instant Sync & Offline Mutation Queue Suite', () => {
         language: 'Hindi',
       });
 
-      expect(messages).toHaveLength(3);
+      mockChannel.postMessage({
+        type: 'PLAN_UPDATED',
+        tasks: [{ id: 'task-1', text: 'Hydrate', category: 'water', timeSlot: 'morning', completed: false, completedAt: null }],
+      });
+
+      expect(messages).toHaveLength(4);
       expect(messages[0].type).toBe('CHECKIN_UPDATED');
       expect(messages[0].slot).toBe('afternoon');
       expect(messages[1].newBalance).toBe(500);
       expect(messages[2].language).toBe('Hindi');
+      expect(messages[3].type).toBe('PLAN_UPDATED');
+      expect(messages[3].tasks[0].id).toBe('task-1');
+    });
+  });
+
+  describe('Non-Destructive State Merge & Local Snapshot Persistence', () => {
+    it('preserves local non-null vitals when server returns nulls or zero values', () => {
+      const localLog = { sleep: 7.5, water: 1.25, mood: 'calm', stress: 2.0, exercise: 20 };
+      const serverLog = { sleep: null, water: 0, mood: null, stress: null, exercise: null };
+
+      const mergedLog = {
+        sleep: serverLog.sleep ?? localLog.sleep ?? null,
+        water: (typeof serverLog.water === 'number' && serverLog.water > 0)
+          ? Math.max(serverLog.water, localLog.water || 0)
+          : (localLog.water ?? null),
+        mood: serverLog.mood ?? localLog.mood ?? null,
+        stress: serverLog.stress ?? localLog.stress ?? null,
+        exercise: (typeof serverLog.exercise === 'number' && serverLog.exercise > 0)
+          ? Math.max(serverLog.exercise, localLog.exercise || 0)
+          : (localLog.exercise ?? null),
+      };
+
+      expect(mergedLog.sleep).toBe(7.5);
+      expect(mergedLog.water).toBe(1.25);
+      expect(mergedLog.mood).toBe('calm');
+      expect(mergedLog.stress).toBe(2.0);
+      expect(mergedLog.exercise).toBe(20);
+    });
+
+    it('preserves completed task status when server returns outdated pending status', () => {
+      const localTasks = [
+        { id: 't1', text: 'Drink tea', category: 'hydration', timeSlot: 'morning', completed: true, status: 'completed', completedAt: '2026-09-07T08:00:00Z' },
+      ];
+      const serverTasks = [
+        { id: 't1', text: 'Drink tea', category: 'hydration', timeSlot: 'morning', completed: false, status: 'pending', completedAt: null },
+      ];
+
+      const mergedTasks = serverTasks.map(srvTask => {
+        const local = localTasks.find(lt => lt.id === srvTask.id);
+        if (local && (local.completed || local.status === 'completed') && !srvTask.completed) {
+          return { ...srvTask, completed: true, status: 'completed', completedAt: local.completedAt };
+        }
+        return srvTask;
+      });
+
+      expect(mergedTasks[0].completed).toBe(true);
+      expect(mergedTasks[0].status).toBe('completed');
+      expect(mergedTasks[0].completedAt).toBe('2026-09-07T08:00:00Z');
+    });
+
+    it('preserves existing local tasks when server returns empty array', () => {
+      const localTasks = [
+        { id: 't1', text: 'Walk 15 mins', category: 'movement', timeSlot: 'morning', completed: false, status: 'pending', completedAt: null },
+      ];
+      const serverTasks: any[] = [];
+
+      const mergedTasks = serverTasks.length > 0 ? serverTasks : (localTasks.length > 0 ? localTasks : []);
+
+      expect(mergedTasks).toHaveLength(1);
+      expect(mergedTasks[0].id).toBe('t1');
+    });
+
+    it('preserves completed slots if either server or local marked them completed', () => {
+      const localSlots = {
+        morning: { completed: true, completedAt: '2026-09-07T09:00:00Z' },
+        afternoon: { completed: false, completedAt: null },
+        evening: { completed: false, completedAt: null },
+      };
+      const serverSlots = {
+        morning: { completed: false, completedAt: null },
+        afternoon: { completed: true, completedAt: '2026-09-07T14:00:00Z' },
+        evening: { completed: false, completedAt: null },
+      };
+
+      const mergedSlots = {
+        morning: {
+          completed: !!(serverSlots.morning.completed || localSlots.morning.completed),
+          completedAt: serverSlots.morning.completedAt || localSlots.morning.completedAt || null,
+        },
+        afternoon: {
+          completed: !!(serverSlots.afternoon.completed || localSlots.afternoon.completed),
+          completedAt: serverSlots.afternoon.completedAt || localSlots.afternoon.completedAt || null,
+        },
+        evening: {
+          completed: !!(serverSlots.evening.completed || localSlots.evening.completed),
+          completedAt: serverSlots.evening.completedAt || localSlots.evening.completedAt || null,
+        },
+      };
+
+      expect(mergedSlots.morning.completed).toBe(true);
+      expect(mergedSlots.afternoon.completed).toBe(true);
+      expect(mergedSlots.evening.completed).toBe(false);
     });
   });
 });

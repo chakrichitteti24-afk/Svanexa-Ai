@@ -107,7 +107,7 @@ function useNextSlotCountdown(activeSlot: CheckinSlot, isCompleted: boolean) {
 export default function CheckInPage() {
   const router = useRouter();
   const { t } = useTranslation();
-  const { wellnessMode, refreshAll, setWellnessTasks } = useHerSync();
+  const { wellnessMode, refreshAll, setWellnessTasks, cycleStatus, updateCheckinSlotLocally, updateTodayLogLocally } = useHerSync();
   const mode = (wellnessMode as WellnessMode) || 'general';
 
   // Strict current period determined by local time
@@ -129,8 +129,12 @@ export default function CheckInPage() {
     return () => clearInterval(slotCheckInterval);
   }, [activeSlot]);
 
-  // 10 MCQs dynamic question set for current slot and mode
-  const questions = useMemo(() => getCheckinQuestions(activeSlot, mode), [activeSlot, mode]);
+  // 10 MCQs dynamic question set for current slot and mode with daily rotation & cycle awareness
+  const todayStr = useMemo(() => format(new Date(), 'yyyy-MM-dd'), []);
+  const questions = useMemo(
+    () => getCheckinQuestions(activeSlot, mode, { dateStr: todayStr, cyclePhase: cycleStatus }),
+    [activeSlot, mode, todayStr, cycleStatus]
+  );
   const totalQuestions = questions.length; // Exactly 10
   const totalSteps = totalQuestions + 1; // 10 questions + 1 reflection step (step index 10)
 
@@ -318,6 +322,11 @@ export default function CheckInPage() {
       toast.success("Reflection saved ✓");
 
       const now = new Date().toISOString();
+      updateCheckinSlotLocally(activeSlot, true);
+      updateTodayLogLocally({
+        mood: finalIndicators.mood.state,
+        stress: finalIndicators.stress.score,
+      });
       setCompletedSlots(prev => ({
         ...prev,
         [activeSlot]: { completed: true, completedAt: now, data: payload.data },
@@ -461,25 +470,25 @@ export default function CheckInPage() {
           {/* 🌟 10-Dimension Wellness Assessment Summary Card */}
           <div className="w-full max-w-md space-y-3 mb-6 text-left">
             {/* Overall Daily Wellness Balance */}
-            <div className="p-4 rounded-2xl border border-violet-500/20 bg-gradient-to-r from-violet-500/10 to-pink-500/5">
+            <div className="p-4 rounded-2xl border border-white/[0.08] bg-white/[0.04]">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                  <Activity className="w-4 h-4 text-violet-400" /> Daily Wellness Balance
+                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Activity className="w-4 h-4 text-primary" /> Daily Wellness Balance
                 </span>
-                <span className="text-xs font-black px-2.5 py-0.5 rounded-full border border-violet-500/30 text-violet-400 bg-violet-500/10">
+                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full border border-white/[0.1] text-foreground bg-white/[0.06]">
                   {safeIndicators.wellnessScore} / 100
                 </span>
               </div>
               <div className="w-full h-2 bg-secondary rounded-full overflow-hidden mt-2">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-pink-500 via-violet-500 to-indigo-500"
+                  className="h-full rounded-full bg-primary"
                   style={{ width: `${safeIndicators.wellnessScore}%` }}
                 />
               </div>
             </div>
 
             {/* Inferred Non-Diagnostic Stress Indicator */}
-            <div className={`p-4 rounded-2xl border bg-gradient-to-r ${safeIndicators.stress.bgStyle || 'from-emerald-500/10 to-teal-500/5'}`}>
+            <div className="p-4 rounded-2xl border border-white/[0.08] bg-white/[0.04]">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                   <HeartPulse className="w-3.5 h-3.5 text-pink-500" /> Stress Signal Indicator
@@ -643,7 +652,7 @@ export default function CheckInPage() {
       {/* Header */}
       <div className="mb-5 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight mb-1 capitalize bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-violet-500">
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-1 capitalize text-foreground">
             {slotLabel} Check-In
           </h1>
           <p className="text-xs md:text-sm text-muted-foreground font-medium">
@@ -653,7 +662,7 @@ export default function CheckInPage() {
           </p>
         </div>
         <div className="text-right">
-          <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-secondary text-foreground">
+          <span className="text-xs font-mono font-semibold px-3 py-1 rounded-full bg-white/[0.08] border border-white/[0.08] text-foreground">
             {currentStep + 1} / {totalSteps}
           </span>
         </div>
@@ -662,7 +671,7 @@ export default function CheckInPage() {
       {/* Progress Bar */}
       <div className="w-full h-2 bg-secondary/80 rounded-full overflow-hidden mb-6">
         <motion.div
-          className="h-full bg-gradient-to-r from-pink-500 via-violet-500 to-indigo-500"
+          className="h-full bg-primary rounded-full"
           initial={{ width: 0 }}
           animate={{ width: `${progressPct}%` }}
           transition={{ duration: 0.3, ease: 'easeOut' }}
@@ -678,11 +687,11 @@ export default function CheckInPage() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
-            className="bg-card/80 backdrop-blur-md border border-border/50 rounded-3xl p-5 md:p-7 shadow-xl shadow-pink-500/5 mb-6"
+            className="bg-card/75 backdrop-blur-2xl border border-white/[0.08] rounded-3xl p-5 md:p-7 shadow-[0_8px_32px_rgba(0,0,0,0.3)] mb-6"
           >
             {/* Category Tag */}
             <div className="flex items-center gap-2 mb-3">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-violet-500/10 text-violet-400 border border-violet-500/20">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-white/[0.08] text-foreground/90 border border-white/[0.08]">
                 <CatIcon className="w-3.5 h-3.5" />
                 {activeQuestion.title}
               </span>
@@ -699,13 +708,13 @@ export default function CheckInPage() {
                 const isSelected = answers[activeQuestion.id] === option.score;
                 return (
                   <button
-                    key={idx}
+                    key={`${activeQuestion.id}-${option.score}-${idx}`}
                     type="button"
                     onClick={() => handleSelectOption(activeQuestion.id, option.score)}
-                    className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center justify-between group min-h-[52px] cursor-pointer ${
+                    className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center justify-between group min-h-[52px] cursor-pointer apple-tactile ${
                       isSelected
-                        ? 'bg-gradient-to-r from-pink-500/15 to-violet-500/15 border-pink-500/50 shadow-md shadow-pink-500/10 scale-[1.01]'
-                        : 'bg-secondary/30 hover:bg-secondary/60 border-border/40 hover:border-border'
+                        ? 'bg-white/[0.12] border-primary/60 shadow-sm scale-[1.005]'
+                        : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.06] hover:border-white/[0.1]'
                     }`}
                   >
                     <div className="flex items-center gap-3.5">
@@ -721,8 +730,8 @@ export default function CheckInPage() {
                     <div
                       className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-all ${
                         isSelected
-                          ? 'border-pink-500 bg-pink-500 text-white'
-                          : 'border-muted-foreground/30 group-hover:border-muted-foreground/60'
+                          ? 'border-primary bg-primary text-white'
+                          : 'border-white/20 group-hover:border-white/40'
                       }`}
                     >
                       {isSelected && <CheckCircle2 className="w-3.5 h-3.5" />}
@@ -744,10 +753,10 @@ export default function CheckInPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -15 }}
             transition={{ duration: 0.25 }}
-            className="bg-card/80 backdrop-blur-md border border-border/50 rounded-3xl p-5 md:p-7 shadow-xl shadow-pink-500/5 mb-6 space-y-5"
+            className="bg-card/80 backdrop-blur-md border border-border/50 rounded-3xl p-5 md:p-7 shadow-sm mb-6 space-y-5"
           >
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-pink-500/10 text-pink-400 border border-pink-500/20">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
                 <Edit3 className="w-3.5 h-3.5" />
                 Step 11: Personal Reflection
               </span>
@@ -779,28 +788,28 @@ export default function CheckInPage() {
             </div>
 
             {/* Quick Indicators Summary Preview */}
-            <div className="p-4 rounded-2xl border border-violet-500/20 bg-gradient-to-r from-violet-500/10 to-pink-500/5 space-y-3">
+            <div className="p-4 rounded-2xl border border-white/[0.08] bg-white/[0.04] space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                  <Activity className="w-3.5 h-3.5 text-violet-400" /> Assessment Preview
+                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5 text-primary" /> Assessment Preview
                 </span>
-                <span className="text-xs font-black px-2.5 py-0.5 rounded-full border border-violet-500/30 text-violet-400 bg-violet-500/10">
+                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full border border-white/[0.1] text-foreground bg-white/[0.06]">
                   {indicators.wellnessScore}/100 Score
                 </span>
               </div>
 
               <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                <div className="p-2 rounded-xl bg-background/50 border border-border/30">
-                  <p className="text-[10px] text-muted-foreground font-semibold">Mood</p>
-                  <p className="font-bold text-pink-400 mt-0.5">{indicators.mood.state}</p>
+                <div className="p-2 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                  <p className="text-[10px] text-muted-foreground font-medium">Mood</p>
+                  <p className="font-semibold text-primary mt-0.5">{indicators.mood.state}</p>
                 </div>
-                <div className="p-2 rounded-xl bg-background/50 border border-border/30">
-                  <p className="text-[10px] text-muted-foreground font-semibold">Energy</p>
-                  <p className="font-bold text-amber-400 mt-0.5">{indicators.energy.level}</p>
+                <div className="p-2 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                  <p className="text-[10px] text-muted-foreground font-medium">Energy</p>
+                  <p className="font-semibold text-amber-400 mt-0.5">{indicators.energy.level}</p>
                 </div>
-                <div className="p-2 rounded-xl bg-background/50 border border-border/30">
-                  <p className="text-[10px] text-muted-foreground font-semibold">Stress Signal</p>
-                  <p className="font-bold text-emerald-400 mt-0.5">{indicators.stress.level}</p>
+                <div className="p-2 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                  <p className="text-[10px] text-muted-foreground font-medium">Stress Signal</p>
+                  <p className="font-semibold text-emerald-400 mt-0.5">{indicators.stress.level}</p>
                 </div>
               </div>
             </div>
@@ -811,12 +820,12 @@ export default function CheckInPage() {
                 type="button"
                 disabled={saving || saveState === 'saving'}
                 onClick={submitCheckin}
-                className={`w-full py-3.5 px-6 rounded-2xl text-white text-sm font-extrabold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-[0.98] min-h-[48px] cursor-pointer ${
+                className={`w-full h-11 px-6 rounded-full text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] transition-all active:scale-[0.98] min-h-[44px] cursor-pointer ${
                   saveState === 'error'
-                    ? 'bg-rose-600 hover:bg-rose-500 shadow-rose-500/25'
+                    ? 'bg-rose-600 hover:bg-rose-500'
                     : saveState === 'saved'
-                    ? 'bg-emerald-600 shadow-emerald-500/25'
-                    : 'bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:opacity-95 shadow-emerald-500/25'
+                    ? 'bg-emerald-600'
+                    : 'bg-emerald-600 hover:bg-emerald-500'
                 } disabled:opacity-50 disabled:pointer-events-none`}
               >
                 {saveState === 'saving' || saving ? (
@@ -859,7 +868,7 @@ export default function CheckInPage() {
               type="button"
               disabled={activeQuestion ? answers[activeQuestion.id] === undefined : true}
               onClick={() => setCurrentStep(prev => Math.min(totalSteps - 1, prev + 1))}
-              className="px-6 py-2.5 sm:py-3 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-pink-500/20 transition-all min-h-[44px]"
+              className="px-6 py-2.5 sm:py-3 rounded-full bg-primary hover:opacity-95 disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-semibold flex items-center gap-1.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] transition-all active:scale-[0.98] min-h-[44px] cursor-pointer"
             >
               {currentStep === totalQuestions - 1 ? 'Reflection' : 'Next'} <ArrowRight className="w-4 h-4" />
             </button>
@@ -868,12 +877,12 @@ export default function CheckInPage() {
               type="button"
               disabled={saving || saveState === 'saving'}
               onClick={submitCheckin}
-              className={`px-5 sm:px-7 py-2.5 sm:py-3 rounded-full text-white text-xs font-extrabold flex items-center gap-2 shadow-lg transition-all active:scale-95 min-h-[44px] ${
+              className={`px-5 sm:px-7 py-2.5 sm:py-3 rounded-full text-white text-xs font-semibold flex items-center gap-2 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] transition-all active:scale-[0.98] min-h-[44px] cursor-pointer ${
                 saveState === 'error'
-                  ? 'bg-rose-600 hover:bg-rose-500 shadow-rose-500/25'
+                  ? 'bg-rose-600 hover:bg-rose-500'
                   : saveState === 'saved'
-                  ? 'bg-emerald-600 shadow-emerald-500/25'
-                  : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 shadow-emerald-500/25'
+                  ? 'bg-emerald-600'
+                  : 'bg-emerald-600 hover:bg-emerald-500'
               } disabled:opacity-50 disabled:pointer-events-none`}
             >
               {saveState === 'saving' || saving ? (

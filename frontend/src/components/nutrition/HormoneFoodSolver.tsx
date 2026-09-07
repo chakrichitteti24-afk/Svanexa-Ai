@@ -239,10 +239,10 @@ export function HormoneFoodSolver({ currentPhase }: { currentPhase?: string }) {
             key={cat.id}
             type="button"
             onClick={() => setActiveCategory(cat.id)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+            className={`px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition-all flex items-center gap-1.5 cursor-pointer active:scale-[0.98] ${
               activeCategory === cat.id
-                ? 'bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-md shadow-pink-500/20 font-bold'
-                : 'bg-secondary/30 hover:bg-secondary/50 text-muted-foreground border border-border/30'
+                ? 'bg-primary text-white shadow-sm font-semibold'
+                : 'bg-white/[0.06] hover:bg-white/[0.1] text-muted-foreground border border-white/[0.08]'
             }`}
           >
             <span>{cat.emoji}</span>
@@ -371,9 +371,9 @@ export function HormoneFoodSolver({ currentPhase }: { currentPhase?: string }) {
               </div>
 
               {/* Clinical Endocrinology Why */}
-              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-pink-950/30 to-purple-950/30 border border-pink-500/25 space-y-1">
-                <h4 className="text-xs font-bold text-pink-300 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-pink-400" />
+              <div className="p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] space-y-1">
+                <h4 className="text-xs font-semibold text-primary flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-primary" />
                   Why This Balances Your Hormones Right Now:
                 </h4>
                 <p className="text-[11px] text-foreground/85 leading-relaxed">
@@ -385,9 +385,9 @@ export function HormoneFoodSolver({ currentPhase }: { currentPhase?: string }) {
                 <button
                   type="button"
                   onClick={() => setSelectedFood(null)}
-                  className="w-full py-2.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 hover:opacity-95 text-white font-bold text-xs shadow-md shadow-pink-500/20 transition-all active:scale-95 cursor-pointer"
+                  className="w-full h-11 rounded-full bg-primary hover:opacity-95 text-white font-semibold text-xs shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center"
                 >
-                  Got It, Thanks Luna! 🌸
+                  Got It, Thanks Luna!
                 </button>
               </div>
             </motion.div>

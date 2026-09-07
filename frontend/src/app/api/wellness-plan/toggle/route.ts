@@ -3,6 +3,9 @@ import { getAuthenticatedUser } from '@/utils/supabase/server';
 import { WellnessPlanService } from '@/lib/services/wellness-plan-service';
 import { extractDateFromRequest } from '@/utils/date-utils';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function POST(req: Request) {
   try {
     const { supabase, user, error: authError } = await getAuthenticatedUser(req);

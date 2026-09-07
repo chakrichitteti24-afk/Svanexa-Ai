@@ -187,12 +187,16 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
   const viewportHeight = useVisualViewport();
   const pathname = usePathname();
 
-  const [currentLanguage, setCurrentLanguage] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('hersync_companion_language') || userContextLanguage || 'English';
-    }
-    return userContextLanguage || 'English';
-  });
+  const [currentLanguage, setCurrentLanguage] = useState<string>(userContextLanguage || 'English');
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('hersync_companion_language');
+      if (stored) {
+        setCurrentLanguage(stored);
+      }
+    } catch {}
+  }, []);
 
   useEffect(() => {
     if (userContextLanguage && userContextLanguage !== currentLanguage) {
@@ -684,13 +688,13 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
                     </button>
                   ) : (
                     <>
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-violet-500 to-pink-500 flex items-center justify-center text-white shadow-md relative shrink-0">
-                        <Sparkles className="w-4 h-4 fill-white/20" />
+                      <div className="w-8 h-8 rounded-full bg-white/[0.12] border border-white/[0.15] flex items-center justify-center text-primary shadow-sm relative shrink-0">
+                        <Sparkles className="w-4 h-4" />
                         <span className={styles.onlineIndicator} />
                       </div>
                       <div>
-                        <div style={{ fontWeight: 800, fontSize: '0.95rem', lineHeight: 1.2 }}>{aiName}</div>
-                        <div style={{ fontSize: '0.65rem', color: '#10B981', fontWeight: 600 }}>● Online · AI Coach</div>
+                        <div style={{ fontWeight: 600, fontSize: '0.95rem', lineHeight: 1.2 }}>{aiName}</div>
+                        <div style={{ fontSize: '0.65rem', color: '#10B981', fontWeight: 500 }}>● Online · AI Coach</div>
                       </div>
                     </>
                   )}
@@ -834,9 +838,9 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
 
                   <button
                     onClick={startNewChat}
-                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-pink-500/20 to-violet-500/20 border border-pink-500/30 text-white font-semibold text-xs flex items-center justify-center gap-2 hover:bg-pink-500/30 transition-all cursor-pointer mt-2"
+                    className="w-full h-11 rounded-full bg-white/[0.08] hover:bg-white/[0.12] border border-white/[0.12] text-foreground font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer mt-2 active:scale-[0.98]"
                   >
-                    <Plus className="w-4 h-4 text-pink-400" /> Start New Chat
+                    <Plus className="w-4 h-4 text-primary" /> Start New Chat
                   </button>
                 </div>
               ) : (
@@ -845,8 +849,8 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
                   <div className={styles.messageList} ref={scrollContainerRef} onScroll={handleScroll}>
                     {messages.length === 0 && isLoading && (
                       <div className="flex-1 flex flex-col items-center justify-center gap-4">
-                        <Sparkles className="w-10 h-10 animate-pulse text-[#e879f9]" />
-                        <p className="text-sm opacity-80 text-[#e879f9]">Generating greeting...</p>
+                        <Sparkles className="w-8 h-8 animate-pulse text-primary" />
+                        <p className="text-xs text-muted-foreground">Generating greeting...</p>
                       </div>
                     )}
                     
@@ -861,8 +865,8 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
                           className={`${styles.messageWrapper} ${isUser ? styles.user : styles.ai}`}
                         >
                           {!isUser && (
-                            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-violet-500 to-pink-500 flex items-center justify-center text-white shadow-sm shrink-0 mt-0.5">
-                              <Sparkles className="w-3.5 h-3.5 fill-white/20" />
+                            <div className="w-7 h-7 rounded-full bg-white/[0.1] border border-white/[0.14] flex items-center justify-center text-primary shadow-sm shrink-0 mt-0.5">
+                              <Sparkles className="w-3.5 h-3.5" />
                             </div>
                           )}
                           <div className="flex flex-col gap-1 max-w-full overflow-hidden">
@@ -897,14 +901,14 @@ export const FloatingCompanion = memo(function FloatingCompanion() {
 
                     {isLoading && messages.length > 0 && (
                       <motion.div initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} className={`${styles.messageWrapper} ${styles.ai}`}>
-                        <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-violet-500 to-pink-500 flex items-center justify-center text-white shadow-sm shrink-0 mt-0.5">
-                          <Sparkles className="w-3.5 h-3.5 fill-white/20 animate-spin" />
+                        <div className="w-7 h-7 rounded-full bg-white/[0.1] border border-white/[0.14] flex items-center justify-center text-primary shadow-sm shrink-0 mt-0.5">
+                          <Sparkles className="w-3.5 h-3.5 animate-spin" />
                         </div>
                         <div className={`${styles.bubble} ${styles.aiBubble} flex items-center gap-2 px-4 py-3`}>
-                          <span className="text-xs font-semibold text-[#e879f9] tracking-wide">Thinking</span>
+                          <span className="text-xs font-medium text-muted-foreground tracking-wide">Thinking</span>
                           <div className="flex gap-1.5 items-center">
                             <motion.span 
-                              className="w-1.5 h-1.5 bg-[#e879f9] rounded-full" 
+                              className="w-1.5 h-1.5 bg-primary rounded-full" 
                               animate={{ y: [0, -4, 0], opacity: [0.4, 1, 0.4] }} 
                               transition={{ duration: 0.8, repeat: Infinity, delay: 0 }} 
                             />

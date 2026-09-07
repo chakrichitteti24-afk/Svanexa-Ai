@@ -151,7 +151,7 @@ export default function ReportsPage() {
         <button
           type="button"
           onClick={() => setShowDoctorModal(true)}
-          className="px-4 py-2.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 hover:opacity-95 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-pink-500/20 transition-all active:scale-95 cursor-pointer w-full sm:w-auto shrink-0"
+          className="px-4 py-2.5 rounded-full bg-primary hover:opacity-90 text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.98] cursor-pointer w-full sm:w-auto shrink-0"
         >
           <Stethoscope className="w-4 h-4" />
           <span>{t('reports.exportPdf')}</span>
@@ -172,32 +172,32 @@ export default function ReportsPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="bg-gradient-to-br from-pink-500/10 to-transparent border-pink-500/20 shadow-sm">
+        <Card className="bg-card/75 backdrop-blur-2xl border border-white/[0.08] rounded-3xl shadow-sm">
           <CardContent className="p-6 flex flex-col items-center text-center">
-            <FileText className="w-8 h-8 text-pink-500 mb-3" />
+            <FileText className="w-8 h-8 text-primary mb-3" />
             <p className="text-sm text-muted-foreground">Total Logs</p>
-            <p className="text-3xl font-bold">{totalEntries}</p>
+            <p className="text-3xl font-bold text-foreground">{totalEntries}</p>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-violet-500/10 to-transparent border-violet-500/20 shadow-sm">
+        <Card className="bg-card/75 backdrop-blur-2xl border border-white/[0.08] rounded-3xl shadow-sm">
           <CardContent className="p-6 flex flex-col items-center text-center">
-            <CalendarHeart className="w-8 h-8 text-violet-500 mb-3" />
+            <CalendarHeart className="w-8 h-8 text-primary mb-3" />
             <p className="text-sm text-muted-foreground">Avg Cycle</p>
-            <p className="text-3xl font-bold">{avgCycleLength === 'N/A' ? 'N/A' : `${avgCycleLength}d`}</p>
+            <p className="text-3xl font-bold text-foreground">{avgCycleLength === 'N/A' ? 'N/A' : `${avgCycleLength}d`}</p>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-blue-500/10 to-transparent border-blue-500/20 shadow-sm">
+        <Card className="bg-card/75 backdrop-blur-2xl border border-white/[0.08] rounded-3xl shadow-sm">
           <CardContent className="p-6 flex flex-col items-center text-center">
-            <Droplets className="w-8 h-8 text-blue-500 mb-3" />
+            <Droplets className="w-8 h-8 text-cyan-400 mb-3" />
             <p className="text-sm text-muted-foreground">Avg Water</p>
-            <p className="text-3xl font-bold">{avgWater}L</p>
+            <p className="text-3xl font-bold text-foreground">{avgWater}L</p>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-indigo-500/10 to-transparent border-indigo-500/20 shadow-sm">
+        <Card className="bg-card/75 backdrop-blur-2xl border border-white/[0.08] rounded-3xl shadow-sm">
           <CardContent className="p-6 flex flex-col items-center text-center">
-            <Activity className="w-8 h-8 text-indigo-500 mb-3" />
+            <Activity className="w-8 h-8 text-indigo-400 mb-3" />
             <p className="text-sm text-muted-foreground">Avg Sleep</p>
-            <p className="text-3xl font-bold">{avgSleep}h</p>
+            <p className="text-3xl font-bold text-foreground">{avgSleep}h</p>
           </CardContent>
         </Card>
       </div>

@@ -82,31 +82,31 @@ export default function ResetPasswordPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-dvh bg-background p-4">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-pink-500 to-violet-500 flex items-center justify-center text-white shadow-xl shadow-pink-500/20 animate-pulse">
+          <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-white shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_4px_16px_rgba(0,0,0,0.25)] animate-pulse">
             <Heart className="w-6 h-6 fill-white" />
           </div>
-          <Loader2 className="w-5 h-5 text-pink-500 animate-spin" />
+          <Loader2 className="w-5 h-5 text-primary animate-spin" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-dvh bg-background py-8 px-4 sm:py-12 sm:px-6 w-full max-w-full overflow-x-hidden selection:bg-pink-500/20">
+    <div className="flex flex-col items-center justify-center min-h-dvh bg-background py-8 px-4 sm:py-12 sm:px-6 w-full max-w-full overflow-x-hidden selection:bg-primary/20">
       <div className="w-full max-w-md space-y-6 sm:space-y-8 animate-in fade-in zoom-in duration-500">
         <div className="flex justify-end">
           <LanguageSelector variant="header" />
         </div>
 
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-tr from-pink-500 to-violet-500 text-white mb-2 shadow-lg shadow-pink-500/20">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-primary text-white mb-2 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_4px_16px_rgba(0,0,0,0.25)]">
             <Lock className="w-6 h-6 fill-white" />
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">{t('auth.resetPasswordTitle')}</h1>
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">{t('auth.resetPasswordTitle')}</h1>
           <p className="text-xs sm:text-sm text-muted-foreground">Secure your account with a new password.</p>
         </div>
 
-        <Card className="border-pink-500/15 shadow-xl shadow-pink-500/5 bg-card/60 backdrop-blur-xl py-0 gap-0">
+        <Card className="border-white/[0.1] shadow-xl bg-white/[0.04] backdrop-blur-2xl py-0 gap-0 rounded-3xl">
           <form onSubmit={handleUpdatePassword}>
             <CardContent className="space-y-4 pt-6 px-4 sm:px-6">
               
@@ -170,7 +170,7 @@ export default function ResetPasswordPage() {
             <CardFooter className="px-4 sm:px-6 pb-6 pt-0 border-t-0 bg-transparent">
               <Button 
                 type="submit" 
-                className="w-full bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 text-white shadow-md shadow-pink-500/20 h-11 font-semibold"
+                className="w-full h-11 rounded-full bg-primary hover:opacity-95 text-white font-semibold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] active:scale-[0.98] transition-all cursor-pointer"
                 disabled={loading}
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}

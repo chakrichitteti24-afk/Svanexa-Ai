@@ -82,10 +82,10 @@ export function NotificationSettings() {
           IPHONE PWA SETUP BANNER
           ───────────────────────────────────────────────────────────────── */}
       {isIOS && !isStandalone && (
-        <div className="p-4 rounded-2xl bg-gradient-to-r from-pink-500/15 via-purple-500/15 to-violet-500/15 border border-pink-500/30 flex items-start gap-3 shadow-md">
-          <Smartphone className="w-5 h-5 text-pink-400 shrink-0 mt-0.5" />
+        <div className="p-4 rounded-2xl bg-white/[0.05] border border-white/[0.1] flex items-start gap-3 shadow-sm">
+          <Smartphone className="w-5 h-5 text-primary shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <p className="text-xs font-bold text-foreground">
+            <p className="text-xs font-semibold text-foreground">
               📱 iPhone Required Step for Lock-Screen Alerts
             </p>
             <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -101,7 +101,7 @@ export function NotificationSettings() {
           ───────────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between border-b border-border/30 pb-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-2xl bg-gradient-to-tr from-pink-500/20 to-violet-500/20 border border-pink-500/30 text-pink-400">
+          <div className="p-2.5 rounded-2xl bg-white/[0.08] border border-white/[0.12] text-primary">
             <Bell className="w-5 h-5" />
           </div>
           <div>

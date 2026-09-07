@@ -40,6 +40,7 @@ import { useHerSync } from '@/context/HerSyncContext';
 import { WeatherWidget } from '@/components/weather/WeatherWidget';
 import { isNonSkinImageAlert } from '@/lib/utils/skin-helpers';
 import { useTranslation } from '@/i18n/useTranslation';
+import { apiFetch } from '@/utils/api-client';
 
 type SkinEntry = {
   id: string;
@@ -142,21 +143,20 @@ export default function SkinTrackerPage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [localLogs, setLocalLogs] = useState<any[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('svanexa_skin_scans');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) return parsed;
-        }
-      } catch {}
-    }
-    return [];
-  });
+  const [localLogs, setLocalLogs] = useState<any[]>([]);
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
 
   const supabase = createClient();
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('svanexa_skin_scans');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) setLocalLogs(parsed);
+      }
+    } catch {}
+  }, []);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -411,7 +411,7 @@ export default function SkinTrackerPage() {
       }
 
       toast.info('Analyzing skin barrier & verifying visual metrics with AI...', { duration: 3500 });
-      const response = await fetch('/api/skin-analysis', {
+      const response = await apiFetch('/api/skin-analysis', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -837,10 +837,10 @@ export default function SkinTrackerPage() {
                       
                       {/* Laser Scanning Animation when analyzing */}
                       {analyzing && (
-                        <div className="absolute inset-0 pointer-events-none overflow-hidden bg-violet-950/20 backdrop-blur-[1px]">
-                          <div className="w-full h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_15px_#22d3ee] animate-bounce duration-1000" />
-                          <div className="absolute bottom-2 left-2 right-2 bg-black/80 backdrop-blur-md p-2 rounded-lg border border-cyan-500/30 text-[10px] text-cyan-300 font-semibold flex items-center gap-2">
-                            <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-400" />
+                        <div className="absolute inset-0 pointer-events-none overflow-hidden bg-black/30 backdrop-blur-[1px]">
+                          <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-white to-transparent opacity-75 animate-bounce duration-1000" />
+                          <div className="absolute bottom-2 left-2 right-2 bg-black/75 backdrop-blur-xl p-2 rounded-xl border border-white/10 text-[10px] text-white font-medium flex items-center gap-2">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
                             <span>
                               {scanningStep === 1 && 'Step 1/3: Checking skin texture & lighting...'}
                               {scanningStep === 2 && 'Step 2/3: Grading pore congestion & active lesions...'}
@@ -941,7 +941,7 @@ export default function SkinTrackerPage() {
               <div className="pt-2">
                 <Button 
                   type="button"
-                  className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:opacity-90 text-white font-semibold shadow-md shadow-violet-500/25 h-10 text-xs" 
+                  className="w-full h-11 rounded-full bg-primary hover:opacity-95 text-white font-semibold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.24)] text-xs active:scale-[0.98] transition-all cursor-pointer" 
                   onClick={handleAnalyze}
                   disabled={analyzing}
                 >
